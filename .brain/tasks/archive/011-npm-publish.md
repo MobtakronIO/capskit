@@ -1,7 +1,7 @@
 ---
 title: Prepare CapsKit for NPM Publishing
 type: configuration
-status: active
+status: done
 created: 2026-03-11
 ---
 
@@ -17,10 +17,10 @@ Prepare the `@capskit/core` package to be legally and technically ready for publ
 6. Draft a professional `README.md` for both the GitHub repository root and the NPM package.
 
 ## Tasks
-- [ ] Install a bundler or configure `tsconfig.json` to output `/dist`.
-- [ ] Update `package.json` `exports` mapping so `import { createPlatform } from '@capskit/core'` works cleanly.
-- [ ] Draft a high-quality `README.md` introducing the framework.
-- [ ] Verify build output and type declarations.
+- [x] Install a bundler or configure `tsconfig.json` to output `/dist`.
+- [x] Update `package.json` `exports` mapping so `import { createPlatform } from '@capskit/core'` works cleanly.
+- [x] Draft a high-quality `README.md` introducing the framework.
+- [x] Verify build output and type declarations.
 
 ## Verification
 - Running `npm run build` succeeds perfectly.
