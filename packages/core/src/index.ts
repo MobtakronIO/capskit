@@ -1,2 +1,2 @@
-export * from './platform';
-export { loadCapsules } from './loader';
+export * from './kernel/platform';
+export { loadCapsules } from './kernel/loader';

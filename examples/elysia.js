@@ -12,7 +12,7 @@ async function main() {
         // Provide directories where your capsules are located.
         // The kernel will automatically scan and register them.
         capsuleDirs: [
-            path.resolve(import.meta.dir, '../packages'),               // Core System Capsules (system, http-elysia)
+            path.resolve(import.meta.dir, '../packages/core/src/system-capsules'), // Core System Capsules (system, http-elysia)
             path.resolve(import.meta.dir, '../packages/core/test-capsules') // Business Logic Capsules (calculator, etc.)
         ],
         // Provide global dependencies (Databases, Redis, etc.)

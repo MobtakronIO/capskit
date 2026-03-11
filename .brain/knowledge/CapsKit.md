@@ -43,9 +43,9 @@ The goal is to create a system where each module behaves like a **lego block**: 
              └───────────────┴───────────────┴───────────────┴───────────────┘
 ```
 
-CapsKit consists of three layers:
+CapsKit consists of three structural layers, though the first two are bundled together in the `@capskit/core` package for simplicity:
 1. **CapsKit Core** (The Kernel)
-2. **System Capsules** (Platform utilities)
+2. **System Capsules** (Platform utilities and Gateway Adapters)
 3. **Application/Service Capsules** (Business logic)
 
 ---
@@ -222,10 +222,12 @@ CapsKit uses a monorepo architecture containing multiple npm packages, creating 
 ```text
 capskit/
 ├── packages/
-│   ├── core/               # Platform Kernel runtime (@capskit/core)
-│   ├── types/              # Type defs: CapsuleManifest, ActionContext (@capskit/types)
-│   └── system-capsules/    # Built-in system platform utilities (@capskit/system)
+│   ├── core/                  # Unified Platform (@capskit/core)
+│   │   ├── src/kernel/        # Bare-metal runtime engine
+│   │   └── src/system-capsules/ # Built-in utilities & gateways (system, http-elysia)
+│   └── types/                 # Type defs: CapsuleManifest, ActionContext (@capskit/types)
 └── examples/
+    ├── elysia.js              # Boostrapper example using Elysia Gateway
     ├── inventory-platform/
     └── accounting-platform/
 ```

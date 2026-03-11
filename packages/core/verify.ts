@@ -1,4 +1,4 @@
-import { createPlatform } from './src/platform';
+import { createPlatform } from './src/kernel/platform';
 import * as path from 'path';
 
 async function verify() {
@@ -7,7 +7,7 @@ async function verify() {
   const platform = await createPlatform({
     capsuleDirs: [
       path.join(process.cwd(), 'test-capsules'),
-      path.resolve(process.cwd(), '..') // Points to 'packages/' which contains system-capsules and http-elysia
+      path.join(process.cwd(), 'src/system-capsules') // Built-in system capsules
     ],
     dependencies: {
       database: { connected: true }
