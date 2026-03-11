@@ -1,4 +1,5 @@
 import { createPlatform } from '../src/index.ts';
+import { Elysia } from 'elysia';
 import * as path from 'path';
 
 /**
@@ -27,10 +28,21 @@ async function main() {
     // Start the kernel (Scans, loads manifests, and validates dependencies)
     await platform.start();
 
-    // The http-elysia capsule exposes a 'listen' action.
-    // Calling it starts the web server and automatically mounts all capsule routes.
+    // Instead of telling the capsule to listen, we ask it to build a router
+    // This allows us to use our own Elysia instance
+    const { router } = await platform.call('http-elysia.buildRouter', {});
+
+    const app = new Elysia();
+    
+    // We can add our own custom host plugins here:
+    // app.use(cors())
+    // app.use(swagger())
+    
+    // Mount the capsule capabilities
+    app.use(router);
+
     const port = 3000;
-    await platform.call('http-elysia.listen', { port });
+    app.listen(port);
 
     console.log(`\n🚀 Gateway is live at http://localhost:${port}`);
     console.log('Try this in your terminal:');

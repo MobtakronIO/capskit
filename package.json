@@ -6,11 +6,9 @@
     "scripts": {
         "test": "bun test/verify.test.ts"
     },
-    "dependencies": {
-        "elysia": "latest"
-    },
     "devDependencies": {
         "@types/node": "^25.4.0",
+        "elysia": "^1.4.27",
         "tsx": "^4.21.0"
     }
 }

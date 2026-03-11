@@ -1,17 +1,13 @@
 import { CapsuleManifest } from '../../types';
-import { listen, stop } from './src/actions/server';
+import { buildRouter } from './src/actions/buildRouter';
 
 export const service: CapsuleManifest = {
   name: 'http-elysia',
   requires: ['platform'],
   actions: {
-    listen: {
-      handler: listen,
-      description: 'Starts the HTTP Gateway server'
-    },
-    stop: {
-      handler: stop,
-      description: 'Stops the HTTP Gateway server'
+    buildRouter: {
+      handler: buildRouter,
+      description: 'Returns an Elysia Router containing all platform capabilities mapped to HTTP'
     }
   }
 };

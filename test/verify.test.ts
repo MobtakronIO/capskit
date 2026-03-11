@@ -1,4 +1,5 @@
 import { createPlatform } from '../src/kernel/platform';
+import { Elysia } from 'elysia';
 import * as path from 'path';
 
 async function verify() {
@@ -40,8 +41,11 @@ async function verify() {
   }
 
   console.log('--- Testing HTTP Elysia Capsule ---');
-  console.log('Starting HTTP Elysia on port 3001...');
-  await platform.call('http-elysia.listen', { port: 3001 });
+  console.log('Building router via HTTP Elysia...');
+  const { router } = await platform.call('http-elysia.buildRouter', {});
+
+  const app = new Elysia().use(router);
+  app.listen(3001);
 
   // Give it a moment to start
   await new Promise(resolve => setTimeout(resolve, 500));
@@ -65,7 +69,7 @@ async function verify() {
   } catch (error) {
     console.error('❌ HTTP Elysia failed with error:', error);
   } finally {
-    await platform.call('http-elysia.stop', {});
+    await app.stop();
   }
 
   console.log('--- Testing Calculator Capsule ---');
