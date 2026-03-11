@@ -14,6 +14,15 @@ async function verify() {
     }
   });
 
+  platform.addInterceptor(async (actionName, payload, context, next) => {
+    console.log(`[Interceptor] ⏳ Pending: ${actionName}`);
+    const start = Date.now();
+    const result = await next();
+    const ms = Date.now() - start;
+    console.log(`[Interceptor] ✅ Resolved: ${actionName} in ${ms}ms`);
+    return result;
+  });
+
   console.log('Starting platform...');
   await platform.start();
 

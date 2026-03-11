@@ -16,6 +16,8 @@ export interface ActionDefinition {
 
 export type ActionHandler = (input: any, context: ActionContext) => Promise<any>;
 
+export type ActionInterceptor = (actionName: string, payload: any, context: ActionContext, next: () => Promise<any>) => Promise<any>;
+
 export interface ActionContext {
   params?: any;
   body?: any;
@@ -47,4 +49,5 @@ export interface IPlatform {
   start(): Promise<void>;
   call(actionName: string, payload: any): Promise<any>;
   emit(event: string, data: any): void;
+  addInterceptor(interceptor: ActionInterceptor): void;
 }

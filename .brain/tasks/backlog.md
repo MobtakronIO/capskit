@@ -18,6 +18,6 @@
 - 🟡 [003-system-capsules-implementation](./archive/003-system-capsules-implementation.md) — Implement Built-in System Capsules
 - 🔴 [004-http-gateway-implementation](./archive/004-http-gateway-implementation.md) — Implement HTTP Gateway as a Capsule
 - 🔴 [005-consolidate-core-packages](./archive/005-consolidate-core-packages.md) — Consolidate Core Packages (Kernel, System, HTTP)
-- 🟡 [006-kernel-interceptors](./006-kernel-interceptors.md) — Implement Kernel Interceptors (Action Middlewares)
+- 🟡 [006-kernel-interceptors](./archive/006-kernel-interceptors.md) — Implement Kernel Interceptors (Action Middlewares)
 - 🟡 [007-http-route-traits](./007-http-route-traits.md) — Implement HTTP Route Traits (Adapter Middlewares)
 - 🟢 [008-event-bus-adapter](./008-event-bus-adapter.md) — Implement Event Bus Adapter

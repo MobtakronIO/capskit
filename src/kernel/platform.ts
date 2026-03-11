@@ -1,10 +1,11 @@
-import { ActionHandler, IPlatform, PlatformConfig, CapsuleManifest } from '../types';
+import { ActionHandler, IPlatform, PlatformConfig, CapsuleManifest, ActionInterceptor, ActionContext } from '../types';
 import * as path from 'path';
 import { loadCapsules } from './loader';
 
 export class Platform implements IPlatform {
   private actions = new Map<string, ActionHandler>();
   private manifests = new Map<string, CapsuleManifest>();
+  private interceptors: ActionInterceptor[] = [];
   private dependencies: Record<string, any> = {};
 
   constructor(private config: PlatformConfig) {
@@ -53,22 +54,37 @@ export class Platform implements IPlatform {
     }
   }
 
+  addInterceptor(interceptor: ActionInterceptor): void {
+    this.interceptors.push(interceptor);
+  }
+
   async call(actionName: string, payload: any): Promise<any> {
     const handler = this.actions.get(actionName);
     if (!handler) {
       throw new Error(`Action "${actionName}" not found.`);
     }
 
-    const context = {
-      params: payload.params,
-      body: payload.body,
-      query: payload.query,
+    const context: ActionContext = {
+      params: payload?.params,
+      body: payload?.body,
+      query: payload?.query,
       deps: this.dependencies,
       emit: this.emit.bind(this),
       call: this.call.bind(this)
     };
 
-    return handler(payload, context);
+    let index = -1;
+    const dispatch = async (i: number): Promise<any> => {
+      if (i <= index) throw new Error('next() called multiple times');
+      index = i;
+      if (i === this.interceptors.length) {
+        return handler(payload, context);
+      }
+      const interceptor = this.interceptors[i];
+      return interceptor(actionName, payload, context, () => dispatch(i + 1));
+    };
+
+    return dispatch(0);
   }
 
   emit(event: string, data: any): void {
