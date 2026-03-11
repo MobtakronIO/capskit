@@ -25,7 +25,7 @@ If you are writing the business logic for an Action and need to perform an opera
 This keeps your inter-capsule communication incredibly clean:
 
 ```ts
-import { ActionHandler } from '@capskit/core';
+import { ActionHandler } from '@mobtakronio/capskit';
 
 export const processOrder: ActionHandler = async (payload, context) => {
   // 1. Create a client pointing to the 'inventory' capsule

@@ -7,7 +7,7 @@ Initialize a completely pure business engine in under a minute.
 Currently, CapsKit is managed internally. Install the core package (assuming NPM publishing is configured!):
 
 ```bash
-npm install @capskit/core elysia
+npm install @mobtakronio/capskit elysia
 ```
 
 ## 1. Create a Capsule Manifest
@@ -15,7 +15,7 @@ npm install @capskit/core elysia
 Create a basic capsule (e.g., `src/capsules/math/manifest.ts`) and define its actions in a declarative manner.
 
 ```ts
-import { CapsuleManifest } from '@capskit/core';
+import { CapsuleManifest } from '@mobtakronio/capskit';
 
 export const service: CapsuleManifest = {
   name: 'math-capsule',
@@ -36,7 +36,7 @@ export const service: CapsuleManifest = {
 In your host application (`index.ts`), initialize the system Kernel and inject external dependencies.
 
 ```ts
-import { createCapsKit } from '@capskit/core';
+import { createCapsKit } from '@mobtakronio/capskit';
 import { Elysia } from 'elysia';
 import * as path from 'path';
 
