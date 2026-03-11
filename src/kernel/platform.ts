@@ -80,7 +80,8 @@ export class CapsKit implements ICapsKit {
       query: payload?.query,
       deps: this.dependencies,
       emit: this.emit.bind(this),
-      call: this.call.bind(this)
+      call: this.call.bind(this),
+      use: this.use.bind(this)
     };
 
     let index = -1;
@@ -113,6 +114,21 @@ export class CapsKit implements ICapsKit {
     };
 
     return dispatch(0);
+  }
+
+  use<TCapsule = any>(capsuleName: string): TCapsule {
+    return new Proxy({}, {
+      get: (_, actionName: string | symbol) => {
+        return async (payload: any) => {
+          const actionPath = `${capsuleName}.${String(actionName)}`;
+          return this.call(actionPath, payload);
+        };
+      }
+    }) as TCapsule;
+  }
+
+  describe(capsuleName: string): CapsuleManifest | undefined {
+    return this.manifests.get(capsuleName);
   }
 
   emit(event: string, data: any): void {

@@ -24,3 +24,4 @@
 - 🟡 [009-action-level-hooks](./archive/009-action-level-hooks.md) — Implement Action-Level Hooks (Pre/Post)
 - 🔴 [010-documentation-site](./archive/010-documentation-site.md) — Build CapsKit Documentation Site
 - 🔴 [011-npm-publish](./011-npm-publish.md) — Prepare CapsKit for NPM Publishing
+- 🟢 [012-capsule-client-proxy](./archive/012-capsule-client-proxy.md) — Implement Capsule Client Proxy (capskit.use)

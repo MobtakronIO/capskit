@@ -30,6 +30,7 @@ export interface ActionContext {
   deps: Record<string, any>;
   emit: (event: string, data: any) => void;
   call: (action: string, payload: any) => Promise<any>;
+  use: <TCapsule = any>(capsuleName: string) => TCapsule;
 }
 
 export interface EventSubscription {
@@ -53,6 +54,8 @@ export interface CapsKitConfig {
 export interface ICapsKit {
   start(): Promise<void>;
   call(actionName: string, payload: any): Promise<any>;
+  use<TCapsule = any>(capsuleName: string): TCapsule;
+  describe(capsuleName: string): CapsuleManifest | undefined;
   emit(event: string, data: any): void;
   addInterceptor(interceptor: ActionInterceptor): void;
 }

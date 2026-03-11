@@ -113,8 +113,12 @@ async function verify() {
   }
 
   console.log('--- Testing Calculator Capsule ---');
-  console.log('Calling capskit-calculator.sum (5 + 10)...');
-  const sumResult = await capskit.call('capskit-calculator.sum', { a: 15, b: 10 });
+  console.log('Calling capskit-calculator.sum (5 + 10) via proxy client...');
+  
+  // Cast the proxy to a dummy interface to prove TypeScript pattern
+  const calculator = capskit.use<{ sum: (payload: any) => Promise<any> }>('capskit-calculator');
+  const sumResult = await calculator.sum({ a: 15, b: 10 });
+
   console.log('Result:', sumResult);
   if (sumResult.result === 25) {
     console.log('✅ capskit-calculator.sum works!');
