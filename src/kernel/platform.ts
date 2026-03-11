@@ -6,6 +6,7 @@ export class Platform implements IPlatform {
   private actions = new Map<string, ActionDefinition>();
   private manifests = new Map<string, CapsuleManifest>();
   private interceptors: ActionInterceptor[] = [];
+  private eventRegistry = new Map<string, string[]>();
   private dependencies: Record<string, any> = {};
 
   constructor(private config: PlatformConfig) {
@@ -38,8 +39,15 @@ export class Platform implements IPlatform {
         this.actions.set(fullName, definition);
       } else {
         // In a real implementation, we would dynamic import here based on string path
-        // For now, let's assume handlers are passed as functions in the manifest for simplicity in this iteration
-        // or handled by the loader.
+      }
+    }
+
+    if (manifest.events?.subscribes) {
+      for (const sub of manifest.events.subscribes) {
+        const targetAction = `${manifest.name}.${sub.action}`;
+        const existing = this.eventRegistry.get(sub.event) || [];
+        existing.push(targetAction);
+        this.eventRegistry.set(sub.event, existing);
       }
     }
   }
@@ -109,7 +117,18 @@ export class Platform implements IPlatform {
 
   emit(event: string, data: any): void {
     // Basic event emission (can be expanded with adapters later)
-    console.log(`[Event] ${event}:`, data);
+    console.log(`[Event Bus] Emitted: ${event}`);
+    
+    // Asynchronously dispatch to all registered subscribers
+    const subscribers = this.eventRegistry.get(event);
+    if (subscribers) {
+      for (const actionName of subscribers) {
+        // Fire and forget, but catch errors to avoid unhandled promises
+        this.call(actionName, data).catch(err => {
+          console.error(`[Event Bus] Subscriber action ${actionName} failed handling event ${event}:`, err);
+        });
+      }
+    }
   }
 
   // Helper for internal registry access (used by system capsule later)

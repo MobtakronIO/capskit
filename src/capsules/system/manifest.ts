@@ -2,6 +2,7 @@ import { CapsuleManifest } from '../../types';
 import { getHealth } from './src/actions/getHealth';
 import { listCapsules } from './src/actions/listCapsules';
 import { metrics } from './src/actions/metrics';
+import { audit } from './src/actions/audit';
 
 export const service: CapsuleManifest = {
   name: 'system',
@@ -17,6 +18,15 @@ export const service: CapsuleManifest = {
     metrics: {
       handler: metrics,
       description: 'Returns platform performance metrics'
+    },
+    audit: {
+      handler: audit,
+      description: 'Global audit logger listener'
     }
+  },
+  events: {
+    subscribes: [
+      { event: 'calculator.calculated', action: 'audit' }
+    ]
   }
 };

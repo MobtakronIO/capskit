@@ -28,5 +28,8 @@ export const service: CapsuleManifest = {
         auth: 'admin'
       }
     }
-  ]
+  ],
+  events: {
+    publishes: ['calculator.calculated']
+  }
 };
