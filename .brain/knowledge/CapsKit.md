@@ -224,7 +224,7 @@ capskit/
 ├── package.json               # capskit core package configuration
 ├── src/
 │   ├── kernel/                # Bare-metal runtime engine
-│   ├── capsules/              # Built-in utilities & gateways (system, http-elysia)
+│   ├── capsules/              # Built-in utilities & gateways (system, http)
 │   ├── index.ts               # Core framework export
 │   └── types.ts               # Type defs: CapsuleManifest, ActionContext
 ├── test/                      # Internal tests (verify.test.ts)

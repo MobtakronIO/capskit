@@ -30,7 +30,7 @@ async function main() {
 
     // Instead of telling the capsule to listen, we ask it to build a router
     // This allows us to use our own Elysia instance
-    const { router } = await platform.call('http-elysia.buildRouter', {});
+    const { router } = await platform.call('http.buildRouter', { adapter: 'elysia' });
 
     const app = new Elysia();
     

@@ -40,9 +40,9 @@ async function verify() {
     console.log('✅ system.metrics works!');
   }
 
-  console.log('--- Testing HTTP Elysia Capsule ---');
-  console.log('Building router via HTTP Elysia...');
-  const { router } = await platform.call('http-elysia.buildRouter', {});
+  console.log('--- Testing HTTP Capsule ---');
+  console.log('Building router via HTTP adapter...');
+  const { router } = await platform.call('http.buildRouter', { adapter: 'elysia' });
 
   const app = new Elysia().use(router);
   app.listen(3001);

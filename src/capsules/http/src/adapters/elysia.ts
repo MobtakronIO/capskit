@@ -1,7 +1,7 @@
 import { Elysia } from 'elysia';
 import { IPlatform, CapsuleManifest } from '../../../../types';
 
-export function createRouter(platform: IPlatform) {
+export function createElysiaRouter(platform: IPlatform) {
   const app = new Elysia();
 
   // @ts-ignore - Accessing internal manifests for registration

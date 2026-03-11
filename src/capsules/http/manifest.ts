@@ -2,7 +2,7 @@ import { CapsuleManifest } from '../../types';
 import { buildRouter } from './src/actions/buildRouter';
 
 export const service: CapsuleManifest = {
-  name: 'http-elysia',
+  name: 'http',
   requires: ['platform'],
   actions: {
     buildRouter: {
