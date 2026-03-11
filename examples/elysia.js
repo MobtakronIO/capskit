@@ -1,4 +1,4 @@
-import { createPlatform } from '../src/index.ts';
+import { createCapsKit } from '../src/index.ts';
 import { Elysia } from 'elysia';
 import * as path from 'path';
 
@@ -9,7 +9,7 @@ import * as path from 'path';
  * and attach the HTTP Elysia gateway to expose your capsule's capabilities.
  */
 async function main() {
-    const platform = await createPlatform({
+    const capskit = await createCapsKit({
         // Provide directories where your capsules are located.
         // The kernel will automatically scan and register them.
         capsuleDirs: [
@@ -26,11 +26,11 @@ async function main() {
     console.log('--- CapsKit Platform Initializing ---');
 
     // Start the kernel (Scans, loads manifests, and validates dependencies)
-    await platform.start();
+    await capskit.start();
 
     // Instead of telling the capsule to listen, we ask it to build a router
     // This allows us to use our own Elysia instance
-    const { router } = await platform.call('http.buildRouter', { adapter: 'elysia' });
+    const { router } = await capskit.call('http.buildRouter', { adapter: 'elysia' });
 
     const app = new Elysia();
     

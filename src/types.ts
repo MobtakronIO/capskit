@@ -45,12 +45,12 @@ export interface RouteDefinition {
   traits?: Record<string, any>;
 }
 
-export interface PlatformConfig {
+export interface CapsKitConfig {
   capsuleDirs?: string[];
   dependencies?: Record<string, any>;
 }
 
-export interface IPlatform {
+export interface ICapsKit {
   start(): Promise<void>;
   call(actionName: string, payload: any): Promise<any>;
   emit(event: string, data: any): void;

@@ -3,7 +3,7 @@ import { buildRouter } from './src/actions/buildRouter';
 
 export const service: CapsuleManifest = {
   name: 'http',
-  requires: ['platform'],
+  requires: ['capskit'],
   actions: {
     buildRouter: {
       handler: buildRouter,

@@ -1,18 +1,18 @@
 import { Elysia } from 'elysia';
-import { IPlatform, CapsuleManifest } from '../../../../types';
+import { ICapsKit, CapsuleManifest } from '../../../../types';
 
-export function createElysiaRouter(platform: IPlatform, traitHandlers: Record<string, Function> = {}) {
+export function createElysiaRouter(capskit: ICapsKit, traitHandlers: Record<string, Function> = {}) {
   const app = new Elysia();
 
   // @ts-ignore - Accessing internal manifests for registration
-  const manifests: CapsuleManifest[] = (platform as any).getManifests();
+  const manifests: CapsuleManifest[] = (capskit as any).getManifests();
 
   manifests.forEach(manifest => {
     if (manifest.routes) {
       manifest.routes.forEach(route => {
         const handler = async ({ body, params, query, set }: { body: any, params: any, query: any, set: any }) => {
           try {
-            const result = await platform.call(`${manifest.name}.${route.action}`, {
+            const result = await capskit.call(`${manifest.name}.${route.action}`, {
               body,
               params,
               query

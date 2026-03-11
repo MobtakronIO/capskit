@@ -1,11 +1,11 @@
-import { createPlatform } from '../src/kernel/platform';
+import { createCapsKit } from '../src/kernel/platform';
 import { Elysia } from 'elysia';
 import * as path from 'path';
 
 async function verify() {
   console.log('--- Testing CapsKit Core ---');
   
-  const platform = await createPlatform({
+  const capskit = await createCapsKit({
     capsuleDirs: [
       path.join(process.cwd(), 'src/capsules') // Built-in system capsules and capskit-calculator
     ],
@@ -14,7 +14,7 @@ async function verify() {
     }
   });
 
-  platform.addInterceptor(async (actionName, payload, context, next) => {
+  capskit.addInterceptor(async (actionName: string, payload: any, context: any, next: any) => {
     console.log(`[Interceptor] ⏳ Pending: ${actionName}`);
     const start = Date.now();
     const result = await next();
@@ -23,35 +23,35 @@ async function verify() {
     return result;
   });
 
-  console.log('Starting platform...');
-  await platform.start();
+  console.log('Starting capskit...');
+  await capskit.start();
 
   // test-capsule was removed
 
   console.log('--- Testing System Capsule ---');
   console.log('Calling system.getHealth...');
-  const health = await platform.call('system.getHealth', {});
+  const health = await capskit.call('system.getHealth', {});
   console.log('Health:', health);
   if (health.status === 'healthy') {
     console.log('✅ system.getHealth works!');
   }
 
   console.log('Calling system.listCapsules...');
-  const capsules = await platform.call('system.listCapsules', {});
+  const capsules = await capskit.call('system.listCapsules', {});
   console.log('Loaded Capsules:', capsules.map((m: any) => m.name));
   if (capsules.length > 0) {
     console.log('✅ system.listCapsules works!');
   }
 
   console.log('Calling system.metrics...');
-  const metrics = await platform.call('system.metrics', {});
+  const metrics = await capskit.call('system.metrics', {});
   if (metrics.memory) {
     console.log('✅ system.metrics works!');
   }
 
   console.log('--- Testing HTTP Capsule ---');
   console.log('Building router via HTTP adapter...');
-  const { router } = await platform.call('http.buildRouter', { 
+  const { router } = await capskit.call('http.buildRouter', { 
     adapter: 'elysia',
     traitHandlers: {
       auth: (role: string, { request, set }: any) => {
@@ -114,7 +114,7 @@ async function verify() {
 
   console.log('--- Testing Calculator Capsule ---');
   console.log('Calling capskit-calculator.sum (5 + 10)...');
-  const sumResult = await platform.call('capskit-calculator.sum', { a: 15, b: 10 });
+  const sumResult = await capskit.call('capskit-calculator.sum', { a: 15, b: 10 });
   console.log('Result:', sumResult);
   if (sumResult.result === 25) {
     console.log('✅ capskit-calculator.sum works!');

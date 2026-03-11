@@ -1,18 +1,18 @@
-import { ActionHandler, IPlatform, PlatformConfig, CapsuleManifest, ActionInterceptor, ActionContext, ActionDefinition } from '../types';
+import { ActionHandler, ICapsKit, CapsKitConfig, CapsuleManifest, ActionInterceptor, ActionContext, ActionDefinition } from '../types';
 import * as path from 'path';
 import { loadCapsules } from './loader';
 
-export class Platform implements IPlatform {
+export class CapsKit implements ICapsKit {
   private actions = new Map<string, ActionDefinition>();
   private manifests = new Map<string, CapsuleManifest>();
   private interceptors: ActionInterceptor[] = [];
   private eventRegistry = new Map<string, string[]>();
   private dependencies: Record<string, any> = {};
 
-  constructor(private config: PlatformConfig) {
+  constructor(private config: CapsKitConfig) {
     this.dependencies = {
       ...config.dependencies,
-      platform: this
+      capskit: this
     };
   }
 
@@ -137,6 +137,6 @@ export class Platform implements IPlatform {
   }
 }
 
-export async function createPlatform(config: PlatformConfig): Promise<Platform> {
-  return new Platform(config);
+export async function createCapsKit(config: CapsKitConfig): Promise<CapsKit> {
+  return new CapsKit(config);
 }
