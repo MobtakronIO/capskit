@@ -1,9 +1,9 @@
 import { CapsuleManifest } from '@capskit/types';
-import { getHealth } from './actions/getHealth';
-import { listCapsules } from './actions/listCapsules';
-import { metrics } from './actions/metrics';
+import { getHealth } from './src/actions/getHealth';
+import { listCapsules } from './src/actions/listCapsules';
+import { metrics } from './src/actions/metrics';
 
-export const manifest: CapsuleManifest = {
+export const service: CapsuleManifest = {
   name: 'system',
   actions: {
     getHealth: {

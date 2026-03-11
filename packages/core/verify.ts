@@ -32,7 +32,7 @@ async function verify() {
 
   console.log('--- Testing System Capsule ---');
   // Manual registration for verification purpose
-  const { manifest: systemManifest } = await import(`file://${path.resolve('../system-capsules/src/manifest.ts')}`);
+  const { service: systemManifest } = await import(`file://${path.resolve('../system-capsules/manifest.ts')}`);
   (platform as any).registerCapsule(systemManifest);
 
   console.log('Calling system.getHealth...');

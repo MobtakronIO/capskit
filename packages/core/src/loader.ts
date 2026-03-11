@@ -27,7 +27,7 @@ export async function loadCapsules(capsulesDir: string): Promise<CapsuleManifest
         try {
           // In Windows, absolute paths must be prefixed with file:// for dynamic import()
           const module = await import(`file://${finalPath}`);
-          const manifest = module.manifest || module.default;
+          const manifest = module.service || module.manifest || module.default;
           if (manifest) {
             manifests.push(manifest);
           }
