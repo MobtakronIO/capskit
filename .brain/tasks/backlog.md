@@ -22,5 +22,5 @@
 - 🟡 [007-http-route-traits](./archive/007-http-route-traits.md) — Implement HTTP Route Traits (Adapter Middlewares)
 - 🟢 [008-event-bus-adapter](./archive/008-event-bus-adapter.md) — Implement Event Bus Adapter
 - 🟡 [009-action-level-hooks](./archive/009-action-level-hooks.md) — Implement Action-Level Hooks (Pre/Post)
-- 🔴 [010-documentation-site](./010-documentation-site.md) — Build CapsKit Documentation Site
+- 🔴 [010-documentation-site](./archive/010-documentation-site.md) — Build CapsKit Documentation Site
 - 🔴 [011-npm-publish](./011-npm-publish.md) — Prepare CapsKit for NPM Publishing

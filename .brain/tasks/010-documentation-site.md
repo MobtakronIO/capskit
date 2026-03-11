@@ -1,7 +1,7 @@
 ---
 title: Build CapsKit Documentation Site
 type: feature
-status: active
+status: done
 created: 2026-03-11
 ---
 
@@ -19,10 +19,10 @@ Create a professional, interactive documentation website for the CapsKit framewo
 4. Ensure the site looks excellent in dark mode and includes responsive code snippets.
 
 ## Tasks
-- [ ] Initialize `/docs` using `npx vitepress init` (or equivalent).
-- [ ] Configure `config.mts` (or equivalent config) for navigation and theming.
-- [ ] Write the `index.md` landing page.
-- [ ] Add the `introduction.md` and `quick-start.md` files.
+- [x] Initialize `/docs` using `npx vitepress init` (or equivalent).
+- [x] Configure `config.mts` (or equivalent config) for navigation and theming.
+- [x] Write the `index.md` landing page.
+- [x] Add the `introduction.md` and `quick-start.md` files.
 
 ## Verification
 - Running `npm run docs:dev` starts a server serving a beautiful, fully functional documentation website locally.
