@@ -5,5 +5,9 @@
     "workspaces": [
         "packages/*",
         "examples/*"
-    ]
+    ],
+    "devDependencies": {
+        "@types/node": "^25.4.0",
+        "tsx": "^4.21.0"
+    }
 }
