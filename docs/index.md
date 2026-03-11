@@ -2,8 +2,8 @@
 layout: home
 hero:
   name: "CapsKit"
-  text: "The Framework-Agnostic Capability Runtime"
-  tagline: "Build pure, transport-agnostic business logic capsules without controllers."
+  text: "The Universal Capability Kernel"
+  tagline: "Break free from controllers. Package your business logic into pure, swappable capsules that run identically via HTTP, Event Queues, CLI, or internal routines."
   actions:
     - theme: brand
       text: Get Started
@@ -13,10 +13,10 @@ hero:
       link: https://github.com/MobtakronIO/capskit
 
 features:
-  - title: Framework Agnostic
-    details: Build logic unaware of Elysia, Express, or tRPC. The platform maps it automatically via dynamic traits.
-  - title: Universal Action Hooks
-    details: Declare execution pipelines directly in manifest.ts using pre/post hooks, avoiding massive global middlewares.
-  - title: Integrated Event Bus
-    details: Automatic publish/subscribe wiring based on capsule definitions prevents tight coupling.
+  - title: Transport Agnostic
+    details: Build pure logic unaware of the outside world. Trigger the exact same capability via HTTP (Elysia, Express), the internal Event Bus, or terminal commands.
+  - title: Declarative Configuration
+    details: Stop scattering routing rules and event listeners. Define your capabilities, dependencies, traits, and subscriptions in a single, clean manifest.ts.
+  - title: Universal Pipelines
+    details: Establish platform-wide logging, authentication, and transactions using deep Kernel Interceptors, or use Capsule-specific Action Hooks for fine-grained control.
 ---

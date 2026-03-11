@@ -1,21 +1,24 @@
 # Introduction
 
-**CapsKit** is a lightweight, strictly-opinionated runtime designed to enforce the "Capability Architecture" pattern for modern TypeScript microservices.
+**CapsKit** is a lightweight, strictly-opinionated runtime kernel designed to enforce the "Capability Architecture" pattern for modern TypeScript applications. It is not merely a framework—it's an explicitly decoupled execution engine for your business logic.
 
 ## The Problem
 
-Traditional web frameworks tightly couple your business logic to HTTP constraints (Controllers, `req`/`res` objects, HTTP Status Codes). Over time, this makes it nearly impossible to execute your codebase logic via CRON jobs, CLI commands, Event Queues, or internal service calls without mocking HTTP requests.
+Traditional architectures tightly couple your business constraints to the transport layer. When a system builds its logic inside HTTP Controllers relying heavily on Request/Response objects and HTTP Status Codes, the logic becomes trapped. Over time, making those same capabilities available to an internal CRON job, a CLI tool, a Kafka message queue, or even just another internal module becomes incredibly convoluted because the logic inherently expects an HTTP environment.
 
-## The Solution
+## The CapsKit Solution
 
-CapsKit ditches the controller entirely in favor of a **Capsule Manifest**.
+CapsKit completely separates "what the system can do" from "how the system is told to do it." It ditches the controller entirely in favor of a declarative **Capsule Manifest**.
 
-A Capsule is a plug-and-play collection of business capabilities (pure actions) that don't know anything about HTTP frameworks or WebSockets.
+A **Capsule** is a plug-and-play collection of business capabilities (pure actions). An action takes a simple payload, uses injected dependencies, and returns a raw result. It is blissfully ignorant of HTTP, WebSockets, or background workers.
 
-Instead, the **Platform Kernel** (CapsKit's core engine) loads these capsules, analyzes their `manifest.ts` metadata, and dynamically generates HTTP Routes, Event Listeners, and CLI commands for them!
+The **Platform Kernel** (CapsKit core) loads these capsules, analyzes their `manifest.ts` metadata, and orchestrates the entire application universe:
+1. **Dynamic Adapters**: It enables adapters to automatically generate transport layers (like binding an Elysia HTTP router) based purely on the defined metadata.
+2. **Event Routing**: It acts as a loosely-coupled Event Bus, dynamically wiring Publishers directly to asynchronous Subscribers.
+3. **Execution Pipeline**: It wraps every capability inside a universal Onion-ring execution pipeline (Interceptors) ensuring platform constraints like tracing, transactions, or latency logging apply globally.
 
 ### Key Design Principles
 
-- **Zero Business Logic in Boundaries**: Modules do not expose network ports.
-- **Traits as Metadata**: Rate-limiting, caching, and auth are declared purely in `manifest.ts`, injected smoothly by adapters.
-- **Dependency Injection**: The Kernel injects configured dependencies (databases, external SDKs) cleanly.
+- **Zero Boundary Logic**: Capsules do not expose network ports or import web frameworks.
+- **Traits as Metadata**: Transport configurations (like Authorization or Rate Limiting) are defined as pure metadata `traits` inside `manifest.ts`. The transport adapters translate these into real middleware seamlessly.
+- **Universal Uniformity**: Whether an action is called by a public API user, a fellow Capsule, or an automatic CRON job, the execution path and middleware lifecycle remain exactly the same inside the `platform.call()` Kernel execution engine.
