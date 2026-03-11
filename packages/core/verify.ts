@@ -55,17 +55,17 @@ async function verify() {
     console.log('✅ system.metrics works!');
   }
 
-  console.log('--- Testing HTTP Gateway Capsule ---');
-  const { service: gatewayManifest } = await import(`file://${path.resolve('../http-gateway/manifest.ts')}`);
+  console.log('--- Testing HTTP Elysia Capsule ---');
+  const { service: gatewayManifest } = await import(`file://${path.resolve('../http-elysia/manifest.ts')}`);
   (platform as any).registerCapsule(gatewayManifest);
 
-  console.log('Starting HTTP Gateway on port 3001...');
-  await platform.call('http-gateway.listen', { port: 3001 });
+  console.log('Starting HTTP Elysia on port 3001...');
+  await platform.call('http-elysia.listen', { port: 3001 });
 
   // Give it a moment to start
   await new Promise(resolve => setTimeout(resolve, 500));
 
-  console.log('Testing GET /calculate/sum via HTTP...');
+  console.log('Testing POST /calculate/sum via HTTP...');
   try {
     const response = await fetch('http://localhost:3001/calculate/sum', {
       method: 'POST',
@@ -73,18 +73,18 @@ async function verify() {
       body: JSON.stringify({ a: 10, b: 20 })
     });
     
-    const result = await response.json();
+    const result: any = await response.json();
     console.log('HTTP Result:', result);
     
     if (result.result === 30) {
-      console.log('✅ HTTP Gateway works!');
+      console.log('✅ HTTP Elysia works!');
     } else {
-      console.error('❌ HTTP Gateway failed: Unexpected result', result);
+      console.error('❌ HTTP Elysia failed: Unexpected result', result);
     }
   } catch (error) {
-    console.error('❌ HTTP Gateway failed with error:', error);
+    console.error('❌ HTTP Elysia failed with error:', error);
   } finally {
-    await platform.call('http-gateway.stop', {});
+    await platform.call('http-elysia.stop', {});
   }
 
   console.log('--- Testing Calculator Capsule ---');

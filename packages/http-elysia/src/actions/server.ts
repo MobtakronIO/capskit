@@ -8,14 +8,14 @@ export const listen: ActionHandler = async (payload, context) => {
   const platform = context.deps.platform;
 
   if (server) {
-    console.warn('[HTTP Gateway] Server is already running.');
+    console.warn('[HTTP Elysia] Server is already running.');
     return { message: 'Server already running', port };
   }
 
   const app = createRouter(platform);
   server = app.listen(port);
 
-  console.log(`[HTTP Gateway] Server started on port ${port}`);
+  console.log(`[HTTP Elysia] Server started on port ${port}`);
   return { message: 'Server started', port };
 };
 

@@ -2,7 +2,7 @@ import { CapsuleManifest } from '@capskit/types';
 import { listen, stop } from './src/actions/server';
 
 export const service: CapsuleManifest = {
-  name: 'http-gateway',
+  name: 'http-elysia',
   requires: ['platform'],
   actions: {
     listen: {
