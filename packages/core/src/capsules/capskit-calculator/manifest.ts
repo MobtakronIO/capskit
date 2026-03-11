@@ -2,7 +2,7 @@ import { CapsuleManifest } from '@capskit/types';
 import { sum } from './src/actions/sum';
 
 export const service: CapsuleManifest = {
-  name: 'calculator',
+  name: 'capskit-calculator',
   actions: {
     sum: {
       handler: sum,

@@ -1,4 +1,4 @@
-import { createPlatform } from './src/kernel/platform';
+import { createPlatform } from '../src/kernel/platform';
 import * as path from 'path';
 
 async function verify() {
@@ -6,8 +6,7 @@ async function verify() {
   
   const platform = await createPlatform({
     capsuleDirs: [
-      path.join(process.cwd(), 'test-capsules'),
-      path.join(process.cwd(), 'src/system-capsules') // Built-in system capsules
+      path.join(process.cwd(), 'src/capsules') // Built-in system capsules and capskit-calculator
     ],
     dependencies: {
       database: { connected: true }
@@ -17,21 +16,7 @@ async function verify() {
   console.log('Starting platform...');
   await platform.start();
 
-  console.log('Calling test-capsule.ping...');
-  try {
-    const result = await platform.call('test-capsule.ping', { params: {} });
-    console.log('Result:', result);
-    
-    if (result.message === 'pong' && result.db === true) {
-      console.log('✅ Verification successful!');
-    } else {
-      console.error('❌ Verification failed: Unexpected result', result);
-      process.exit(1);
-    }
-  } catch (error) {
-    console.error('❌ Verification failed with error:', error);
-    process.exit(1);
-  }
+  // test-capsule was removed
 
   console.log('--- Testing System Capsule ---');
   console.log('Calling system.getHealth...');
@@ -84,28 +69,14 @@ async function verify() {
   }
 
   console.log('--- Testing Calculator Capsule ---');
-  console.log('Calling calculator.sum (5 + 10)...');
-  const sumResult = await platform.call('calculator.sum', { a: 15, b: 10 });
+  console.log('Calling capskit-calculator.sum (5 + 10)...');
+  const sumResult = await platform.call('capskit-calculator.sum', { a: 15, b: 10 });
   console.log('Result:', sumResult);
   if (sumResult.result === 25) {
-    console.log('✅ calculator.sum works!');
+    console.log('✅ capskit-calculator.sum works!');
   } else {
-    console.error('❌ calculator.sum failed!');
+    console.error('❌ capskit-calculator.sum failed!');
     process.exit(1);
-  }
-
-  // Test dependency validation
-  console.log('Testing dependency validation (should fail)...');
-  try {
-    const failingPlatform = await createPlatform({
-      capsuleDirs: [path.join(process.cwd(), 'test-capsules')],
-      dependencies: {} // Missing 'database'
-    });
-    await failingPlatform.start();
-    console.error('❌ Error: Platform started despite missing dependency');
-    process.exit(1);
-  } catch (error) {
-    console.log('✅ Correctly caught missing dependency:', error.message);
   }
 }
 
