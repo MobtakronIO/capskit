@@ -1,4 +1,4 @@
-import { ActionHandler } from '@capskit/types';
+import { ActionHandler } from '../../../../types';
 
 export const listCapsules: ActionHandler = async (payload, context) => {
   const platform = context.deps.platform;

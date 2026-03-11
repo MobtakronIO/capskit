@@ -1,4 +1,4 @@
-import { ActionHandler } from '@capskit/types';
+import { ActionHandler } from '../../../../types';
 
 export const getHealth: ActionHandler = async () => {
   return {

@@ -1,5 +1,5 @@
 import { Elysia } from 'elysia';
-import { IPlatform, CapsuleManifest } from '@capskit/types';
+import { IPlatform, CapsuleManifest } from '../../../../types';
 
 export function createRouter(platform: IPlatform) {
   const app = new Elysia();

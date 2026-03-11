@@ -1,4 +1,4 @@
-import { CapsuleManifest } from '@capskit/types';
+import { CapsuleManifest } from '../../types';
 import { getHealth } from './src/actions/getHealth';
 import { listCapsules } from './src/actions/listCapsules';
 import { metrics } from './src/actions/metrics';

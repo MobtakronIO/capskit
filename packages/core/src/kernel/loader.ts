@@ -1,4 +1,4 @@
-import { CapsuleManifest } from '@capskit/types';
+import { CapsuleManifest } from '../types';
 import * as fs from 'fs';
 import * as path from 'path';
 

@@ -1,4 +1,4 @@
-import { CapsuleManifest } from '@capskit/types';
+import { CapsuleManifest } from '../../types';
 import { listen, stop } from './src/actions/server';
 
 export const service: CapsuleManifest = {

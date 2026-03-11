@@ -1,4 +1,4 @@
-import { ActionHandler, IPlatform, PlatformConfig, CapsuleManifest } from '@capskit/types';
+import { ActionHandler, IPlatform, PlatformConfig, CapsuleManifest } from '../types';
 import * as path from 'path';
 import { loadCapsules } from './loader';
 

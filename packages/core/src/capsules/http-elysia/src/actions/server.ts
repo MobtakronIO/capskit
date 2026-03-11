@@ -1,4 +1,4 @@
-import { ActionHandler } from '@capskit/types';
+import { ActionHandler } from '../../../../types';
 import { createRouter } from '../core/router';
 
 let server: any = null;
