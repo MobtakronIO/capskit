@@ -8,7 +8,10 @@ export class Platform implements IPlatform {
   private dependencies: Record<string, any> = {};
 
   constructor(private config: PlatformConfig) {
-    this.dependencies = config.dependencies || {};
+    this.dependencies = {
+      ...config.dependencies,
+      platform: this
+    };
   }
 
   async start(): Promise<void> {

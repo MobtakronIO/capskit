@@ -1,7 +1,7 @@
 ---
 title: Implement Built-in System Capsules
 type: feature
-status: active
+status: done
 created: 2026-03-11
 ---
 
@@ -14,11 +14,11 @@ Implement early iterations of `@capskit/system`, providing essential platform ut
 3. Establish how the kernel can inject itself (or a contextual reference) into system capsule functions to retrieve the live list of capabilities.
 
 ## Tasks
-- [ ] Establish `manifest.ts` defining actions: `system.getHealth`, `system.listCapsules`, `system.metrics`.
-- [ ] Implement `getHealth.ts` action handler to return basic platform uptime metadata and overall system health status.
-- [ ] Implement `listCapsules.ts` action handler traversing the Platform Registry to return structured info about everything loaded.
-- [ ] Implement `metrics.ts` stub (e.g., memory usage or basic request counts if instrumented).
-- [ ] Ensure the virtual `@capskit/system` module can be registered during the kernel boot process so its endpoints can be parsed by adapters like any other capsule.
+- [x] Establish `manifest.ts` defining actions: `system.getHealth`, `system.listCapsules`, `system.metrics`.
+- [x] Implement `getHealth.ts` action handler to return basic platform uptime metadata and overall system health status.
+- [x] Implement `listCapsules.ts` action handler traversing the Platform Registry to return structured info about everything loaded.
+- [x] Implement `metrics.ts` stub (e.g., memory usage or basic request counts if instrumented).
+- [x] Ensure the virtual `@capskit/system` module can be registered during the kernel boot process so its endpoints can be parsed by adapters like any other capsule.
 
 ## Verification
 - Initialize the Platform incorporating the System capsule.
