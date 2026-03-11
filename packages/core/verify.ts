@@ -55,6 +55,17 @@ async function verify() {
     console.log('✅ system.metrics works!');
   }
 
+  console.log('--- Testing Calculator Capsule ---');
+  console.log('Calling calculator.sum (5 + 10)...');
+  const sumResult = await platform.call('calculator.sum', { a: 5, b: 10 });
+  console.log('Result:', sumResult);
+  if (sumResult.result === 15) {
+    console.log('✅ calculator.sum works!');
+  } else {
+    console.error('❌ calculator.sum failed!');
+    process.exit(1);
+  }
+
   // Test dependency validation
   console.log('Testing dependency validation (should fail)...');
   try {
