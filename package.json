@@ -2,10 +2,13 @@
     "name": "capskit",
     "version": "0.0.0",
     "private": true,
-    "workspaces": [
-        "packages/*",
-        "examples/*"
-    ],
+    "main": "src/index.ts",
+    "scripts": {
+        "test": "bun test/verify.test.ts"
+    },
+    "dependencies": {
+        "elysia": "latest"
+    },
     "devDependencies": {
         "@types/node": "^25.4.0",
         "tsx": "^4.21.0"

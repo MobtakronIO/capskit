@@ -1,4 +1,4 @@
-import { createPlatform } from '../packages/core/src/index.ts';
+import { createPlatform } from '../src/index.ts';
 import * as path from 'path';
 
 /**
@@ -12,7 +12,7 @@ async function main() {
         // Provide directories where your capsules are located.
         // The kernel will automatically scan and register them.
         capsuleDirs: [
-            path.resolve(import.meta.dir, '../packages/core/src/capsules') // Built-in capsules and capskit-calculator
+            path.resolve(import.meta.dir, '../src/capsules') // Built-in capsules and capskit-calculator
         ],
         // Provide global dependencies (Databases, Redis, etc.)
         // These will be injected into every action's 'deps' object.
