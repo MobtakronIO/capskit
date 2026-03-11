@@ -217,15 +217,17 @@ export const manifest = {
 
 ## 6. Repository Strategy
 
-CapsKit uses a monorepo architecture containing multiple npm packages, creating an ecosystem.
+CapsKit is now deployed natively as a standalone, flat package structure representing the unified core.
 
 ```text
 capskit/
-├── packages/
-│   ├── core/                  # Unified Platform (@capskit/core)
-│   │   ├── src/kernel/        # Bare-metal runtime engine
-│   │   └── src/system-capsules/ # Built-in utilities & gateways (system, http-elysia)
-│   └── types/                 # Type defs: CapsuleManifest, ActionContext (@capskit/types)
+├── package.json               # capskit core package configuration
+├── src/
+│   ├── kernel/                # Bare-metal runtime engine
+│   ├── capsules/              # Built-in utilities & gateways (system, http-elysia)
+│   ├── index.ts               # Core framework export
+│   └── types.ts               # Type defs: CapsuleManifest, ActionContext
+├── test/                      # Internal tests (verify.test.ts)
 └── examples/
     ├── elysia.js              # Boostrapper example using Elysia Gateway
     ├── inventory-platform/
