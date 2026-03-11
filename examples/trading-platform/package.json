@@ -1,0 +1,13 @@
+{
+    "name": "trading-platform",
+    "version": "0.0.0",
+    "private": true,
+    "main": "main.ts",
+    "scripts": {
+        "start": "node main.ts"
+    },
+    "dependencies": {
+        "@capskit/core": "*",
+        "@capskit/system": "*"
+    }
+}
