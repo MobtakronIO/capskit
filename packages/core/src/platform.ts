@@ -15,12 +15,14 @@ export class Platform implements IPlatform {
   }
 
   async start(): Promise<void> {
-    if (this.config.capsulesDir) {
-      const capsulesDir = path.resolve(this.config.capsulesDir);
-      const manifests = await loadCapsules(capsulesDir);
-      
-      for (const manifest of manifests) {
-        this.registerCapsule(manifest);
+    if (this.config.capsuleDirs) {
+      for (const dir of this.config.capsuleDirs) {
+        const absoluteDir = path.resolve(dir);
+        const manifests = await loadCapsules(absoluteDir);
+        
+        for (const manifest of manifests) {
+          this.registerCapsule(manifest);
+        }
       }
     }
   }

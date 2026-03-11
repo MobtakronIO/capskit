@@ -39,7 +39,7 @@ export interface RouteDefinition {
 }
 
 export interface PlatformConfig {
-  capsulesDir?: string;
+  capsuleDirs?: string[];
   dependencies?: Record<string, any>;
 }
 

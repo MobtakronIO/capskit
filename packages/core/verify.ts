@@ -5,7 +5,10 @@ async function verify() {
   console.log('--- Testing CapsKit Core ---');
   
   const platform = await createPlatform({
-    capsulesDir: path.join(process.cwd(), 'test-capsules'),
+    capsuleDirs: [
+      path.join(process.cwd(), 'test-capsules'),
+      path.resolve(process.cwd(), '..') // Points to 'packages/' which contains system-capsules and http-elysia
+    ],
     dependencies: {
       database: { connected: true }
     }
@@ -31,10 +34,6 @@ async function verify() {
   }
 
   console.log('--- Testing System Capsule ---');
-  // Manual registration for verification purpose
-  const { service: systemManifest } = await import(`file://${path.resolve('../system-capsules/manifest.ts')}`);
-  (platform as any).registerCapsule(systemManifest);
-
   console.log('Calling system.getHealth...');
   const health = await platform.call('system.getHealth', {});
   console.log('Health:', health);
@@ -56,9 +55,6 @@ async function verify() {
   }
 
   console.log('--- Testing HTTP Elysia Capsule ---');
-  const { service: gatewayManifest } = await import(`file://${path.resolve('../http-elysia/manifest.ts')}`);
-  (platform as any).registerCapsule(gatewayManifest);
-
   console.log('Starting HTTP Elysia on port 3001...');
   await platform.call('http-elysia.listen', { port: 3001 });
 
@@ -102,7 +98,7 @@ async function verify() {
   console.log('Testing dependency validation (should fail)...');
   try {
     const failingPlatform = await createPlatform({
-      capsulesDir: path.join(process.cwd(), 'test-capsules'),
+      capsuleDirs: [path.join(process.cwd(), 'test-capsules')],
       dependencies: {} // Missing 'database'
     });
     await failingPlatform.start();
