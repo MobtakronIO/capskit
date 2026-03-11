@@ -9,9 +9,14 @@ export interface CapsuleManifest {
   routes?: RouteDefinition[];
 }
 
+export type ActionPreHook = (payload: any, context: ActionContext) => Promise<void> | void;
+export type ActionPostHook = (payload: any, result: any, context: ActionContext) => Promise<any> | any;
+
 export interface ActionDefinition {
   handler: string | ActionHandler;
   description?: string;
+  pre?: ActionPreHook[];
+  post?: ActionPostHook[];
 }
 
 export type ActionHandler = (input: any, context: ActionContext) => Promise<any>;

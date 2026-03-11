@@ -6,7 +6,17 @@ export const service: CapsuleManifest = {
   actions: {
     sum: {
       handler: sum,
-      description: 'Sums two numbers provided in the payload'
+      description: 'Sums two numbers provided in the payload',
+      pre: [
+        async (payload) => {
+          console.log(`[capskit-calculator] 🔹 Pre-hook triggered for payload:`, payload);
+        }
+      ],
+      post: [
+        async (payload, result) => {
+          console.log(`[capskit-calculator] 🔸 Post-hook triggered. Calculated result:`, result);
+        }
+      ]
     }
   },
   routes: [

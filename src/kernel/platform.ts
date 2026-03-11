@@ -1,9 +1,9 @@
-import { ActionHandler, IPlatform, PlatformConfig, CapsuleManifest, ActionInterceptor, ActionContext } from '../types';
+import { ActionHandler, IPlatform, PlatformConfig, CapsuleManifest, ActionInterceptor, ActionContext, ActionDefinition } from '../types';
 import * as path from 'path';
 import { loadCapsules } from './loader';
 
 export class Platform implements IPlatform {
-  private actions = new Map<string, ActionHandler>();
+  private actions = new Map<string, ActionDefinition>();
   private manifests = new Map<string, CapsuleManifest>();
   private interceptors: ActionInterceptor[] = [];
   private dependencies: Record<string, any> = {};
@@ -35,7 +35,7 @@ export class Platform implements IPlatform {
     for (const [actionName, definition] of Object.entries(manifest.actions)) {
       const fullName = `${manifest.name}.${actionName}`;
       if (typeof definition.handler === 'function') {
-        this.actions.set(fullName, definition.handler);
+        this.actions.set(fullName, definition);
       } else {
         // In a real implementation, we would dynamic import here based on string path
         // For now, let's assume handlers are passed as functions in the manifest for simplicity in this iteration
@@ -59,10 +59,12 @@ export class Platform implements IPlatform {
   }
 
   async call(actionName: string, payload: any): Promise<any> {
-    const handler = this.actions.get(actionName);
-    if (!handler) {
+    const actionDef = this.actions.get(actionName);
+    if (!actionDef) {
       throw new Error(`Action "${actionName}" not found.`);
     }
+
+    const handler = actionDef.handler as ActionHandler;
 
     const context: ActionContext = {
       params: payload?.params,
@@ -78,7 +80,25 @@ export class Platform implements IPlatform {
       if (i <= index) throw new Error('next() called multiple times');
       index = i;
       if (i === this.interceptors.length) {
-        return handler(payload, context);
+        
+        if (actionDef.pre) {
+          for (const hook of actionDef.pre) {
+            await hook(payload, context);
+          }
+        }
+
+        let result = await handler(payload, context);
+
+        if (actionDef.post) {
+          for (const hook of actionDef.post) {
+            const hookResult = await hook(payload, result, context);
+            if (hookResult !== undefined) {
+              result = hookResult;
+            }
+          }
+        }
+
+        return result;
       }
       const interceptor = this.interceptors[i];
       return interceptor(actionName, payload, context, () => dispatch(i + 1));

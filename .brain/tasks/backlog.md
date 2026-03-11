@@ -21,4 +21,4 @@
 - 🟡 [006-kernel-interceptors](./archive/006-kernel-interceptors.md) — Implement Kernel Interceptors (Action Middlewares)
 - 🟡 [007-http-route-traits](./007-http-route-traits.md) — Implement HTTP Route Traits (Adapter Middlewares)
 - 🟢 [008-event-bus-adapter](./008-event-bus-adapter.md) — Implement Event Bus Adapter
-- 🟡 [009-action-level-hooks](./009-action-level-hooks.md) — Implement Action-Level Hooks (Pre/Post)
+- 🟡 [009-action-level-hooks](./archive/009-action-level-hooks.md) — Implement Action-Level Hooks (Pre/Post)

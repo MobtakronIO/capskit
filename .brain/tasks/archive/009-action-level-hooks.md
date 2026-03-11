@@ -1,7 +1,7 @@
 ---
 title: Implement Action-Level Hooks (Pre/Post)
 type: feature
-status: active
+status: done
 created: 2026-03-11
 ---
 
@@ -17,9 +17,9 @@ Introduce Action-Level Hooks (`pre` and `post` arrays) explicitly defined within
 3. Update `test/verify.test.ts` by adding a simple `pre` hook (e.g., logging or input mutating) to `capskit-calculator.sum` to verify it triggers and controls the flow before the handler runs.
 
 ## Tasks
-- [ ] Add `pre` and `post` property types to `ActionDefinition` in `src/types.ts` (using `ActionInterceptor` or a similar dedicated type).
-- [ ] Implement the execution execution sequence for `pre` and `post` arrays inside `platform.call()` in `src/kernel/platform.ts`.
-- [ ] Add a `pre` and `post` hook to the `sum` action in `capskit-calculator`'s manifest and verify the logging order in `verify.test.ts`.
+- [x] Add `pre` and `post` property types to `ActionDefinition` in `src/types.ts` (using `ActionInterceptor` or a similar dedicated type).
+- [x] Implement the execution execution sequence for `pre` and `post` arrays inside `platform.call()` in `src/kernel/platform.ts`.
+- [x] Add a `pre` and `post` hook to the `sum` action in `capskit-calculator`'s manifest and verify the logging order in `verify.test.ts`.
 
 ## Verification
 - Executing `bun test/verify.test.ts` should show the `pre` hook log firing before the action handler, and the `post` hook after the action handler, all safely inside the platform's global Onion interceptor.
