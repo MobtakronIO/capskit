@@ -61,3 +61,15 @@ bootstrap();
 ```
 
 Done! You now have a framework-agnostic capability system wrapped gracefully in an Elysia server.
+
+## 3. Invoke Capabilities Internally
+
+If you need to call a capability explicitly from code (e.g., inside an automated CRON job or a terminal tool), never write framework logic. Simply instantiate a **Capsule Client**:
+
+```ts
+const math = capskit.use('math-capsule');
+
+// Look! It acts just like a native Javascript module!
+const { result } = await math.sum({ a: 15, b: 30 });
+console.log('Result:', result);
+```

@@ -21,6 +21,7 @@ export default defineConfig({
         items: [
           { text: 'Manifests & Actions', link: '/guide/core/manifests' },
           { text: 'Action Pre/Post Hooks', link: '/guide/core/hooks' },
+          { text: 'Capsule Clients', link: '/guide/core/clients' }
         ]
       },
       {
