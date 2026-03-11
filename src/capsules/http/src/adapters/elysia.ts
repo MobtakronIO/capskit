@@ -1,7 +1,7 @@
 import { Elysia } from 'elysia';
 import { IPlatform, CapsuleManifest } from '../../../../types';
 
-export function createElysiaRouter(platform: IPlatform) {
+export function createElysiaRouter(platform: IPlatform, traitHandlers: Record<string, Function> = {}) {
   const app = new Elysia();
 
   // @ts-ignore - Accessing internal manifests for registration
@@ -25,12 +25,27 @@ export function createElysiaRouter(platform: IPlatform) {
         };
 
         const path = route.path;
+        let config: any = {};
+        if (route.traits) {
+          const beforeHandle: any[] = [];
+          for (const [traitName, traitValue] of Object.entries(route.traits)) {
+            if (traitHandlers[traitName]) {
+              beforeHandle.push(async (c: any) => traitHandlers[traitName](traitValue, c));
+            } else {
+              console.warn(`[HTTP Elysia] No handler provided for trait "${traitName}" on route ${route.method} ${path}`);
+            }
+          }
+          if (beforeHandle.length > 0) {
+            config.beforeHandle = beforeHandle;
+          }
+        }
+
         switch (route.method) {
-          case 'GET': app.get(path, handler); break;
-          case 'POST': app.post(path, handler); break;
-          case 'PUT': app.put(path, handler); break;
-          case 'DELETE': app.delete(path, handler); break;
-          case 'PATCH': app.patch(path, handler); break;
+          case 'GET': app.get(path, handler, config); break;
+          case 'POST': app.post(path, handler, config); break;
+          case 'PUT': app.put(path, handler, config); break;
+          case 'DELETE': app.delete(path, handler, config); break;
+          case 'PATCH': app.patch(path, handler, config); break;
         }
       });
     }

@@ -23,7 +23,10 @@ export const service: CapsuleManifest = {
     {
       method: 'POST',
       path: '/calculate/sum',
-      action: 'sum'
+      action: 'sum',
+      traits: {
+        auth: 'admin'
+      }
     }
   ]
 };

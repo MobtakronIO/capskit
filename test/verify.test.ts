@@ -51,7 +51,18 @@ async function verify() {
 
   console.log('--- Testing HTTP Capsule ---');
   console.log('Building router via HTTP adapter...');
-  const { router } = await platform.call('http.buildRouter', { adapter: 'elysia' });
+  const { router } = await platform.call('http.buildRouter', { 
+    adapter: 'elysia',
+    traitHandlers: {
+      auth: (role: string, { request, set }: any) => {
+        const auth = request.headers.get('authorization');
+        if (role === 'admin' && auth !== 'Bearer token') {
+          set.status = 401;
+          return { error: 'Unauthorized: admin role required' };
+        }
+      }
+    }
+  });
 
   const app = new Elysia().use(router);
   app.listen(3001);
@@ -59,7 +70,7 @@ async function verify() {
   // Give it a moment to start
   await new Promise(resolve => setTimeout(resolve, 500));
 
-  console.log('Testing POST /calculate/sum via HTTP...');
+  console.log('Testing POST /calculate/sum via HTTP (Unauthorized)...');
   try {
     const response = await fetch('http://localhost:3001/calculate/sum', {
       method: 'POST',
@@ -67,11 +78,31 @@ async function verify() {
       body: JSON.stringify({ a: 10, b: 20 })
     });
     
+    if (response.status === 401) {
+      console.log('✅ HTTP Elysia Route Traits works (Unauthorized blocked)!');
+    } else {
+      console.error('❌ HTTP Elysia Route Traits failed setup (Should have blocked!). Status:', response.status);
+    }
+  } catch (error) {
+    console.error('❌ HTTP Elysia failed with error:', error);
+  }
+
+  console.log('Testing POST /calculate/sum via HTTP (Authorized)...');
+  try {
+    const response = await fetch('http://localhost:3001/calculate/sum', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer token'
+      },
+      body: JSON.stringify({ a: 10, b: 20 })
+    });
+    
     const result: any = await response.json();
     console.log('HTTP Result:', result);
     
     if (result.result === 30) {
-      console.log('✅ HTTP Elysia works!');
+      console.log('✅ HTTP Elysia works (Authorized)!');
     } else {
       console.error('❌ HTTP Elysia failed: Unexpected result', result);
     }

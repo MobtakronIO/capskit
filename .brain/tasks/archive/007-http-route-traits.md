@@ -1,7 +1,7 @@
 ---
 title: Implement HTTP Route Traits (Adapter Middlewares)
 type: feature
-status: active
+status: done
 created: 2026-03-11
 ---
 
@@ -16,9 +16,9 @@ Enhance the HTTP Capsule's Elysia adapter so it can inject native Elysia request
 5. Create a mock trait (e.g., `auth: 'user'`) in `capskit-calculator`'s manifest to verify execution.
 
 ## Tasks
-- [ ] Define how `http.buildRouter` receives or maps trait handlers from the host application.
-- [ ] Update `src/adapters/elysia.ts` to apply `beforeHandle` hooks dynamically based on `route.traits`.
-- [ ] Add a sample trait to the calculator capsule in `manifest.ts` and test failing/passing that trait via `verify.test.ts` HTTP fetch calls.
+- [x] Define how `http.buildRouter` receives or maps trait handlers from the host application.
+- [x] Update `src/adapters/elysia.ts` to apply `beforeHandle` hooks dynamically based on `route.traits`.
+- [x] Add a sample trait to the calculator capsule in `manifest.ts` and test failing/passing that trait via `verify.test.ts` HTTP fetch calls.
 
 ## Verification
 - A route with a restricted trait should return a 401 or 403 HTTP status code when called if the condition is not met, without the underlying Capsule action ever executing.
