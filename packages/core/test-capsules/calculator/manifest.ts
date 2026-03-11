@@ -8,5 +8,12 @@ export const service: CapsuleManifest = {
       handler: sum,
       description: 'Sums two numbers provided in the payload'
     }
-  }
+  },
+  routes: [
+    {
+      method: 'POST',
+      path: '/calculate/sum',
+      action: 'sum'
+    }
+  ]
 };

@@ -55,11 +55,43 @@ async function verify() {
     console.log('✅ system.metrics works!');
   }
 
+  console.log('--- Testing HTTP Gateway Capsule ---');
+  const { service: gatewayManifest } = await import(`file://${path.resolve('../http-gateway/manifest.ts')}`);
+  (platform as any).registerCapsule(gatewayManifest);
+
+  console.log('Starting HTTP Gateway on port 3001...');
+  await platform.call('http-gateway.listen', { port: 3001 });
+
+  // Give it a moment to start
+  await new Promise(resolve => setTimeout(resolve, 500));
+
+  console.log('Testing GET /calculate/sum via HTTP...');
+  try {
+    const response = await fetch('http://localhost:3001/calculate/sum', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ a: 10, b: 20 })
+    });
+    
+    const result = await response.json();
+    console.log('HTTP Result:', result);
+    
+    if (result.result === 30) {
+      console.log('✅ HTTP Gateway works!');
+    } else {
+      console.error('❌ HTTP Gateway failed: Unexpected result', result);
+    }
+  } catch (error) {
+    console.error('❌ HTTP Gateway failed with error:', error);
+  } finally {
+    await platform.call('http-gateway.stop', {});
+  }
+
   console.log('--- Testing Calculator Capsule ---');
   console.log('Calling calculator.sum (5 + 10)...');
-  const sumResult = await platform.call('calculator.sum', { a: 5, b: 10 });
+  const sumResult = await platform.call('calculator.sum', { a: 15, b: 10 });
   console.log('Result:', sumResult);
-  if (sumResult.result === 15) {
+  if (sumResult.result === 25) {
     console.log('✅ calculator.sum works!');
   } else {
     console.error('❌ calculator.sum failed!');
