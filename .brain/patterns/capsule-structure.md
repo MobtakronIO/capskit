@@ -1,6 +1,6 @@
 # Service Capsule Structure
 
-> Every module under `microservices/services/` MUST follow this structure.
+> Every module under `src/capsules/` MUST follow this structure.
 > A **Capsule** is a plug-and-play, framework-agnostic collection of business capabilities (actions).
 
 ## Layout
@@ -23,8 +23,8 @@ services/<capsule-name>/
 
 ### `manifest.ts`
 The single source of truth for what this Capsule can do, and what it needs to run. 
-- Must export a `service` object conforming to `ServiceManifest` (from `@trading/shared-types`).
-- Defines `name`, `requires` (hard dependencies like 'redis' or 'database'), `actions` (metadata and handlers), `routes` (Zod schemas, traits), and `events`.
+- Must export a `service` object conforming to `CapsuleManifest` (from `../types`).
+- Defines `name`, `requires` (hard dependencies like 'redis' or 'database'), `actions` (metadata, handlers, and localized `pre`/`post` hooks), `routes` (Zod schemas, traits), and `events`.
 
 ### `index.ts`
 The API boundary for the Platform Kernel. It exports the `service` manifest and safely re-exports the individual actions.
@@ -39,7 +39,7 @@ Contains the **pure capabilities** of the Capsule.
 
 ### `src/core/`
 This is the black box. The Platform Kernel never looks inside `core/`. It contains the private implementations that the actions rely on.
-- `entities/`: Service-private domain types. (Platform-wide types live in `@trading/shared-types`).
+- `entities/`: Service-private domain types. (Platform-wide types live in `src/types.ts`).
 - `providers/`: Classes or functions to talk to external systems (e.g., Binance REST APIs).
 - `services/`: Heavy business orchestration. If an action processes complex state, it delegates to a domain service here.
 
@@ -60,6 +60,8 @@ export const service = {
   actions: {
     getPrice: {
       handler: getPrice,
+      pre: [validateSubscription], // Action-level hooks that run BEFORE the handler
+      post: [emitPriceFetched],    // Action-level hooks that run AFTER the handler
       description: "Get symbol price"
     }
   },
