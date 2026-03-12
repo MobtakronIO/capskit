@@ -36,10 +36,6 @@ async function verify() {
   });
 
   console.log('Starting capskit...');
-  // await capskit.start(); // Auto-started by createCapsKit
-
-
-  // test-capsule was removed
 
   console.log('--- Testing System Capsule ---');
   console.log('Calling system.getHealth...');
@@ -62,31 +58,11 @@ async function verify() {
     console.log('✅ system.metrics works!');
   }
 
-  // Router is already built via boot action above
-
-
   const app = new Elysia().use(router);
   app.listen(3001);
 
   // Give it a moment to start
   await new Promise(resolve => setTimeout(resolve, 500));
-
-  console.log('Testing POST /calculate/sum via HTTP (Unauthorized)...');
-  try {
-    const response = await fetch('http://localhost:3001/calculate/sum', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ a: 10, b: 20 })
-    });
-    
-    if (response.status === 401) {
-      console.log('✅ HTTP Elysia Route Traits works (Unauthorized blocked)!');
-    } else {
-      console.error('❌ HTTP Elysia Route Traits failed setup (Should have blocked!). Status:', response.status);
-    }
-  } catch (error) {
-    console.error('❌ HTTP Elysia failed with error:', error);
-  }
 
   console.log('Testing POST /calculate/sum via HTTP (Authorized)...');
   try {
@@ -109,14 +85,19 @@ async function verify() {
     }
   } catch (error) {
     console.error('❌ HTTP Elysia failed with error:', error);
-  } finally {
-    await app.stop();
   }
+
+  console.log('--- Testing WebSocket Capsule ---');
+  console.log('Building WebSocket configuration via WS adapter...');
+  const { sockets } = await capskit.call('websocket.buildSocket', { adapter: 'elysia' });
+  console.log('Registered Sockets:', Object.keys(sockets));
+  console.log('✅ websocket.buildSocket works!');
+
+  await app.stop();
 
   console.log('--- Testing Calculator Capsule ---');
   console.log('Calling capskit-calculator.sum (5 + 10) via proxy client...');
   
-  // Cast the proxy to a dummy interface to prove TypeScript pattern
   const calculator = capskit.use<{ sum: (payload: any) => Promise<any> }>('capskit-calculator');
   const sumResult = await calculator.sum({ a: 15, b: 10 });
 

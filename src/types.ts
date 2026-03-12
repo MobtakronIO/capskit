@@ -6,17 +6,8 @@ export interface CapsuleManifest {
     publishes?: string[];
     subscribes?: EventSubscription[];
   };
-  routes?: RouteDefinition[];
-  sockets?: SocketDefinition[];
-}
-
-export interface SocketDefinition {
-  path: string;
-  open?: string;
-  message: string;
-  close?: string;
-  drain?: string;
-  schema?: any;
+  // Allow system capsules to extend the manifest with their own definitions (e.g., routes, sockets)
+  [key: string]: any;
 }
 
 export type ActionPreHook = (payload: any, context: ActionContext) => Promise<void> | void;
@@ -46,14 +37,6 @@ export interface ActionContext {
 export interface EventSubscription {
   event: string;
   action: string;
-}
-
-export interface RouteDefinition {
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
-  path: string;
-  action: string;
-  schema?: any; // Zod schema
-  traits?: Record<string, any>;
 }
 
 export interface CapsKitConfig {

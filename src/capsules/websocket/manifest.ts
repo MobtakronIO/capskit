@@ -7,7 +7,7 @@ export const service: CapsuleManifest = {
   actions: {
     buildSocket: {
       handler: buildSocket,
-      description: 'Returns a WebSocket configuration for Elysia containing all platform capabilities mapped to WebSockets'
+      description: 'Returns a WebSocket configuration containing all platform capabilities mapped to WebSockets'
     }
   }
 };

@@ -1,5 +1,5 @@
 {
-    "name": "@capskit/websocket-elysia",
+    "name": "@capskit/websocket",
     "version": "0.0.0",
     "main": "index.ts",
     "dependencies": {

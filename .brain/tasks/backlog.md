@@ -25,3 +25,4 @@
 - 🔴 [010-documentation-site](./archive/010-documentation-site.md) — Build CapsKit Documentation Site
 - 🔴 [011-npm-publish](./archive/011-npm-publish.md) — Prepare CapsKit for NPM Publishing
 - 🟢 [012-capsule-client-proxy](./archive/012-capsule-client-proxy.md) — Implement Capsule Client Proxy (capskit.use)
+- 🟢 [020-websocket-system-capsule](./020-websocket-system-capsule.md) — Create system capsule for WebSocket

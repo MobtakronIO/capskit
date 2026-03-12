@@ -1,9 +1,11 @@
 import { ActionHandler, ICapsKit, CapsKitConfig, CapsuleManifest, ActionInterceptor, ActionContext, ActionDefinition } from '../types';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import { loadCapsules } from './loader';
 import { service as systemService } from '../capsules/system/manifest';
 import { service as httpService } from '../capsules/http/manifest';
 import { service as calculatorService } from '../capsules/capskit-calculator/manifest';
+import { service as websocketService } from '../capsules/websocket/manifest';
 
 export class CapsKit implements ICapsKit {
   private actions = new Map<string, ActionDefinition>();
@@ -20,10 +22,27 @@ export class CapsKit implements ICapsKit {
   }
 
   async start(): Promise<any> {
-    // 1. Register built-in capsules (statically imported)
+    // 1. Register built-in capsules (statically imported for core stability)
     this.registerCapsule(systemService);
     this.registerCapsule(httpService);
     this.registerCapsule(calculatorService);
+    this.registerCapsule(websocketService);
+
+    // 2. Discover and load other capsules in the built-in directory
+    try {
+      // In a library, we might need a better way to resolve this, but for now we look at the source structure
+      const currentDir = path.dirname(fileURLToPath(import.meta.url));
+      const builtinDir = path.resolve(currentDir, '../capsules');
+      const builtinManifests = await loadCapsules(builtinDir);
+      for (const manifest of builtinManifests) {
+        // Skip if already registered
+        if (!this.manifests.has(manifest.name)) {
+          this.registerCapsule(manifest);
+        }
+      }
+    } catch (error) {
+      console.warn('[CapsKit] Could not auto-load built-in capsules directory:', error);
+    }
 
     // 2. Load custom capsules from config
     if (this.config.capsuleDirs) {
