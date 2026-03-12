@@ -1,7 +1,9 @@
 import { ActionHandler, ICapsKit, CapsKitConfig, CapsuleManifest, ActionInterceptor, ActionContext, ActionDefinition } from '../types';
 import * as path from 'path';
-import { fileURLToPath } from 'url';
 import { loadCapsules } from './loader';
+import { service as systemService } from '../capsules/system/manifest';
+import { service as httpService } from '../capsules/http/manifest';
+import { service as calculatorService } from '../capsules/capskit-calculator/manifest';
 
 export class CapsKit implements ICapsKit {
   private actions = new Map<string, ActionDefinition>();
@@ -18,17 +20,10 @@ export class CapsKit implements ICapsKit {
   }
 
   async start(): Promise<any> {
-    // 1. Auto-load built-in capsules
-    try {
-      const currentDir = path.dirname(fileURLToPath(import.meta.url));
-      const builtinDir = path.resolve(currentDir, '../capsules');
-      const builtinManifests = await loadCapsules(builtinDir);
-      for (const manifest of builtinManifests) {
-        this.registerCapsule(manifest);
-      }
-    } catch (error) {
-      console.warn('[CapsKit] Could not auto-load built-in capsules:', error);
-    }
+    // 1. Register built-in capsules (statically imported)
+    this.registerCapsule(systemService);
+    this.registerCapsule(httpService);
+    this.registerCapsule(calculatorService);
 
     // 2. Load custom capsules from config
     if (this.config.capsuleDirs) {
