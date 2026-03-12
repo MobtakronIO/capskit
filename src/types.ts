@@ -7,6 +7,16 @@ export interface CapsuleManifest {
     subscribes?: EventSubscription[];
   };
   routes?: RouteDefinition[];
+  sockets?: SocketDefinition[];
+}
+
+export interface SocketDefinition {
+  path: string;
+  open?: string;
+  message: string;
+  close?: string;
+  drain?: string;
+  schema?: any;
 }
 
 export type ActionPreHook = (payload: any, context: ActionContext) => Promise<void> | void;
