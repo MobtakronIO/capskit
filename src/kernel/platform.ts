@@ -1,5 +1,6 @@
 import { ActionHandler, ICapsKit, CapsKitConfig, CapsuleManifest, ActionInterceptor, ActionContext, ActionDefinition } from '../types';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import { loadCapsules } from './loader';
 
 export class CapsKit implements ICapsKit {
@@ -16,7 +17,20 @@ export class CapsKit implements ICapsKit {
     };
   }
 
-  async start(): Promise<void> {
+  async start(): Promise<any> {
+    // 1. Auto-load built-in capsules
+    try {
+      const currentDir = path.dirname(fileURLToPath(import.meta.url));
+      const builtinDir = path.resolve(currentDir, '../capsules');
+      const builtinManifests = await loadCapsules(builtinDir);
+      for (const manifest of builtinManifests) {
+        this.registerCapsule(manifest);
+      }
+    } catch (error) {
+      console.warn('[CapsKit] Could not auto-load built-in capsules:', error);
+    }
+
+    // 2. Load custom capsules from config
     if (this.config.capsuleDirs) {
       for (const dir of this.config.capsuleDirs) {
         const absoluteDir = path.resolve(dir);
@@ -27,6 +41,13 @@ export class CapsKit implements ICapsKit {
         }
       }
     }
+
+    // 3. Execute boot action if specified
+    if (this.config.boot) {
+      return await this.call(this.config.boot.action, this.config.boot.payload || {});
+    }
+
+    return null;
   }
 
   private registerCapsule(manifest: CapsuleManifest) {
@@ -153,6 +174,11 @@ export class CapsKit implements ICapsKit {
   }
 }
 
-export async function createCapsKit(config: CapsKitConfig): Promise<CapsKit> {
-  return new CapsKit(config);
+export async function createCapsKit(config: CapsKitConfig): Promise<any> {
+  const kit = new CapsKit(config);
+  const bootResult = await kit.start();
+  
+  // Return boot results merged with the kit instance for convenience
+  return Object.assign(bootResult || {}, { capskit: kit });
 }
+

@@ -2,43 +2,23 @@ import { createCapsKit } from '../src/index.ts';
 import { Elysia } from 'elysia';
 import * as path from 'path';
 
-/**
- * CapsKit Bootstrapper Example (Elysia)
- * 
- * This file demonstrates how to initialize the CapsKit platform
- * and attach the HTTP Elysia gateway to expose your capsule's capabilities.
- */
+
 async function main() {
-    const capskit = await createCapsKit({
-        // Provide directories where your capsules are located.
-        // The kernel will automatically scan and register them.
-        capsuleDirs: [
-            path.resolve(import.meta.dir, '../src/capsules') // Built-in capsules and capskit-calculator
-        ],
-        // Provide global dependencies (Databases, Redis, etc.)
-        // These will be injected into every action's 'deps' object.
+
+    const { router, capskit } = await createCapsKit({
+        capsuleDirs: [path.resolve(__dirname, 'capsules')],
+        boot: {
+            action: 'http.buildRouter',
+            payload: { adapter: 'elysia' }
+        },
         dependencies: {
             database: { connection: 'connected', type: 'mock' },
             logger: console
         }
     });
 
-    console.log('--- CapsKit Platform Initializing ---');
-
-    // Start the kernel (Scans, loads manifests, and validates dependencies)
-    await capskit.start();
-
-    // Instead of telling the capsule to listen, we ask it to build a router
-    // This allows us to use our own Elysia instance
-    const { router } = await capskit.call('http.buildRouter', { adapter: 'elysia' });
-
+    console.log('--- CapsKit Platform Initialized ---');
     const app = new Elysia();
-    
-    // We can add our own custom host plugins here:
-    // app.use(cors())
-    // app.use(swagger())
-    
-    // Mount the capsule capabilities
     app.use(router);
 
     const port = 3000;

@@ -49,10 +49,14 @@ export interface RouteDefinition {
 export interface CapsKitConfig {
   capsuleDirs?: string[];
   dependencies?: Record<string, any>;
+  boot?: {
+    action: string;
+    payload?: any;
+  };
 }
 
 export interface ICapsKit {
-  start(): Promise<void>;
+  start(): Promise<any>;
   call(actionName: string, payload: any): Promise<any>;
   use<TCapsule = any>(capsuleName: string): TCapsule;
   describe(capsuleName: string): CapsuleManifest | undefined;

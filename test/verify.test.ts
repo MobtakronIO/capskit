@@ -1,14 +1,26 @@
 import { createCapsKit } from '../src/kernel/platform';
 import { Elysia } from 'elysia';
-import * as path from 'path';
+import * as path from 'node:path';
 
 async function verify() {
   console.log('--- Testing CapsKit Core ---');
   
-  const capskit = await createCapsKit({
-    capsuleDirs: [
-      path.join(process.cwd(), 'src/capsules') // Built-in system capsules and capskit-calculator
-    ],
+  const { router, capskit } = await createCapsKit({
+    boot: {
+      action: 'http.buildRouter',
+      payload: {
+        adapter: 'elysia',
+        traitHandlers: {
+          auth: (role: string, { request, set }: any) => {
+            const auth = request.headers.get('authorization');
+            if (role === 'admin' && auth !== 'Bearer token') {
+              set.status = 401;
+              return { error: 'Unauthorized: admin role required' };
+            }
+          }
+        }
+      }
+    },
     dependencies: {
       database: { connected: true }
     }
@@ -24,7 +36,8 @@ async function verify() {
   });
 
   console.log('Starting capskit...');
-  await capskit.start();
+  // await capskit.start(); // Auto-started by createCapsKit
+
 
   // test-capsule was removed
 
@@ -49,20 +62,8 @@ async function verify() {
     console.log('✅ system.metrics works!');
   }
 
-  console.log('--- Testing HTTP Capsule ---');
-  console.log('Building router via HTTP adapter...');
-  const { router } = await capskit.call('http.buildRouter', { 
-    adapter: 'elysia',
-    traitHandlers: {
-      auth: (role: string, { request, set }: any) => {
-        const auth = request.headers.get('authorization');
-        if (role === 'admin' && auth !== 'Bearer token') {
-          set.status = 401;
-          return { error: 'Unauthorized: admin role required' };
-        }
-      }
-    }
-  });
+  // Router is already built via boot action above
+
 
   const app = new Elysia().use(router);
   app.listen(3001);

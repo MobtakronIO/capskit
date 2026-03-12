@@ -1,6 +1,6 @@
 {
     "name": "@mobtakronio/capskit",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "The Universal Capability Kernel - A framework-agnostic runtime for pure business logic.",
     "license": "MIT",
     "type": "module",

@@ -51,15 +51,15 @@ import { createCapsKit } from '@mobtakronio/capskit';
 import { Elysia } from 'elysia';
 import * as path from 'path';
 
-const capskit = await createCapsKit({
-  capsuleDirs: [path.resolve('./capsules')],
+// Simplified initialization: starts, auto-loads built-ins, and builds router in one call!
+const { router, capskit } = await createCapsKit({
+  capsuleDirs: [path.resolve('./custom-capsules')],
+  boot: { 
+    action: 'http.buildRouter',
+    payload: { adapter: 'elysia' }
+  },
   dependencies: { db: myDatabase }
 });
-
-await capskit.start();
-
-// Mount to Elysia automatically!
-const { router } = await capskit.call('http.buildRouter', { adapter: 'elysia' });
 
 new Elysia()
   .use(router)
