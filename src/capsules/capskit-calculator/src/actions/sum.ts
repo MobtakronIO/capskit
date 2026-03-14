@@ -1,14 +1,11 @@
 import { ActionHandler } from '../../../../types';
 
-export const sum: ActionHandler = async (payload, context) => {
-  const { a, b } = payload?.body || payload;
-  
-  if (typeof a !== 'number' || typeof b !== 'number') {
-    throw new Error('Inputs "a" and "b" must be numbers.');
-  }
+export const sum: ActionHandler = async ({ body }, { emit }) => {
+  const data = typeof body === 'string' ? JSON.parse(body) : body;
+  const result = Number(data?.a) + Number(data?.b);
 
-  const result = a + b;
-  context.emit('calculator.calculated', { a, b, result });
+  if (isNaN(result)) throw new Error('Inputs must be numeric');
 
+  emit('calculator.calculated', { ...data, result });
   return { result };
 };

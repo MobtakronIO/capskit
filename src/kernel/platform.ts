@@ -30,14 +30,27 @@ export class CapsKit implements ICapsKit {
 
     // 2. Discover and load other capsules in the built-in directory
     try {
-      // In a library, we might need a better way to resolve this, but for now we look at the source structure
-      const currentDir = path.dirname(fileURLToPath(import.meta.url));
-      const builtinDir = path.resolve(currentDir, '../capsules');
-      const builtinManifests = await loadCapsules(builtinDir);
-      for (const manifest of builtinManifests) {
-        // Skip if already registered
-        if (!this.manifests.has(manifest.name)) {
-          this.registerCapsule(manifest);
+      let currentDir: string | null = null;
+      
+      if (typeof __dirname !== 'undefined') {
+        currentDir = __dirname;
+      } else {
+        try {
+          if (typeof import.meta !== 'undefined' && import.meta.url) {
+            currentDir = path.dirname(fileURLToPath(import.meta.url));
+          }
+        } catch {
+          // ESM import.meta not available
+        }
+      }
+      
+      if (currentDir) {
+        const builtinDir = path.resolve(currentDir, '../capsules');
+        const builtinManifests = await loadCapsules(builtinDir);
+        for (const manifest of builtinManifests) {
+          if (!this.manifests.has(manifest.name)) {
+            this.registerCapsule(manifest);
+          }
         }
       }
     } catch (error) {
