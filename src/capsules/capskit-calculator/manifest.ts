@@ -29,7 +29,7 @@ export const service: CapsuleManifest = {
       }
     }
   ],
-  events: {
-    publishes: ['calculator.calculated']
-  }
+   events: {
+     publishes: ['capskit-calculator.sum']
+   }
 };

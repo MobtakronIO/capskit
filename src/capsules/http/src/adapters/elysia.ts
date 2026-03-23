@@ -1,12 +1,12 @@
 import { Elysia } from 'elysia';
 import { ICapsKit, CapsuleManifest } from '../../../../types';
 import { RouteDefinition } from '../types';
+import { FrameworkError } from '../../../../kernel/errors';
 
 export function createElysiaRouter(capskit: ICapsKit, traitHandlers: Record<string, Function> = {}) {
   const app = new Elysia();
 
-  // @ts-ignore - Accessing internal manifests for registration
-  const manifests: CapsuleManifest[] = (capskit as any).getManifests();
+  const manifests: CapsuleManifest[] = capskit.getManifests();
 
   manifests.forEach(manifest => {
     if (manifest.routes) {
@@ -25,18 +25,28 @@ export function createElysiaRouter(capskit: ICapsKit, traitHandlers: Record<stri
           }
         }
 
-        const handler = async ({ body, params, query, set }: any) => {
-          try {
-            return await capskit.call(`${manifest.name}.${route.action}`, {
-              body,
-              params,
-              query
-            });
-          } catch (error: any) {
-            set.status = 500;
-            return { error: error.message };
-          }
-        };
+         const handler = async ({ body, params, query, set }: any) => {
+           try {
+             return await capskit.call(`${manifest.name}.${route.action}`, {
+               body,
+               params,
+               query
+             });
+           } catch (error: any) {
+             // Map structured framework errors to appropriate HTTP status codes
+             if (error instanceof FrameworkError && error.status) {
+               set.status = error.status;
+               return { error: error.message, ...(error.details && { details: error.details }) };
+             }
+             
+             // Unexpected errors
+             set.status = 500;
+             return { 
+               error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
+               ...(process.env.NODE_ENV === 'development' && error.stack ? { stack: error.stack } : {})
+             };
+           }
+         };
 
         switch (route.method) {
           case 'GET': app.get(path, handler, hooks); break;

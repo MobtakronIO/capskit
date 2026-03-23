@@ -24,9 +24,9 @@ export const service: CapsuleManifest = {
       description: 'Global audit logger listener'
     }
   },
-  events: {
-    subscribes: [
-      { event: 'calculator.calculated', action: 'audit' }
-    ]
-  }
+   events: {
+     subscribes: [
+       { event: 'capskit-calculator.sum', action: 'audit' }
+     ]
+   }
 };

@@ -18,6 +18,13 @@ export interface ActionDefinition {
   description?: string;
   pre?: ActionPreHook[];
   post?: ActionPostHook[];
+  schema?: ActionSchema;
+}
+
+export interface ActionSchema {
+  type: 'object';
+  properties?: Record<string, any>;
+  required?: string[];
 }
 
 export type ActionHandler = (input: any, context: ActionContext) => Promise<any>;
@@ -40,7 +47,8 @@ export interface EventSubscription {
 }
 
 export interface CapsKitConfig {
-  capsuleDirs?: string[];
+  capsules?: CapsuleSource[];
+  capsuleDirs?: string[]; // Deprecated: use 'capsules' array for explicit precedence
   dependencies?: Record<string, any>;
   boot?: {
     action: string;
@@ -48,11 +56,17 @@ export interface CapsKitConfig {
   };
 }
 
+export type CapsuleSource = 
+  | { type: 'directory'; path: string }
+  | { type: 'manifest'; manifest: CapsuleManifest }
+  | { type: 'package'; name: string };
+
 export interface ICapsKit {
   start(): Promise<any>;
   call(actionName: string, payload: any): Promise<any>;
   use<TCapsule = any>(capsuleName: string): TCapsule;
   describe(capsuleName: string): CapsuleManifest | undefined;
+  getManifests(): CapsuleManifest[];
   emit(event: string, data: any): void;
   addInterceptor(interceptor: ActionInterceptor): void;
 }
