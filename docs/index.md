@@ -2,9 +2,9 @@
 layout: home
 ---
 
-<script setup>
-import { ref } from 'vue'
-</script>
+<div class="hero-row">
+
+<div class="hero-content">
 
 # CapsKit
 
@@ -17,45 +17,30 @@ import { ref } from 'vue'
   <a href="https://github.com/MobtakronIO/capskit" class="VPButton alt">GitHub</a>
 </div>
 
-```ts
-// src/capsules/math/manifest.ts
-export const service = {
-  name: 'math',
-  actions: {
-    sum: {
-      handler: async (payload) => ({
-        result: payload.a + payload.b
-      }),
-      schema: {
-        type: 'object',
-        properties: {
-          a: { type: 'number' },
-          b: { type: 'number' }
-        }
-      }
-    }
-  }
-}
-```
+</div>
 
-<br>
+<div class="hero-visual">
 
-```ts
-// bootstrap.ts
-import { createCapsKit } from '@mobtakronio/capskit'
-import { Elysia } from 'elysia'
+<div class="capsule-diagram">
+  <div class="capsule-outer">
+    <div class="capsule-inner">
+      <span class="capsule-icon">⚡</span>
+    </div>
+  </div>
+  <div class="capsule-label">Capsule</div>
+  
+  <div class="connector connector-top"></div>
+  <div class="connector connector-bottom"></div>
+  
+  <div class="capsule-ring ring-1">Interceptors</div>
+  <div class="capsule-ring ring-2">Pre Hooks</div>
+  <div class="capsule-ring ring-3">Action</div>
+  <div class="capsule-ring ring-4">Post Hooks</div>
+</div>
 
-const capskit = await createCapsKit({
-  capsuleDirs: ['./src/capsules']
-})
+</div>
 
-// Auto-generate HTTP router from manifests
-const { router } = await capskit.call('http.buildRouter', {
-  adapter: 'elysia'
-})
-
-new Elysia().use(router).listen(3000)
-```
+</div>
 
 ## Why CapsKit?
 
@@ -135,11 +120,131 @@ Capsules are self-contained modules. Drop a capsule into your project and the ke
 </div>
 
 <style>
+.hero-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3rem;
+  align-items: center;
+  margin-bottom: 4rem;
+}
+
+@media (max-width: 768px) {
+  .hero-row {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+  
+  .hero-actions {
+    justify-content: center;
+  }
+}
+
+.hero-content h1 {
+  font-size: 3.5rem;
+  font-weight: 800;
+  margin: 0;
+  background: linear-gradient(135deg, var(--vp-c-brand-1), var(--vp-c-brand-2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1;
+}
+
+.hero-content h2 {
+  font-size: 1.5rem;
+  font-weight: 500;
+  color: var(--vp-c-text-1);
+  margin: 0.5rem 0 1rem 0;
+}
+
+.hero-content p {
+  font-size: 1.1rem;
+  line-height: 1.7;
+  color: var(--vp-c-text-2);
+  margin-bottom: 1.5rem;
+}
+
 .hero-actions {
   display: flex;
   gap: 12px;
-  margin-bottom: 2rem;
 }
+
+.hero-visual {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.capsule-diagram {
+  position: relative;
+  width: 200px;
+  height: 280px;
+}
+
+.capsule-outer {
+  width: 120px;
+  height: 60px;
+  background: linear-gradient(135deg, var(--vp-c-brand-1), var(--vp-c-brand-2));
+  border-radius: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  position: relative;
+  z-index: 10;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.capsule-inner {
+  width: 100px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.capsule-icon {
+  font-size: 1.5rem;
+}
+
+.capsule-label {
+  text-align: center;
+  margin-top: 12px;
+  font-weight: 600;
+  color: var(--vp-c-text-1);
+}
+
+.connector {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 20px;
+  background: var(--vp-c-brand-1);
+  opacity: 0.5;
+}
+
+.connector-top { top: -20px; }
+.connector-bottom { bottom: -20px; }
+
+.capsule-ring {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  font-size: 0.75rem;
+  border-radius: 12px;
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-border);
+  white-space: nowrap;
+}
+
+.ring-1 { top: 20px; }
+.ring-2 { top: 50px; }
+.ring-3 { top: 80px; background: var(--vp-c-brand-3); border-color: var(--vp-c-brand-1); }
+.ring-4 { top: 110px; }
 
 .feature-grid {
   display: grid;
