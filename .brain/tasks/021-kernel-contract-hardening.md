@@ -1,9 +1,10 @@
 ---
 title: Harden CapsKit kernel contracts and adapter boundaries
 type: refactor
-status: active
+status: completed
 priority: 🔴 critical
 created: 2026-03-23
+completed: 2026-03-23
 tags: kernel,adapters,typing,loading,events
 dependencies: 020-websocket-system-capsule
 ---
@@ -126,3 +127,51 @@ The work should proceed in this order:
   - Mitigation: keep a backward-compatibility layer with deprecation warnings where reasonable.
 - Introducing structured errors may require adapter API changes.
   - Mitigation: land the kernel error model first, then update adapters in the same task.
+
+## Completion Summary
+
+### What Was Accomplished
+
+1. **Type validation in `validatePayload`**: Added type checking against `schema.properties` so that payloads with wrong types (e.g., string instead of number) are rejected with 400 errors.
+
+2. **Event subscription format**: Fixed tests to use the correct `events.subscribes: [{ event, action }]` format instead of the incorrect shorthand `events: { 'event.name': {} }`.
+
+3. **Windows file URL resolution**: Fixed `pathToFileURL` helper to properly produce `file:///` URLs on Windows for both absolute and relative paths.
+
+4. **Error classes**: Added structured error classes (`ValidationError`, `NotFoundError`, `DependencyError`, `AuthorizationError`, `TraitError`) for transport-agnostic error handling.
+
+5. **Builtin capsules registry**: Created `src/capsules/builtin.ts` for explicit built-in capsule registration.
+
+6. **Handler signature**: Updated to `(payload, context)` where context contains `deps`, `emit`, `call`, etc.
+
+7. **Config key**: Fixed from `deps` to `dependencies` for dependency injection.
+
+8. **All 10 loader edge case tests pass**: Tests now cover string handler resolution, duplicate detection, DI invariant, schema validation, event dispatch, introspection API, and file URL resolution.
+
+### Patterns Captured
+
+1. **Handler signature**: `ActionHandler = (input: any, context: ActionContext) => Promise<any>` - first arg is payload, second is context containing `deps`, `emit`, `call`, etc.
+
+2. **Loader directory structure**: The loader expects `{root}/capsuleName/manifest.ts` structure. When using `type: 'directory'`, point to the root containing capsule subdirectories.
+
+3. **String handler resolution**: Requires capsules to be loaded from directory sources because the loader needs `__capsuleDir` to resolve relative paths.
+
+4. **Event subscription format**: Must use `events.subscribes: [{ event: 'event.name', action: 'actionName' }]` not shorthand object keys.
+
+5. **Schema validation**: Currently validates `required` fields AND type validation against `schema.properties`.
+
+### Decisions Made
+
+1. **No runtime `on` method for events**: Events are subscribed via manifest declarations only, not runtime listeners. This keeps the event system declarative and capsule-centric.
+
+2. **Type validation is strict**: If a property is present and has a type defined, it must match. This catches type mismatches early.
+
+3. **Windows file URLs use `file:///`**: Both absolute and relative paths use three slashes on Windows for consistency.
+
+### Learnings
+
+1. **Template literals in test strings**: Using single quotes `'${capsuleName}.greet'` passes the literal string instead of interpolating. Must use backticks.
+
+2. **Payload structure for validation**: The `validatePayload` method receives `payload.body` (not the whole payload) from `call()`.
+
+3. **`createCapsKit` return shape**: Returns `{ router, capskit }` - tests must access the kit via `.capskit`.
