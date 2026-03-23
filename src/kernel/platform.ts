@@ -1,5 +1,6 @@
 import { ActionHandler, ICapsKit, CapsKitConfig, CapsuleManifest, ActionInterceptor, ActionContext, ActionDefinition, CapsuleSource } from '../types';
 import * as path from 'path';
+import { pathToFileURL } from 'url';
 import { loadCapsules } from './loader';
 import { builtinCapsules } from '../capsules/builtin';
 import { ValidationError, NotFoundError, DependencyError, AuthorizationError, TraitError } from './errors';
@@ -119,14 +120,43 @@ export class CapsKit implements ICapsKit {
         const handlerPath = path.resolve(capsuleSource, handler);
 
         // Security check: ensure resolved path stays within capsule source
-        if (!handlerPath.startsWith(capsuleSource)) {
+        // Use path.relative to properly check containment across different path styles
+        const relativePath = path.relative(capsuleSource, handlerPath);
+        if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
           throw new Error(`Handler path "${handler}" for action ${fullName} resolves outside capsule directory. ` +
             `This is a security restriction.`);
         }
 
         try {
-          // Dynamic import the handler module
-          const module = await import(`file://${handlerPath}`);
+          // Try to import with extension resolution
+          // First try the path as-is (in case it already has an extension or is a package)
+          let module;
+          let lastError: Error | null = null;
+          
+          // Generate potential file URLs with extensions
+          const extensions = path.extname(handlerPath) ? [''] : ['', '.js', '.mjs', '.cjs', '.ts'];
+          
+          for (const ext of extensions) {
+            const candidatePath = ext ? handlerPath + ext : handlerPath;
+            try {
+              const fileUrl = pathToFileURL(candidatePath).href;
+              module = await import(fileUrl);
+              lastError = null;
+              break;
+            } catch (error: any) {
+              lastError = error;
+              // If file not found, continue to next extension
+              if (error.code === 'ERR_MODULE_NOT_FOUND' || error.code === 'ENOENT') {
+                continue;
+              }
+              // Other errors should be re-raised
+              throw error;
+            }
+          }
+          
+          if (lastError && !module) {
+            throw lastError;
+          }
 
           // Try default export first, then named export matching action name
           let resolvedHandler: ActionHandler;
@@ -156,6 +186,10 @@ export class CapsKit implements ICapsKit {
     // Register event subscriptions
     if (manifest.events?.subscribes) {
       for (const sub of manifest.events.subscribes) {
+        // Validate that the subscribed action exists in this capsule
+        if (!manifest.actions[sub.action]) {
+          throw new ValidationError(`Capsule "${manifest.name}" subscribes to event "${sub.event}" with non-existent action "${sub.action}".`);
+        }
         const targetAction = `${manifest.name}.${sub.action}`;
         const existing = this.eventRegistry.get(sub.event) || [];
         existing.push(targetAction);
@@ -260,50 +294,53 @@ export class CapsKit implements ICapsKit {
         throw new NotFoundError(`Action "${actionName}" not found.`);
       }
 
+      // Normalize payload: support both structured (body/params/query) and plain objects
+      const normalizedPayload = payload.body !== undefined ? payload : { body: payload, params: undefined, query: {} };
+
       // Validate input payload body against schema if defined
       if (actionDef.schema) {
-        this.validatePayload(actionDef.schema, payload.body, actionName);
+        this.validatePayload(actionDef.schema, normalizedPayload.body, actionName);
       }
 
       const handler = actionDef.handler as ActionHandler;
 
       const context: ActionContext = {
-        params: payload?.params,
-        body: payload?.body,
-        query: payload?.query,
+        params: normalizedPayload.params,
+        body: normalizedPayload.body,
+        query: normalizedPayload.query,
         deps: this.dependencies,
         emit: this.emit.bind(this),
         call: this.call.bind(this),
-      use: this.use.bind(this)
-    };
+        use: this.use.bind(this)
+      };
 
-    let index = -1;
-    const dispatch = async (i: number): Promise<any> => {
-      if (i <= index) throw new Error('next() called multiple times');
-      index = i;
-      if (i === this.interceptors.length) {
-        
-        if (actionDef.pre) {
-          for (const hook of actionDef.pre) {
-            await hook(payload, context);
-          }
-        }
-
-        let result = await handler(payload, context);
-
-        if (actionDef.post) {
-          for (const hook of actionDef.post) {
-            const hookResult = await hook(payload, result, context);
-            if (hookResult !== undefined) {
-              result = hookResult;
+      let index = -1;
+      const dispatch = async (i: number): Promise<any> => {
+        if (i <= index) throw new Error('next() called multiple times');
+        index = i;
+        if (i === this.interceptors.length) {
+          
+          if (actionDef.pre) {
+            for (const hook of actionDef.pre) {
+              await hook(normalizedPayload.body, context);
             }
           }
-        }
 
-        return result;
-      }
-      const interceptor = this.interceptors[i];
-      return interceptor(actionName, payload, context, () => dispatch(i + 1));
+          let result = await handler(normalizedPayload.body, context);
+
+          if (actionDef.post) {
+            for (const hook of actionDef.post) {
+              const hookResult = await hook(normalizedPayload.body, result, context);
+              if (hookResult !== undefined) {
+                result = hookResult;
+              }
+            }
+          }
+
+          return result;
+        }
+        const interceptor = this.interceptors[i];
+        return interceptor(actionName, normalizedPayload.body, context, () => dispatch(i + 1));
     };
 
     return dispatch(0);

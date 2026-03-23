@@ -28,8 +28,8 @@ export async function runLoaderEdgeCaseTests() {
   `;
   await writeFile(join(capsuleDir, 'manifest.ts'), manifestContent);
   await writeFile(join(actionsDir, 'greet.ts'), `
-    export default async function greet(ctx) {
-      return { message: \`Hello, \${ctx.body.name || 'World'}!\` };
+    export default async function greet(payload, ctx) {
+      return { message: \`Hello, \${payload.name || 'World'}!\` };
     }
   `);
 
@@ -197,8 +197,8 @@ export async function runLoaderEdgeCaseTests() {
           name: 'schema-good-test',
           actions: {
             add: {
-              handler: async (ctx) => {
-                const { a, b } = ctx.body;
+              handler: async (payload, _ctx) => {
+                const { a, b } = payload;
                 return { result: a + b };
               },
               schema: {
@@ -245,7 +245,7 @@ export async function runLoaderEdgeCaseTests() {
           name: 'schema-bad-test',
           actions: {
             add: {
-              handler: async (ctx) => ({ result: ctx.body.a + ctx.body.b }),
+              handler: async (payload, _ctx) => ({ result: payload.a + payload.b }),
               schema: {
                 type: 'object',
                 required: ['a', 'b'],

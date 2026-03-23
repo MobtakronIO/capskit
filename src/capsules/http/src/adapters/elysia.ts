@@ -18,7 +18,21 @@ export function createElysiaRouter(capskit: ICapsKit, traitHandlers: Record<stri
           hooks.beforeHandle = [];
           for (const [traitName, traitValue] of Object.entries(route.traits)) {
             if (traitHandlers[traitName]) {
-              hooks.beforeHandle.push((c: any) => traitHandlers[traitName](traitValue, c));
+              // Wrap trait handler to properly map framework errors to HTTP responses
+              const wrappedTrait = async (c: any) => {
+                try {
+                  await traitHandlers[traitName](traitValue, c);
+                } catch (error: any) {
+                  if (error instanceof FrameworkError && error.status) {
+                    c.set.status = error.status;
+                    // Throw formatted error to abort request
+                    throw { error: error.message, ...(error.details && { details: error.details }) };
+                  }
+                  // Re-throw other errors to be caught by main handler (500)
+                  throw error;
+                }
+              };
+              hooks.beforeHandle.push(wrappedTrait);
             } else {
               console.warn(`[HTTP Elysia] No handler provided for trait "${traitName}" on route ${route.method} ${path}`);
             }

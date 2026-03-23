@@ -86,7 +86,7 @@ export async function runPlatformTests(kitFactory: (config: any) => Promise<any>
           name: 'validator',
           actions: {
         test: {
-          handler: async (ctx: any) => ctx.body,
+          handler: async (payload: any, _ctx: any) => payload,
           schema: { type: 'object', required: ['x'] }
         }
           }
