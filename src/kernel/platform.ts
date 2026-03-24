@@ -295,7 +295,9 @@ export class CapsKit implements ICapsKit {
       }
 
       // Normalize payload: support both structured (body/params/query) and plain objects
-      const normalizedPayload = payload.body !== undefined ? payload : { body: payload, params: undefined, query: {} };
+      const isStructured = payload && typeof payload === 'object' &&
+        (payload.body !== undefined || payload.params !== undefined || payload.query !== undefined);
+      const normalizedPayload = isStructured ? payload : { body: payload, params: undefined, query: {} };
 
       // Validate input payload body against schema if defined
       if (actionDef.schema) {
@@ -320,27 +322,27 @@ export class CapsKit implements ICapsKit {
         index = i;
         if (i === this.interceptors.length) {
           
-          if (actionDef.pre) {
-            for (const hook of actionDef.pre) {
-              await hook(normalizedPayload.body, context);
-            }
-          }
+       if (actionDef.pre) {
+         for (const hook of actionDef.pre) {
+           await hook(normalizedPayload, context);
+         }
+       }
 
-          let result = await handler(normalizedPayload.body, context);
+       let result = await handler(normalizedPayload, context);
 
-          if (actionDef.post) {
-            for (const hook of actionDef.post) {
-              const hookResult = await hook(normalizedPayload.body, result, context);
-              if (hookResult !== undefined) {
-                result = hookResult;
-              }
-            }
-          }
+       if (actionDef.post) {
+         for (const hook of actionDef.post) {
+           const hookResult = await hook(normalizedPayload, result, context);
+           if (hookResult !== undefined) {
+             result = hookResult;
+           }
+         }
+       }
 
           return result;
         }
         const interceptor = this.interceptors[i];
-        return interceptor(actionName, normalizedPayload.body, context, () => dispatch(i + 1));
+        return interceptor(actionName, normalizedPayload, context, () => dispatch(i + 1));
     };
 
     return dispatch(0);

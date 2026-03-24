@@ -29,7 +29,8 @@ export async function runLoaderEdgeCaseTests() {
   await writeFile(join(capsuleDir, 'manifest.ts'), manifestContent);
   await writeFile(join(actionsDir, 'greet.ts'), `
     export default async function greet(payload, ctx) {
-      return { message: \`Hello, \${payload.name || 'World'}!\` };
+      // normalizedPayload has structure: { body, params, query }
+      return { message: \`Hello, \${payload.body?.name || payload.name || 'World'}!\` };
     }
   `);
 
@@ -46,7 +47,8 @@ export async function runLoaderEdgeCaseTests() {
   try {
     const result = await createCapsKit(configStringHandler);
     const kit = result.capskit;
-    const response = await kit.call(`${capsuleName}.greet`, { body: { name: 'Test' } });
+    // Pass plain payload - handler accesses payload.name directly
+    const response = await kit.call(`${capsuleName}.greet`, { name: 'Test' });
     if (response.message !== 'Hello, Test!') {
       throw new Error(`expected "Hello, Test!", got "${response.message}"`);
     }

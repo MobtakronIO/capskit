@@ -116,8 +116,8 @@ export async function runPlatformTests(kitFactory: (config: any) => Promise<any>
 
   // Provide required field should succeed
   const valResult = await kit5.call('validator.test', { body: { x: 1 } });
-  if (valResult.x !== 1) {
-    throw new Error('expected payload to be returned');
+  if (valResult.body?.x !== 1) {
+    throw new Error('expected payload body to be returned, got: ' + JSON.stringify(valResult));
   }
   console.log('✅ schema validation works');
 

@@ -1,7 +1,8 @@
 import { Elysia } from 'elysia';
-import { ICapsKit, CapsuleManifest } from '../../../../types';
+import { ICapsKit, CapsuleManifest, ActionInput } from '../../../../types';
 import { RouteDefinition } from '../types';
 import { FrameworkError } from '../../../../kernel/errors';
+import { mapToHttpResponse } from '../../../../kernel/error-mapping';
 
 export function createElysiaRouter(capskit: ICapsKit, traitHandlers: Record<string, Function> = {}) {
   const app = new Elysia();
@@ -18,18 +19,11 @@ export function createElysiaRouter(capskit: ICapsKit, traitHandlers: Record<stri
           hooks.beforeHandle = [];
           for (const [traitName, traitValue] of Object.entries(route.traits)) {
             if (traitHandlers[traitName]) {
-              // Wrap trait handler to properly map framework errors to HTTP responses
               const wrappedTrait = async (c: any) => {
                 try {
                   await traitHandlers[traitName](traitValue, c);
                 } catch (error: any) {
-                  if (error instanceof FrameworkError && error.status) {
-                    c.set.status = error.status;
-                    // Throw formatted error to abort request
-                    throw { error: error.message, ...(error.details && { details: error.details }) };
-                  }
-                  // Re-throw other errors to be caught by main handler (500)
-                  throw error;
+                  return mapToHttpResponse(error, c.set);
                 }
               };
               hooks.beforeHandle.push(wrappedTrait);
@@ -39,28 +33,17 @@ export function createElysiaRouter(capskit: ICapsKit, traitHandlers: Record<stri
           }
         }
 
-         const handler = async ({ body, params, query, set }: any) => {
-           try {
-             return await capskit.call(`${manifest.name}.${route.action}`, {
-               body,
-               params,
-               query
-             });
-           } catch (error: any) {
-             // Map structured framework errors to appropriate HTTP status codes
-             if (error instanceof FrameworkError && error.status) {
-               set.status = error.status;
-               return { error: error.message, ...(error.details && { details: error.details }) };
-             }
-             
-             // Unexpected errors
-             set.status = 500;
-             return { 
-               error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
-               ...(process.env.NODE_ENV === 'development' && error.stack ? { stack: error.stack } : {})
-             };
-           }
-         };
+          const handler = async ({ body, params, query, set }: any) => {
+            try {
+              return await capskit.call(`${manifest.name}.${route.action}`, {
+                body,
+                params,
+                query
+              });
+            } catch (error: any) {
+              return mapToHttpResponse(error, set);
+            }
+          };
 
         switch (route.method) {
           case 'GET': app.get(path, handler, hooks); break;

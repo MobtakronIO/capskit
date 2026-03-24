@@ -1,6 +1,7 @@
 import { ICapsKit, CapsuleManifest, ActionContext } from '../../../../types';
 import { SocketDefinition } from '../types';
 import { FrameworkError } from '../../../../kernel/errors';
+import { handleWebSocketError } from '../../../../kernel/error-mapping';
 
 export function createElysiaSocket(capskit: ICapsKit) {
   const manifests: CapsuleManifest[] = capskit.getManifests();
