@@ -1,5 +1,7 @@
+.agent/
 .agents/
 .opencode/
+.opencode
 node_modules/
 .DS_Store
 *.log

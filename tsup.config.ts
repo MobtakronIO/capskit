@@ -10,4 +10,5 @@ export default defineConfig({
   minify: false,
   outDir: 'dist',
   target: 'node20',
+  shims: true,
 });

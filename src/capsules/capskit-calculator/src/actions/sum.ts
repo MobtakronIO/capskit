@@ -11,5 +11,6 @@ export const sum: ActionHandler = async (payload, context) => {
   const result = a + b;
    context.emit('capskit-calculator.sum', { a, b, result });
 
+  emit('calculator.calculated', { ...data, result });
   return { result };
 };
