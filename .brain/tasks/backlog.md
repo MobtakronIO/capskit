@@ -26,3 +26,6 @@
 - 🔴 [011-npm-publish](./archive/011-npm-publish.md) — Prepare CapsKit for NPM Publishing
 - 🟢 [012-capsule-client-proxy](./archive/012-capsule-client-proxy.md) — Implement Capsule Client Proxy (capskit.use)
 - 🟢 [020-websocket-system-capsule](./020-websocket-system-capsule.md) — Create system capsule for WebSocket
+- 🔴 [021-kernel-contract-hardening](./021-kernel-contract-hardening.md) — Harden CapsKit kernel contracts and adapter boundaries
+- 🟡 [022-quality-boosters](./022-quality-boosters.md) — Raise kernel quality to 9.5 via contract polish and tests
+- 🟡 [023-docs-elysia-inspired](./023-docs-elysia-inspired.md) — Redesign docs inspired by ElysiaJS and cover CapsKit features

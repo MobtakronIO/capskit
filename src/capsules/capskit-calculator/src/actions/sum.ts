@@ -1,10 +1,15 @@
 import { ActionHandler } from '../../../../types';
+import { ValidationError } from '../../../../kernel/errors';
 
-export const sum: ActionHandler = async ({ body }, { emit }) => {
-  const data = typeof body === 'string' ? JSON.parse(body) : body;
-  const result = Number(data?.a) + Number(data?.b);
+export const sum: ActionHandler = async (payload, context) => {
+  const { a, b } = payload?.body || payload;
+  
+  if (typeof a !== 'number' || typeof b !== 'number') {
+    throw new ValidationError('Inputs "a" and "b" must be numbers.');
+  }
 
-  if (isNaN(result)) throw new Error('Inputs must be numeric');
+  const result = a + b;
+   context.emit('capskit-calculator.sum', { a, b, result });
 
   emit('calculator.calculated', { ...data, result });
   return { result };

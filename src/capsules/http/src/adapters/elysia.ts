@@ -1,12 +1,13 @@
 import { Elysia } from 'elysia';
-import { ICapsKit, CapsuleManifest } from '../../../../types';
+import { ICapsKit, CapsuleManifest, ActionInput } from '../../../../types';
 import { RouteDefinition } from '../types';
+import { FrameworkError } from '../../../../kernel/errors';
+import { mapToHttpResponse } from '../../../../kernel/error-mapping';
 
 export function createElysiaRouter(capskit: ICapsKit, traitHandlers: Record<string, Function> = {}) {
   const app = new Elysia();
 
-  // @ts-ignore - Accessing internal manifests for registration
-  const manifests: CapsuleManifest[] = (capskit as any).getManifests();
+  const manifests: CapsuleManifest[] = capskit.getManifests();
 
   manifests.forEach(manifest => {
     if (manifest.routes) {
@@ -18,25 +19,31 @@ export function createElysiaRouter(capskit: ICapsKit, traitHandlers: Record<stri
           hooks.beforeHandle = [];
           for (const [traitName, traitValue] of Object.entries(route.traits)) {
             if (traitHandlers[traitName]) {
-              hooks.beforeHandle.push((c: any) => traitHandlers[traitName](traitValue, c));
+              const wrappedTrait = async (c: any) => {
+                try {
+                  await traitHandlers[traitName](traitValue, c);
+                } catch (error: any) {
+                  return mapToHttpResponse(error, c.set);
+                }
+              };
+              hooks.beforeHandle.push(wrappedTrait);
             } else {
               console.warn(`[HTTP Elysia] No handler provided for trait "${traitName}" on route ${route.method} ${path}`);
             }
           }
         }
 
-        const handler = async ({ body, params, query, set }: any) => {
-          try {
-            return await capskit.call(`${manifest.name}.${route.action}`, {
-              body,
-              params,
-              query
-            });
-          } catch (error: any) {
-            set.status = 500;
-            return { error: error.message };
-          }
-        };
+          const handler = async ({ body, params, query, set }: any) => {
+            try {
+              return await capskit.call(`${manifest.name}.${route.action}`, {
+                body,
+                params,
+                query
+              });
+            } catch (error: any) {
+              return mapToHttpResponse(error, set);
+            }
+          };
 
         switch (route.method) {
           case 'GET': app.get(path, handler, hooks); break;

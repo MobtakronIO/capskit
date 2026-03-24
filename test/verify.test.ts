@@ -2,6 +2,12 @@ import { createCapsKit } from '../src/kernel/platform';
 import { Elysia } from 'elysia';
 import * as path from 'node:path';
 
+// Automated test suites
+import { runPlatformTests } from './suites/platform.test';
+import { runEventTests } from './suites/events.test';
+import { runHttpAdapterTests } from './suites/http-adapter.test';
+import { runLoaderEdgeCaseTests } from './suites/loader-edge-cases.test';
+
 async function verify() {
   console.log('--- Testing CapsKit Core ---');
   
@@ -96,18 +102,27 @@ async function verify() {
   await app.stop();
 
   console.log('--- Testing Calculator Capsule ---');
-  console.log('Calling capskit-calculator.sum (5 + 10) via proxy client...');
-  
-  const calculator = capskit.use<{ sum: (payload: any) => Promise<any> }>('capskit-calculator');
-  const sumResult = await calculator.sum({ a: 15, b: 10 });
+   console.log('Calling capskit-calculator.sum (5 + 10) via proxy client...');
+   
+   // @ts-ignore - using proxy access
+   const calculator = capskit.use('capskit-calculator');
+   const sumResult = await calculator.sum({ a: 15, b: 10 });
 
   console.log('Result:', sumResult);
   if (sumResult.result === 25) {
     console.log('✅ capskit-calculator.sum works!');
-  } else {
-    console.error('❌ capskit-calculator.sum failed!');
-    process.exit(1);
-  }
-}
+   } else {
+     console.error('❌ capskit-calculator.sum failed!');
+     process.exit(1);
+   }
+
+   // Run automated test suites for hardened contracts
+   console.log('\n=== Running Automated Test Suites ===');
+   await runPlatformTests(createCapsKit);
+   await runEventTests(createCapsKit);
+   await runHttpAdapterTests();
+   await runLoaderEdgeCaseTests();
+   console.log('✅ All automated test suites passed');
+ }
 
 verify();
