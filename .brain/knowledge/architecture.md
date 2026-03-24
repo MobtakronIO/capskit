@@ -91,17 +91,18 @@ orders/
     └── services/
 ```
 
-### The "System" Capsule (Hybrid Approach)
+### The "System" & Gateway Capsules (Hybrid Approach)
 
-To avoid infinite recursion and "chicken-and-egg" dependencies, the raw Kernel handles the registry and adapters directly. However, upon booting, the Kernel also exposes a virtual **System Capsule** (`@capskit/system`).
-
-This hybrid approach maps platform operations identically to normal business logic. The `system` capsule exposes Kernel management functions:
+To avoid infinite recursion and "chicken-and-egg" dependencies, the raw Kernel handles the registry and adapters through specialized built-in capsules.
 - `system.listCapsules`: Returns manifests of all running capsules.
 - `system.getHealth`: Returns platform status.
 - `system.reloadCapsule`: Hot-reloads a specific capsule folder.
-- `system.metrics`: Exposes performance metrics.
 
-Instead of calling separate kernel APIs, you invoke them normally: `platform.call("system.listCapsules")`.
+The **Gateway Adapters** are also capsules with specific build actions:
+- `http.buildRouter`: Generates a routable object for HTTP frameworks (default: Elysia).
+- `websocket.buildRouter`: Generates a WebSocket-ready router.
+
+Instead of calling separate kernel APIs, you invoke them normally: `capskit.use("system").listCapsules()`.
 
 ---
 
@@ -240,17 +241,29 @@ A real application project contains only its business capsules and configuration
 
 **Example Boot Process (`main.ts`):**
 ```typescript
-import { createPlatform } from "@capskit/core"
+### Application Boot Process
 
-const platform = await createPlatform({
-  capsulesDir: "./capsules"     // 1. Kernel initializes
+A real application project contains only its business capsules and configuration. The application boots the Kernel using the `createCapsKit` helper, which orchestrates the rest.
+
+**Example Boot Process (`main.ts`):**
+```typescript
+import { createCapsKit } from "@mobtakronio/capskit"
+
+const { capskit } = await createCapsKit({
+  capsules: [
+    { type: 'directory', path: './src/capsules' }
+  ],
+  dependencies: { database: myDatabase }
 })
 
-await platform.start()          // 2. Capsules discovered, manifests loaded
-                                // 3. Dependencies injected & validated
-                                // 4. Actions registered
-                                // 5. Events subscribed
-                                // 6. Adapters (HTTP, etc.) started
+// Optional: call boot actions or generate adapters manually
+const { router } = await capskit.use('http').buildRouter({ adapter: 'elysia' });
+
+// Native proxy invocation
+const result = await capskit.use('market-data').getPrice({ symbol: "BTCUSDT" });
+```
+
+The `createCapsKit` function initializes the kernel, loads built-in and configured capsules, injects dependencies, and executes any specified boot actions in one go.
 ```
 
 ---
