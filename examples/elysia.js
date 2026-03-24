@@ -1,32 +1,39 @@
 import { createCapsKit } from '../packages/capskit/src/index.ts';
 import { Elysia } from 'elysia';
-import * as path from 'path';
 
-
+/**
+ * Basic example demonstrating how to boot CapsKit with an Elysia adapter.
+ */
 async function main() {
-
+    // 1. Initialize the platform with a boot action
+    // In a monorepo, we can reference the built-in system 'http' capsule.
     const { router, capskit } = await createCapsKit({
-        // Uses the new monorepo adapter resolution
         boot: {
             action: 'http.buildRouter',
-            payload: { adapter: '@mobtakronio/capskit-http-elysia' }
+            payload: { 
+                adapter: '@mobtakronio/capskit-http-elysia' 
+            }
         },
         dependencies: {
-            database: { connection: 'connected', type: 'mock' },
+            database: { connection: 'connected' },
             logger: console
         }
     });
 
-    console.log('--- CapsKit Platform Initialized ---');
+    console.log('--- CapsKit Platform Successfully Initialized ---');
+
+    // 2. The router was built automatically by the boot action
     const app = new Elysia();
     app.use(router);
+
+    // 3. Alternatively, you can always build/fetch transport blueprints manually:
+    // const { router: manualRouter } = await capskit.use('http').buildRouter();
 
     const port = 3000;
     app.listen(port);
 
     console.log(`\n🚀 Gateway is live at http://localhost:${port}`);
-    console.log('Try this in your terminal:');
-    console.log(`curl -X POST http://localhost:${port}/calculate/sum -H "Content-Type: application/json" -d '{"body": {"a": 5, "b": 10}}'`);
+    console.log('Available routes:', capskit.getManifests().flatMap(m => m.routes || []).map(r => r.path));
 }
 
 main().catch(console.error);
