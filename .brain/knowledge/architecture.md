@@ -268,10 +268,44 @@ The `createCapsKit` function initializes the kernel, loads built-in and configur
 
 ---
 
-## 7. Key Architectural Goals & Benefits
+---
 
-1. **Framework-Agnostic / Zero Lock-in**: You can swap out the web framework simply by pulling in a new HTTP adapter. The business capsules remain entirely unmodified.
-2. **Capability-Centric Design**: Functionality is exposed as explicitly named actions rather than arbitrary services or controllers.
-3. **Action-Centric Routing & Safety**: By mapping routes to explicit actions with Zod schemas, we maintain tight cohesion without coupling to HTTP Requests/Responses. Generative AI tools and OpenAPI docs can be auto-generated from the manifest directly.
-4. **Plug-and-Play Reusability**: Capsules can be installed as NPM packages or dropped into folders, instantly enriching the host platform.
-5. **Clean Separation**: Business logic (Actions) is completely separated from infrastructure implementations (Adapters & DI).
+## 8. Pattern Comparison
+
+CapsKit sits at the intersection of several established design patterns, borrowing the best from each while maintaining its unique transport-agnostic focus.
+
+| Pattern | CapsKit | Plugins | Microservices | Middleware |
+|---------|---------|---------|---------------|------------|
+| **Transport Agnostic** | Yes | No | No | No |
+| **Dynamic Loading** | Yes | Yes | No | No |
+| **Event System** | Yes | Limited | Yes | No |
+| **Dependency Injection** | Yes | Limited | No | No |
+| **Interceptors** | Yes | Yes | No | Yes |
+
+### Comparison Highlights:
+- **vs. Plugins**: Like VS Code, CapsKit uses manifests for discovery, but focuses on business capabilities rather than UI extensions.
+- **vs. Microservices**: CapsKit provides service boundaries and event-driven decoupled communication but runs **in-process**, eliminating network overhead for inter-service calls.
+- **vs. Middleware**: CapsKit's interceptors are **action-level**, not transport-level, allowing logic like "log all sum calls" to work regardless of whether they come from HTTP or CLI.
+
+---
+
+## 9. Deep Analysis: Where CapsKit Excels
+
+### 1. Transport Agnostic Execution (The "Killer Feature")
+The complete decoupling of business logic from transport layers allows the same logic to serve multiple interfaces without modification.
+```typescript
+// Same action, different interfaces
+await capskit.use('calculator').sum({ a: 5, b: 3 }); // Internal/Test
+// POST /calculator/sum                              // HTTP
+// ws://localhost/calculator/sum                     // WebSocket
+// capskit calculator.sum 5 3                        // CLI
+```
+
+### 2. Declarative Manifest System
+By separating configuration (routes, traits, events) from code (handlers), the system remains self-documenting and introspection-ready.
+
+### 3. Built-in Event System
+Capsules can react to state changes without direct coupling through `context.emit()` and `events.subscribes`.
+
+### 4. Explicit Dependency Requirements
+Capsules declare what they need (redis, database), and the platform ensures they are provided during the boot phase, preventing runtime "missing service" errors.
