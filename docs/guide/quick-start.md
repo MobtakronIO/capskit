@@ -41,15 +41,15 @@ import { Elysia } from 'elysia';
 import * as path from 'path';
 
 async function bootstrap() {
-  const capskit = await createCapsKit({
-    capsuleDirs: [ path.join(process.cwd(), 'src/capsules') ],
+  const { capskit } = await createCapsKit({
+    capsules: [
+      { type: 'directory', path: path.join(process.cwd(), 'src/capsules') }
+    ],
     dependencies: { database: {} } 
   });
 
-  await capskit.start();
-
   // 1. Generate an Elysia router automatically!
-  const { router } = await capskit.call('http.buildRouter', { adapter: 'elysia' });
+  const { router } = await capskit.use('http').buildRouter({ adapter: 'elysia' });
 
   // 2. Start specific framework listeners
   new Elysia()

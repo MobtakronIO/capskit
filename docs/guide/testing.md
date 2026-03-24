@@ -160,7 +160,7 @@ import { test, expect } from 'bun:test'
 import { createCapsKit } from '@mobtakronio/capskit'
 
 test('full pipeline: create user', async () => {
-  const capskit = await createCapsKit({
+  const { capskit } = await createCapsKit({
     capsules: [{ type: 'directory', path: './test-capsules/user' }],
     dependencies: {
       database: mockDb,
@@ -168,10 +168,8 @@ test('full pipeline: create user', async () => {
     }
   })
   
-  await capskit.start()
-  
   // Call through the kernel (full pipeline)
-  const result = await capskit.call('user-capsule.create', {
+  const result = await capskit.use('user-capsule').create({
     name: 'Alice',
     email: 'alice@example.com'
   })
@@ -195,13 +193,12 @@ import { Elysia } from 'elysia'
 import { createCapsKit } from '@mobtakronio/capskit'
 
 test('POST /users returns 200', async () => {
-  const capskit = await createCapsKit({
+  const { capskit } = await createCapsKit({
     capsules: [{ type: 'directory', path: './src/capsules' }],
     dependencies: { database: mockDb }
   })
   
-  await capskit.start()
-  const { router } = await capskit.call('http.buildRouter', { adapter: 'elysia' })
+  const { router } = await capskit.use('http').buildRouter({ adapter: 'elysia' })
   
   const app = new Elysia().use(router)
   
@@ -340,7 +337,7 @@ Simulate real usage scenarios:
 ```ts
 test('user registration flow', async () => {
   // 1. Create user
-  const createResult = await capskit.call('user-capsule.create', {
+  const createResult = await capskit.use('user-capsule').create({
     name: 'Alice',
     email: 'alice@example.com'
   })
@@ -350,7 +347,7 @@ test('user registration flow', async () => {
   capskit.on('event', (event, data) => emits.push({ event, data }))
   
   // 3. Verify user was created
-  const getResult = await capskit.call('user-capsule.get', {
+  const getResult = await capskit.use('user-capsule').get({
     id: createResult.user.id
   })
   

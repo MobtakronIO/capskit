@@ -27,15 +27,15 @@ bun add @mobtakronio/capskit elysia
 ### 1. Define a Capsule
 
 ```typescript
-// capsules/calculator/manifest.ts
+// src/capsules/math/manifest.ts
 import { CapsuleManifest } from '@mobtakronio/capskit';
 
 export const service: CapsuleManifest = {
-  name: 'calculator',
+  name: 'math-capsule',
   actions: {
     sum: {
       handler: async (payload) => ({ result: payload.a + payload.b }),
-      description: 'Adds two numbers'
+      description: 'Sums two integers'
     }
   },
   routes: [
@@ -51,16 +51,18 @@ import { createCapsKit } from '@mobtakronio/capskit';
 import { Elysia } from 'elysia';
 import * as path from 'path';
 
-// Simplified initialization: starts, auto-loads built-ins, and builds router in one call!
-const { router, capskit } = await createCapsKit({
-  capsuleDirs: [path.resolve('./custom-capsules')],
-  boot: { 
-    action: 'http.buildRouter',
-    payload: { adapter: 'elysia' }
-  },
-  dependencies: { db: myDatabase }
+// Initialize the platform, auto-load built-ins and custom capsules
+const { capskit } = await createCapsKit({
+  capsules: [
+    { type: 'directory', path: path.resolve('./src/capsules') }
+  ],
+  dependencies: { database: myDatabase }
 });
 
+// 1. Generate an Elysia router automatically from capsule metadata!
+const { router } = await capskit.use('http').buildRouter({ adapter: 'elysia' });
+
+// 2. Start the framework listener
 new Elysia()
   .use(router)
   .listen(3000);
@@ -69,8 +71,8 @@ new Elysia()
 ### 3. Native Invocation (Proxy Client)
 
 ```typescript
-const calculator = capskit.use('calculator');
-const { result } = await calculator.sum({ a: 10, b: 20 });
+const math = capskit.use('math-capsule');
+const { result } = await math.sum({ a: 10, b: 20 });
 ```
 
 ## 📖 Documentation

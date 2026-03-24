@@ -213,10 +213,9 @@ const { capskit } = await createCapsKit({
 });
 
 capskit.addInterceptor(loggingInterceptor);
-await capskit.start();
 
 // All actions will now be logged
-await capskit.call('users.get', { id: '123' });
+await capskit.use('users').get({ id: '123' });
 // → users.get
 // ← users.get { id: '123', name: 'John Doe' }
 ```

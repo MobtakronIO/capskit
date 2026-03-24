@@ -8,14 +8,12 @@ The HTTP adapter exposes capsule actions as HTTP endpoints using the Elysia fram
 import { createCapsKit } from '@mobtakronio/capskit'
 import { Elysia } from 'elysia'
 
-const capskit = await createCapsKit({
+const { capskit } = await createCapsKit({
   capsules: [{ type: 'directory', path: './src/capsules' }]
 })
 
-await capskit.start()
-
 // Build Elysia router from capsule routes
-const { router } = await capskit.call('http.buildRouter', {
+const { router } = await capskit.use('http').buildRouter({
   adapter: 'elysia'
 })
 
@@ -127,7 +125,7 @@ Traits attach behavior to routes without polluting action code. Common use cases
 None are built-in—you define trait handlers:
 
 ```ts
-const capskit = await createCapsKit({
+const { capskit } = await createCapsKit({
   traitHandlers: {
     // Trait: 'auth:role:admin'
     'auth:role': (requiredRole, ctx) => {
@@ -325,12 +323,12 @@ import { Elysia } from 'elysia'
 import { createCapsKit } from '@mobtakronio/capskit'
 
 test('POST /users creates user', async () => {
-  const capskit = await createCapsKit({
+  const { capskit } = await createCapsKit({
     capsules: [{ type: 'directory', path: './src/capsules' }],
     dependencies: { database: mockDb }
   })
   
-  const { router } = await capskit.call('http.buildRouter', { adapter: 'elysia' })
+  const { router } = await capskit.use('http').buildRouter({ adapter: 'elysia' })
   
   const app = new Elysia().use(router)
   

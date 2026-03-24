@@ -9,14 +9,12 @@ import { createCapsKit } from '@mobtakronio/capskit'
 import { Elysia } from 'elysia'
 import { ws } from '@elysiajs/websocket'
 
-const capskit = await createCapsKit({
+const { capskit } = await createCapsKit({
   capsules: [{ type: 'directory', path: './src/capsules' }]
 })
 
-await capskit.start()
-
 // Build WebSocket router
-const { websocket } = await capskit.call('websocket.buildRouter', {
+const { websocket } = await capskit.use('websocket').buildRouter({
   adapter: 'elysia'
 })
 
@@ -159,7 +157,7 @@ wss.on('connection', (ws, req) => {
 })
 
 // Make broadcast helper available
-const capskit = await createCapsKit({
+const { capskit } = await createCapsKit({
   dependencies: {
     websocket: {
       broadcastToRoom: (room, message) => adapter.broadcastToRoom(room, message)
@@ -173,10 +171,10 @@ const capskit = await createCapsKit({
 Use **traits** for WebSocket connection authentication:
 
 ```ts
-const capskit = await createCapsKit({
+const { capskit } = await createCapsKit({
   traitHandlers: {
     'auth': async (token, ctx) => {
-      const user = await ctx.deps.auth.verifyToken(token)
+      const user = await ctx.deps.verifyToken(token)
       if (!user) throw new AuthorizationError('Invalid token')
       ctx.deps.currentUser = user // Attach user to context
     }
