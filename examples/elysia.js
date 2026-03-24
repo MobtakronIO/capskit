@@ -1,4 +1,4 @@
-import { createCapsKit } from '../src/index.ts';
+import { createCapsKit } from '../packages/capskit/src/index.ts';
 import { Elysia } from 'elysia';
 import * as path from 'path';
 
@@ -6,10 +6,10 @@ import * as path from 'path';
 async function main() {
 
     const { router, capskit } = await createCapsKit({
-        capsuleDirs: [path.resolve(__dirname, 'capsules')],
+        // Uses the new monorepo adapter resolution
         boot: {
             action: 'http.buildRouter',
-            payload: { adapter: 'elysia' }
+            payload: { adapter: '@mobtakronio/capskit-http-elysia' }
         },
         dependencies: {
             database: { connection: 'connected', type: 'mock' },

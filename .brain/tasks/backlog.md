@@ -29,3 +29,5 @@
 - 🔴 [021-kernel-contract-hardening](./021-kernel-contract-hardening.md) — Harden CapsKit kernel contracts and adapter boundaries
 - 🟡 [022-quality-boosters](./022-quality-boosters.md) — Raise kernel quality to 9.5 via contract polish and tests
 - 🟡 [023-docs-elysia-inspired](./023-docs-elysia-inspired.md) — Redesign docs inspired by ElysiaJS and cover CapsKit features
+- 🔴 [024-dynamic-adapter-lazy-loading](./024-dynamic-adapter-lazy-loading.md) — Decouple Elysia via Dynamic Lazy-Loading
+- 🔴 [025-extract-adapters-into-monorepo-packages](./025-extract-adapters-into-monorepo-packages.md) — Extract transport adapters into monorepo packages

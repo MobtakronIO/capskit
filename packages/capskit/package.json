@@ -1,0 +1,44 @@
+{
+    "name": "@mobtakronio/capskit",
+    "version": "0.2.0",
+    "description": "The Universal Capability Kernel - A framework-agnostic runtime for pure business logic.",
+    "license": "MIT",
+    "type": "module",
+    "main": "./dist/index.cjs",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js",
+            "require": "./dist/index.cjs"
+        }
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "files": [
+        "dist",
+        "README.md",
+        "LICENSE"
+    ],
+    "scripts": {
+        "build": "tsup",
+        "dev": "tsup --watch",
+        "test": "bun test/verify.test.ts",
+        "docs:dev": "vitepress dev docs",
+        "docs:build": "vitepress build docs",
+        "docs:preview": "vitepress preview docs",
+        "prepublishOnly": "npm run build"
+    },
+    "devDependencies": {
+        "@types/node": "^25.4.0",
+        "elysia": "^1.4.27",
+        "tsup": "^8.5.1",
+        "tsx": "^4.21.0",
+        "typescript": "^5.9.3",
+        "vitepress": "^1.6.4",
+        "vue": "^3.5.30"
+    }
+}
+

@@ -5,17 +5,8 @@
     "moduleResolution": "Bundler",
     "strict": true,
     "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "outDir": "./dist",
-    "baseUrl": ".",
-    "paths": {
-      "@mobtakronio/capskit": ["./src/index.ts"]
-    }
-  },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "test", "examples"]
+    "baseUrl": "."
+  }
 }
