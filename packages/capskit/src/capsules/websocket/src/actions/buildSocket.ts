@@ -1,5 +1,11 @@
 import { ActionHandler } from '../../../../types';
 import { WebSocketAdapter } from '../types';
+import {
+  loadAdapterManifest,
+  checkVersionCompatibility,
+  buildIncompatibilityError,
+} from '../../../../kernel/adapter-validation';
+import { getCapsKitVersion } from '../../../../kernel/version';
 
 export const buildSocket: ActionHandler = async (payload, context) => {
   const { adapter = 'elysia' } = payload?.body || payload || {};
@@ -19,6 +25,29 @@ export const buildSocket: ActionHandler = async (payload, context) => {
       
       if (!adapterFn) {
         throw new Error(`Package "${packageName}" does not export a valid WebSocket adapter (expected default export or "createSocket").`);
+      }
+
+      // Try to load and validate adapter manifest for compatibility checking
+      const manifest = await loadAdapterManifest(packageName, module);
+      if (manifest) {
+        const capskitVersion = getCapsKitVersion();
+        // Check if manifest declares WebSocket capability
+        if (manifest.capabilities.includes('websocket')) {
+          const compatResult = checkVersionCompatibility(
+            manifest.version,
+            capskitVersion,
+            manifest.capskitVersion
+          );
+          if (!compatResult.compatible) {
+            const errorMsg = buildIncompatibilityError(
+              manifest.name,
+              manifest.version,
+              capskitVersion,
+              compatResult
+            );
+            throw new Error(errorMsg);
+          }
+        }
       }
     } catch (error: any) {
       if (error.code === 'ERR_MODULE_NOT_FOUND' || error.message.includes('Cannot find module')) {

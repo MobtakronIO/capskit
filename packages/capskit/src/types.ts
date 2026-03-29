@@ -16,6 +16,28 @@ export interface CapsuleManifest {
 }
 
 /**
+ * Manifest contract for third-party adapter plugins.
+ * Adapters can export this manifest to declare compatibility and capabilities.
+ */
+export interface AdapterPluginManifest {
+  /** Adapter package name */
+  name: string;
+  /** Adapter version (semver) */
+  version: string;
+  /** Compatible capskit version range */
+  capskitVersion: {
+    /** Minimum compatible capskit version (inclusive) */
+    min: string;
+    /** Maximum compatible capskit version (exclusive), undefined = no upper bound */
+    max?: string;
+  };
+  /** Capabilities: 'http', 'websocket', or ['http', 'websocket'] */
+  capabilities: string[];
+  /** Optional description of the adapter */
+  description?: string;
+}
+
+/**
  * Boot lifecycle configuration for a capsule.
  * Controls initialization order and readiness signaling.
  */
@@ -249,18 +271,242 @@ export function redactPayload(obj: any, depth = 0): any {
 export type ActionPreHook = (input: ActionInput, context: ActionContext) => Promise<void> | void;
 export type ActionPostHook = (input: ActionInput, result: any, context: ActionContext) => Promise<any> | any;
 
+/**
+ * Cache configuration for action-level caching.
+ * When specified on an action, results are cached based on the action name and input payload.
+ */
+export interface CacheConfig {
+  /**
+   * Time-to-live in milliseconds.
+   * If not specified, cache entries do not expire.
+   */
+  ttl?: number;
+  /**
+   * Cache storage backend.
+   * - 'memory': In-memory Map-based cache (default)
+   * - 'sqlite': SQLite-based cache using better-sqlite3
+   * - 'redis': Redis-based cache using ioredis
+   */
+  storage?: 'memory' | 'sqlite' | 'redis';
+  /**
+   * Optional custom cache key prefix.
+   * If not specified, the cache key is derived from action name and payload hash.
+   */
+  key?: string;
+}
+
 export interface ActionDefinition {
   handler: string | ActionHandler;
   description?: string;
   pre?: ActionPreHook[];
   post?: ActionPostHook[];
+  /**
+   * Input schema for validation (JSON Schema draft-07 compatible).
+   * Validates the request payload before the handler executes.
+   * 
+   * @example
+   * ```typescript
+   * inputSchema: {
+   *   type: 'object',
+   *   properties: {
+   *     email: { type: 'string', format: 'email' },
+   *     age: { type: 'number', minimum: 0 }
+   *   },
+   *   required: ['email']
+   * }
+   * ```
+   */
+  inputSchema?: ActionSchema;
+  /**
+   * Output schema for validation (JSON Schema draft-07 compatible).
+   * When `strict` is true, validates the handler response before returning.
+   * 
+   * @example
+   * ```typescript
+   * outputSchema: {
+   *   type: 'object',
+   *   properties: {
+   *     id: { type: 'string' },
+   *     createdAt: { type: 'string', format: 'date-time' }
+   *   },
+   *   strict: true
+   * }
+   * ```
+   */
+  outputSchema?: OutputValidationOptions;
+  /**
+   * @deprecated Use `inputSchema` instead. `schema` is kept for backward compatibility.
+   * The `schema` field is an alias for `inputSchema`.
+   */
   schema?: ActionSchema;
+  /**
+   * Cache configuration for this action.
+   * When specified, action results are cached based on the action name and input payload.
+   */
+  cache?: CacheConfig;
+  /**
+   * Resiliency configuration for this action.
+   * Provides fallback behavior and circuit breaker when the action fails.
+   */
+  resiliency?: ResiliencyConfig;
 }
 
+/**
+ * Resiliency configuration for action-level fallback and circuit breaker behavior.
+ */
+export interface ResiliencyConfig {
+  /**
+   * Fallback behavior to use when the action fails.
+   * If not provided, failures will surface normally.
+   */
+  fallback?: FallbackConfig;
+  /**
+   * Circuit breaker configuration to prevent repeated failing calls.
+   * If not provided, circuit breaker is disabled for this action.
+   */
+  circuitBreaker?: CircuitBreakerConfig;
+}
+
+/**
+ * Fallback configuration for when an action fails.
+ */
+export interface FallbackConfig {
+  /**
+   * The type of fallback: 'cache' or 'action'.
+   * - 'cache': Return cached result from a previous successful call
+   * - 'action': Call an alternate action instead
+   */
+  type: 'cache' | 'action';
+  /**
+   * For type='action': The full name of the fallback action to call.
+   * e.g., 'user.getCachedUser' or 'cache.getUser'
+   * 
+   * NOTE: To prevent infinite loops, the fallback action should NOT
+   * reference the same action as its fallback, or a validation error
+   * will be thrown at registration time.
+   */
+  action?: string;
+  /**
+   * Optional TTL in milliseconds for cached results.
+   * Only applicable when type='cache'.
+   * If not provided, cached results never expire.
+   * 
+   * @default Infinity (no expiration)
+   */
+  cacheTtlMs?: number;
+}
+
+/**
+ * Circuit breaker configuration to prevent cascading failures.
+ */
+export interface CircuitBreakerConfig {
+  /**
+   * Number of consecutive failures before opening the circuit.
+   * When circuit is open, calls fail immediately without attempting handler.
+   * 
+   * @default 3
+   */
+  failureThreshold?: number;
+  /**
+   * Number of successful calls required to close a half-open circuit.
+   * After opening, circuit enters half-open state and allows test calls.
+   * 
+   * @default 1
+   */
+  successThreshold?: number;
+  /**
+   * Time window in milliseconds to track consecutive failures.
+   * Failures outside this window are not counted.
+   * 
+   * @default 60000 (60 seconds)
+   */
+  windowMs?: number;
+  /**
+   * Time in milliseconds to wait before transitioning from open to half-open.
+   * During open state, all calls fail immediately.
+   * 
+   * @default 30000 (30 seconds)
+   */
+  resetTimeoutMs?: number;
+}
+
+/**
+ * Circuit breaker state for a single action.
+ */
+export interface CircuitBreakerState {
+  status: 'closed' | 'open' | 'half-open';
+  consecutiveFailures: number;
+  consecutiveSuccesses: number;
+  lastFailureTime: number | null;
+  lastSuccessTime: number | null;
+  nextResetTime: number | null; // When 'open' state should transition to 'half-open'
+}
+
+/**
+ * Cached result entry with expiration.
+ */
+export interface CachedResult {
+  result: any;
+  timestamp: number;
+  expiresAt: number | null; // null = never expires
+}
+
+/**
+ * Schema contract types for action input/output validation.
+ * Uses JSON Schema draft-07 compatible structure.
+ */
 export interface ActionSchema {
   type: 'object';
-  properties?: Record<string, any>;
+  properties?: Record<string, JsonSchemaProperty>;
   required?: string[];
+  additionalProperties?: boolean;
+  description?: string;
+}
+
+/**
+ * JSON Schema property definition (subset of JSON Schema draft-07).
+ */
+export interface JsonSchemaProperty {
+  type?: 'string' | 'number' | 'boolean' | 'array' | 'object' | 'null' | 'integer';
+  format?: string;
+  description?: string;
+  minimum?: number;
+  maximum?: number;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  enum?: any[];
+  items?: JsonSchemaProperty;
+  nullable?: boolean;
+  default?: any;
+}
+
+/**
+ * Validation error detail for a specific field.
+ */
+export interface FieldValidationError {
+  field: string;
+  message: string;
+  value?: any;
+  constraint: string;
+}
+
+/**
+ * Result of validating a payload against a schema.
+ */
+export interface ValidationResult {
+  valid: boolean;
+  errors: FieldValidationError[];
+}
+
+/**
+ * Output validation options for an action.
+ */
+export interface OutputValidationOptions {
+  /** Enable strict output validation */
+  strict?: boolean;
+  /** Custom output schema (uses input schema if not specified) */
+  schema?: ActionSchema;
 }
 
 export type ActionHandler = (input: ActionInput, context: ActionContext) => Promise<any>;
