@@ -122,6 +122,92 @@ Dependencies (`requires`) are resolved **after** all capsules are loaded. If a c
 
 If a required capsule is not found, boot fails with `DependencyError`.
 
+## Validation
+
+The loader performs several validations on capsule manifests during the loading process. Invalid manifests are rejected with descriptive errors to help you quickly identify and fix issues.
+
+### Action Key Uniqueness
+
+Each action key within a capsule must be unique. The loader rejects manifests with duplicate action keys:
+
+```
+Error: Capsule 'my-capsule' has duplicate action key: 'create'
+```
+
+**Fix**: Ensure each action in the `actions` object has a unique key.
+
+### Name Format Validation
+
+Capsule names and action names must follow strict format rules. Names must match the pattern `^[a-zA-Z0-9_-]+$`:
+
+```
+Error: Invalid capsule name 'my-capsule!' - must match ^[a-zA-Z0-9_-]+$
+Error: Invalid action name 'create-user' - must match ^[a-zA-Z0-9_-]+$
+```
+
+**Allowed characters**:
+- Letters (a-z, A-Z)
+- Numbers (0-9)
+- Underscores (_)
+- Hyphens (-)
+
+**Fix**: Rename your capsule or action to use only allowed characters.
+
+### Non-Empty Actions
+
+A capsule must define at least one action:
+
+```
+Error: Capsule 'empty-capsule' has no actions defined
+```
+
+**Fix**: Add at least one action to your capsule's `actions` object.
+
+### Requires Array Validation
+
+If a capsule specifies `requires`, it must be an array of strings:
+
+```
+Error: Capsule 'my-capsule' requires field must be an array of strings
+```
+
+**Fix**: Ensure `requires` is an array:
+
+```ts
+{
+  name: 'my-capsule',
+  requires: ['auth-capsule', 'logging-capsule'], // Correct
+  actions: { /* ... */ }
+}
+```
+
+### Events Structure Validation
+
+If a capsule defines `events`, it must be a properly structured object with `subscribes` and/or `publishes`:
+
+```
+Error: Capsule 'my-capsule' events must be an object with 'subscribes' and/or 'publishes'
+```
+
+**Valid event structures**:
+
+```ts
+{
+  name: 'my-capsule',
+  events: {
+    subscribes: ['user.created', 'order.placed'],   // Valid
+    publishes: ['notification.sent']                // Valid
+  },
+  actions: { /* ... */ }
+}
+
+// Or with both:
+events: {
+  subscribes: ['user.created'],
+  publishes: ['notification.sent']
+}
+```
+
 ## Loader Behavior
 
 ### Detailed Loading Process

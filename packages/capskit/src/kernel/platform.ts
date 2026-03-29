@@ -5,6 +5,121 @@ import { loadCapsules } from './loader';
 import { builtinCapsules } from '../capsules/builtin';
 import { ValidationError, NotFoundError, DependencyError, AuthorizationError, TraitError } from './errors';
 
+/**
+ * Pool configuration parsed from environment variables.
+ * For Postgres (neon): passed to neon() config.
+ * For SQLite: not applicable (synchronous, not pooled).
+ */
+interface PoolConfig {
+  min?: number;
+  max?: number;
+  idleTimeout?: number;
+  connectionTimeout?: number;
+}
+
+/**
+ * Parse pool configuration from environment variables.
+ */
+function parsePoolConfig(): PoolConfig {
+  const config: PoolConfig = {};
+  
+  const min = process.env.CAPSKIT_DB_POOL_MIN;
+  if (min !== undefined) {
+    const parsed = parseInt(min, 10);
+    if (!isNaN(parsed) && parsed >= 0) {
+      config.min = parsed;
+    }
+  }
+  
+  const max = process.env.CAPSKIT_DB_POOL_MAX;
+  if (max !== undefined) {
+    const parsed = parseInt(max, 10);
+    if (!isNaN(parsed) && parsed >= 1) {
+      config.max = parsed;
+    }
+  }
+  
+  const idleTimeout = process.env.CAPSKIT_DB_POOL_IDLE_TIMEOUT;
+  if (idleTimeout !== undefined) {
+    const parsed = parseInt(idleTimeout, 10);
+    if (!isNaN(parsed) && parsed >= 0) {
+      config.idleTimeout = parsed;
+    }
+  }
+  
+  const connectionTimeout = process.env.CAPSKIT_DB_POOL_CONNECTION_TIMEOUT;
+  if (connectionTimeout !== undefined) {
+    const parsed = parseInt(connectionTimeout, 10);
+    if (!isNaN(parsed) && parsed >= 0) {
+      config.connectionTimeout = parsed;
+    }
+  }
+  
+  return config;
+}
+
+/**
+ * Construct a Drizzle instance from CAPSKIT_DB_* environment variables.
+ * Supports Postgres (via @neondatabase/serverless) and SQLite (via better-sqlite3).
+ * Returns undefined if packages are not installed or URL is not configured.
+ */
+async function createDrizzleFromEnv(): Promise<unknown> {
+  const dbUrl = process.env.CAPSKIT_DB_URL;
+  
+  if (!dbUrl) {
+    return undefined;
+  }
+
+  // Auto-detect provider from URL if not explicitly set
+  const provider = process.env.CAPSKIT_DB_PROVIDER || 
+    (dbUrl.startsWith('postgres') || dbUrl.startsWith('postgresql') ? 'postgres' : 'sqlite');
+
+  // Parse pool configuration (used for Postgres; SQLite is synchronous and not pooled)
+  const poolConfig = parsePoolConfig();
+  const hasPoolConfig = Object.keys(poolConfig).length > 0;
+
+  try {
+    if (provider === 'postgres') {
+      // Dynamic import for optional dependency
+      const { default: neon } = await import('@neondatabase/serverless');
+      const drizzle = await import('drizzle-orm');
+
+      // Pass pool configuration to neon if provided
+      const sql = neon(dbUrl, hasPoolConfig ? { poolConfig } : undefined);
+
+      // Create drizzle instance with Postgres
+      const drizzleInstance = drizzle.drizzle(sql);
+
+      return drizzleInstance;
+    } else if (provider === 'sqlite') {
+      // Note: SQLite via better-sqlite3 is synchronous and does not use connection pooling.
+      // Pool settings (CAPSKIT_DB_POOL_*) are ignored for SQLite.
+      if (hasPoolConfig) {
+        console.warn('[Drizzle] Pool settings (CAPSKIT_DB_POOL_*) are not applicable for SQLite (better-sqlite3 is synchronous).');
+      }
+
+      // Dynamic import for optional dependency
+      const betterSqlite3Module = await import('better-sqlite3');
+      const drizzle = await import('drizzle-orm');
+
+      // Safe access: better-sqlite3 may or may not have a default export depending on ESM/CJS interop
+      const BetterSQLite3 = ('default' in betterSqlite3Module 
+        ? betterSqlite3Module.default 
+        : betterSqlite3Module) as typeof import('better-sqlite3');
+      const db = new BetterSQLite3(dbUrl);
+      const drizzleInstance = drizzle.drizzle(db);
+
+      return drizzleInstance;
+    }
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[Drizzle] Failed to initialize ${provider} database: ${message}`);
+    return undefined;
+  }
+
+  return undefined;
+}
+
 export class CapsKit implements ICapsKit {
   private actions = new Map<string, ActionDefinition>();
   private manifests = new Map<string, CapsuleManifest>();
@@ -21,14 +136,25 @@ export class CapsKit implements ICapsKit {
   }
 
   async start(): Promise<any> {
-    // 1. Register built-in capsules (explicit list for packaging safety)
+    // 1. Initialize Drizzle from env vars if CAPSKIT_DB_URL is set
+    if (process.env.CAPSKIT_DB_URL) {
+      const drizzle = await createDrizzleFromEnv();
+      if (drizzle) {
+        this.dependencies.drizzle = drizzle;
+        console.log('[CapsKit] Drizzle ORM initialized');
+      } else {
+        console.warn('[CapsKit] CAPSKIT_DB_URL is set but Drizzle failed to initialize. Install drizzle-orm and the appropriate driver.');
+      }
+    }
+
+    // 2. Register built-in capsules (explicit list for packaging safety)
     for (const manifest of builtinCapsules) {
       if (!this.manifests.has(manifest.name)) {
         await this.registerCapsule(manifest, undefined);
       }
     }
 
-    // 2. Process custom capsule sources with explicit precedence
+    // 3. Process custom capsule sources with explicit precedence
     const sources: CapsuleSource[] = [];
 
     if (this.config.capsules) {
@@ -209,45 +335,108 @@ export class CapsKit implements ICapsKit {
    }
 
    private validateManifestShape(manifest: CapsuleManifest): void {
-     // Required fields check
-     if (!manifest.name) {
-       throw new ValidationError('Capsule manifest must have a name.');
-     }
-     if (!manifest.actions || typeof manifest.actions !== 'object') {
-       throw new ValidationError(`Capsule "${manifest.name}" must have an actions object.`);
-     }
+      // Required fields check
+      if (!manifest.name) {
+        throw new ValidationError('Capsule manifest must have a name.');
+      }
 
-     // Validate action definitions
-     for (const [actionName, def] of Object.entries(manifest.actions)) {
-       if (!def.handler) {
-         throw new ValidationError(`Action "${manifest.name}.${actionName}" must have a handler.`);
-       }
-     }
+      // Validate name format (alphanumeric, dashes, underscores)
+      if (!/^[a-zA-Z0-9_-]+$/.test(manifest.name)) {
+        throw new ValidationError(
+          `Capsule "${manifest.name}" has an invalid name. ` +
+          `Names must contain only alphanumeric characters, dashes, and underscores.`
+        );
+      }
 
-     // Validate event subscriptions if present
-     if (manifest.events?.subscribes) {
-       if (!Array.isArray(manifest.events.subscribes)) {
-         throw new ValidationError(`Capsule "${manifest.name}" events.subscribes must be an array.`);
-       }
-       for (const sub of manifest.events.subscribes) {
-         if (typeof sub.event !== 'string' || typeof sub.action !== 'string') {
-           throw new ValidationError(`Invalid event subscription in capsule "${manifest.name}": event and action must be strings.`);
-         }
-       }
-     }
+      if (!manifest.actions || typeof manifest.actions !== 'object' || Array.isArray(manifest.actions)) {
+        throw new ValidationError(`Capsule "${manifest.name}" must have an actions object.`);
+      }
 
-     // Validate event publishes if present
-     if (manifest.events?.publishes) {
-       if (!Array.isArray(manifest.events.publishes)) {
-         throw new ValidationError(`Capsule "${manifest.name}" events.publishes must be an array.`);
-       }
-       for (const ev of manifest.events.publishes) {
-         if (typeof ev !== 'string') {
-           throw new ValidationError(`Invalid event name in capsule "${manifest.name}" publishes: must be string.`);
-         }
-       }
-     }
-   }
+      // Check for empty actions
+      const actionKeys = Object.keys(manifest.actions);
+      if (actionKeys.length === 0) {
+        throw new ValidationError(`Capsule "${manifest.name}" must have at least one action.`);
+      }
+
+      // Check for duplicate action keys (JS silently overwrites duplicates with same name)
+      const uniqueKeys = new Set(actionKeys);
+      if (actionKeys.length !== uniqueKeys.size) {
+        const duplicates = actionKeys.filter((key, index) => actionKeys.indexOf(key) !== index);
+        throw new ValidationError(`Capsule "${manifest.name}" has duplicate action keys: ${[...new Set(duplicates)].join(', ')}`);
+      }
+
+      // Validate action definitions
+      for (const [actionName, def] of Object.entries(manifest.actions)) {
+        // Validate action name format
+        if (!/^[a-zA-Z0-9_-]+$/.test(actionName)) {
+          throw new ValidationError(
+            `Action "${manifest.name}.${actionName}" has an invalid name. ` +
+            `Action names must contain only alphanumeric characters, dashes, and underscores.`
+          );
+        }
+        if (!def || typeof def !== 'object') {
+          throw new ValidationError(`Action "${manifest.name}.${actionName}" must be an object with a handler.`);
+        }
+        if (!def.handler) {
+          throw new ValidationError(`Action "${manifest.name}.${actionName}" must have a handler.`);
+        }
+        if (typeof def.handler !== 'string' && typeof def.handler !== 'function') {
+          throw new ValidationError(
+            `Action "${manifest.name}.${actionName}" has an invalid handler type. ` +
+            `Handler must be a function or a string path to a module.`
+          );
+        }
+      }
+
+      // Validate requires if present
+      if (manifest.requires !== undefined) {
+        if (!Array.isArray(manifest.requires)) {
+          throw new ValidationError(`Capsule "${manifest.name}" requires must be an array.`);
+        }
+        for (const dep of manifest.requires) {
+          if (typeof dep !== 'string') {
+            throw new ValidationError(`Capsule "${manifest.name}" has invalid requires entry: must be strings.`);
+          }
+        }
+      }
+
+      // Validate events structure if present
+      if (manifest.events !== undefined) {
+        if (typeof manifest.events !== 'object' || Array.isArray(manifest.events)) {
+          throw new ValidationError(`Capsule "${manifest.name}" events must be an object.`);
+        }
+
+        // Validate event subscriptions if present
+        if (manifest.events.subscribes !== undefined) {
+          if (!Array.isArray(manifest.events.subscribes)) {
+            throw new ValidationError(`Capsule "${manifest.name}" events.subscribes must be an array.`);
+          }
+          for (const sub of manifest.events.subscribes) {
+            if (!sub || typeof sub !== 'object') {
+              throw new ValidationError(`Invalid event subscription in capsule "${manifest.name}": must be an object with event and action.`);
+            }
+            if (typeof sub.event !== 'string' || !sub.event) {
+              throw new ValidationError(`Invalid event subscription in capsule "${manifest.name}": event must be a non-empty string.`);
+            }
+            if (typeof sub.action !== 'string' || !sub.action) {
+              throw new ValidationError(`Invalid event subscription in capsule "${manifest.name}": action must be a non-empty string.`);
+            }
+          }
+        }
+
+        // Validate event publishes if present
+        if (manifest.events.publishes !== undefined) {
+          if (!Array.isArray(manifest.events.publishes)) {
+            throw new ValidationError(`Capsule "${manifest.name}" events.publishes must be an array.`);
+          }
+          for (const ev of manifest.events.publishes) {
+            if (typeof ev !== 'string' || !ev) {
+              throw new ValidationError(`Invalid event name in capsule "${manifest.name}" publishes: must be non-empty strings.`);
+            }
+          }
+        }
+      }
+    }
 
   private validatePayload(schema: any, payload: any, actionName: string): void {
       if (!schema) return;
