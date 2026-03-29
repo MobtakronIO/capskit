@@ -1,7 +1,7 @@
 {
-  "name": "@capskit/adapter-elysia",
+  "name": "@mobtakronio/elysia",
   "version": "0.1.0",
-  "description": "Unified Elysia adapter for CapsKit with HTTP and WebSocket support",
+  "description": "Elysia integration for CapsKit with HTTP and WebSocket support",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

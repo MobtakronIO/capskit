@@ -1,15 +1,15 @@
-# @capskit/adapter-elysia
+# @mobtakronio/elysia
 
 Unified Elysia adapter for CapsKit with HTTP and WebSocket support.
 
 ## Installation
 
 ```bash
-npm install @capskit/adapter-elysia
+npm install @mobtakronio/elysia
 # or
-pnpm add @capskit/adapter-elysia
+pnpm add @mobtakronio/elysia
 # or
-yarn add @capskit/adapter-elysia
+yarn add @mobtakronio/elysia
 ```
 
 ## Requirements
@@ -33,7 +33,7 @@ yarn add @capskit/adapter-elysia
 
 ```ts
 import { Elysia } from 'elysia';
-import { createElysiaAdapter } from '@capskit/adapter-elysia';
+import { createElysiaAdapter } from '@mobtakronio/elysia';
 import { createCapsKit } from '@mobtakronio/capskit';
 
 const { capskit } = await createCapsKit({
@@ -231,7 +231,7 @@ import {
   createSocket,
   mapToHttpResponse,
   handleWebSocketError
-} from '@capskit/adapter-elysia';
+} from '@mobtakronio/elysia';
 ```
 
 ### Subpath Exports
@@ -240,13 +240,13 @@ For tree-shaking or selective imports:
 
 ```ts
 // HTTP adapter only
-import { createRouter } from '@capskit/adapter-elysia/http';
+import { createRouter } from '@mobtakronio/elysia/http';
 
 // WebSocket adapter only
-import { createSocket } from '@capskit/adapter-elysia/websocket';
+import { createSocket } from '@mobtakronio/elysia/websocket';
 
 // Shared utilities only
-import { mapToHttpResponse, handleWebSocketError } from '@capskit/adapter-elysia/shared';
+import { mapToHttpResponse, handleWebSocketError } from '@mobtakronio/elysia/shared';
 ```
 
 ## Shared Error Mapping
@@ -292,7 +292,7 @@ import { createWebSocketAdapter } from '@mobtakronio/capskit/adapters/elysia/web
 **After (unified):**
 
 ```ts
-import { createElysiaAdapter } from '@capskit/adapter-elysia';
+import { createElysiaAdapter } from '@mobtakronio/elysia';
 
 // HTTP-only
 const { app } = await createElysiaAdapter(capskit, { http: true });
