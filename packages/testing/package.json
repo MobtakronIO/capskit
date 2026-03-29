@@ -21,7 +21,7 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "test": "bun test/",
+    "test": "bun test",
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {
@@ -41,5 +41,8 @@
   },
   "dependencies": {
     "sinon": "^18.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
