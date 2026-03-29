@@ -12,6 +12,11 @@
             "types": "./dist/index.d.ts",
             "import": "./dist/index.js",
             "require": "./dist/index.cjs"
+        },
+        "./lint": {
+            "types": "./dist/lint/no-direct-call.d.ts",
+            "import": "./dist/lint/no-direct-call.js",
+            "require": "./dist/lint/no-direct-call.cjs"
         }
     },
     "publishConfig": {
@@ -25,6 +30,7 @@
     "scripts": {
         "build": "tsup",
         "dev": "tsup --watch",
+        "lint": "eslint eslint.config.js",
         "test": "bun test/verify.test.ts",
         "docs:dev": "vitepress dev docs",
         "docs:build": "vitepress build docs",
@@ -33,12 +39,19 @@
     },
     "devDependencies": {
         "@types/node": "^25.4.0",
+        "@typescript-eslint/eslint-plugin": "^8.57.2",
+        "@typescript-eslint/parser": "^8.57.2",
         "elysia": "^1.4.27",
+        "eslint": "^10.1.0",
         "tsup": "^8.5.1",
         "tsx": "^4.21.0",
         "typescript": "^5.9.3",
         "vitepress": "^1.6.4",
         "vue": "^3.5.30"
+    },
+    "dependencies": {
+        "@neondatabase/serverless": "^1.0.2",
+        "better-sqlite3": "^12.8.0",
+        "drizzle-orm": "^0.45.2"
     }
 }
-

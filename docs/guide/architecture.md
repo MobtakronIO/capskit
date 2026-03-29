@@ -194,6 +194,90 @@ Because actions are pure functions, the same capsule can be triggered by:
 
 No code changes needed. Just configure the appropriate adapter and routes/subscriptions in the manifest.
 
+## API Boundaries
+
+CapsKit provides two APIs with different intended use cases:
+
+### Public API: `use().action()`
+
+**The recommended approach for application code.**
+
+```ts
+const users = capskit.use('users');
+const user = await users.create({ email: 'test@example.com' });
+```
+
+Benefits:
+- Type-safe with full IDE autocompletion
+- Natural, object-like syntax
+- Refactoring-friendly (rename works)
+- Self-documenting code
+
+### Internal API: `call()`
+
+**For kernel, adapters, and advanced use cases.**
+
+```ts
+// Adapters and kernel internals
+await capskit.call('system.getHealth', {});
+
+// Dynamic action resolution (when action name is a variable)
+await capskit.call(dynamicActionName, payload);
+```
+
+Use `call()` when:
+- Building adapters (HTTP, WebSocket, etc.)
+- Implementing kernel functionality
+- Dynamic action invocation where the name is determined at runtime
+
+### Context API
+
+Inside action handlers, both `context.call()` and `context.use()` are available:
+
+```ts
+// context.use() - preferred for known capsules
+const users = context.use('users');
+await users.create({ email: 'test@example.com' });
+
+// context.call() - for dynamic resolution
+const result = await context.call(dynamicAction, payload);
+```
+
+### Lint Rule
+
+Use the `@capskit/no-direct-call` ESLint rule to enforce the `use().action()` pattern:
+
+```bash
+npm install --save-dev eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin
+```
+
+```js
+// eslint.config.js
+import { capsKitLintRules } from '@mobtakronio/capskit/lint';
+
+export default [
+  {
+    files: ['**/*.ts'],
+    rules: {
+      ...capsKitLintRules,
+    },
+  },
+];
+```
+
+### Runtime Warning
+
+Enable `warnOnDirectCall` in development to catch accidental `call()` usage:
+
+```ts
+const { capskit } = await createCapsKit({
+  capsules: [...],
+  warnOnDirectCall: process.env.NODE_ENV !== 'production',
+});
+```
+
+See the [Migration Guide](./migration/call-to-use.md) for detailed upgrade instructions.
+
 ## Next Steps
 
 - **Philosophy**: Understand the design principles behind CapsKit

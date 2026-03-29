@@ -27,6 +27,88 @@ export async function runPlatformTests(kitFactory: (config: any) => Promise<any>
   }
   console.log('✅ DI invariant holds');
 
+  // Test warnOnDirectCall runtime warning - disabled by default
+  console.log('Test: warnOnDirectCall disabled by default');
+  const configWarn = {
+    capsules: [
+      {
+        type: 'manifest',
+        manifest: {
+          name: 'test-warn',
+          actions: {
+            doThing: {
+              handler: async (payload: any, _ctx: any) => ({ result: 'ok' })
+            }
+          }
+        }
+      }
+    ]
+  };
+  const resultWarn = await kitFactory(configWarn);
+  const kitWarn = resultWarn.capskit;
+  
+  // Capture console.warn calls
+  let warningCaught: string | null = null;
+  const originalWarn = console.warn;
+  console.warn = (msg: string) => { warningCaught = msg; };
+  
+  // Direct call - should NOT warn when warnOnDirectCall not configured (default false)
+  await kitWarn.call('test-warn.doThing', { body: {} });
+  console.warn = originalWarn;
+  
+  if (warningCaught !== null) {
+    throw new Error('Warning should not be emitted when warnOnDirectCall is not configured');
+  }
+  console.log('✅ warnOnDirectCall disabled by default - no warning emitted');
+
+  // Test warnOnDirectCall - enabled via config
+  console.log('Test: warnOnDirectCall enabled via config');
+  const configWarnEnabled = {
+    capsules: [
+      {
+        type: 'manifest',
+        manifest: {
+          name: 'test-warn2',
+          actions: {
+            doThing: {
+              handler: async (payload: any, _ctx: any) => ({ result: 'ok' })
+            }
+          }
+        }
+      }
+    ],
+    warnOnDirectCall: true
+  };
+  const resultWarnEnabled = await kitFactory(configWarnEnabled);
+  const kitWarnEnabled = resultWarnEnabled.capskit;
+  
+  // Capture console.warn calls
+  warningCaught = null;
+  console.warn = (msg: string) => { warningCaught = msg; };
+  
+  // Direct call - SHOULD warn
+  await kitWarnEnabled.call('test-warn2.doThing', { body: {} });
+  console.warn = originalWarn;
+  
+  if (warningCaught === null || !warningCaught.includes('Warning: Direct')) {
+    throw new Error('Warning should be emitted when warnOnDirectCall is enabled');
+  }
+  console.log('✅ warnOnDirectCall enabled - warning emitted for direct call');
+
+  // Test warnOnDirectCall - use() proxy does NOT trigger warning
+  console.log('Test: warnOnDirectCall - use() proxy does not trigger warning');
+  warningCaught = null;
+  console.warn = (msg: string) => { warningCaught = msg; };
+  
+  // Call via use() proxy - should NOT warn
+  await kitWarnEnabled.use('test-warn2').doThing({});
+  console.warn = originalWarn;
+  
+  if (warningCaught !== null) {
+    throw new Error('Warning should NOT be emitted when using use() proxy');
+  }
+  console.log('✅ use() proxy does not trigger warning');
+
   // Test 2: Manifest validation - missing name
   console.log('Test: manifest validation - missing name');
   try {
