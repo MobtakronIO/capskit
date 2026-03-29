@@ -128,7 +128,7 @@ async function verify() {
     await runHttpAdapterTests();
     // await runLoaderEdgeCaseTests(); // Skipped - pre-existing failure
     await runErrorTaxonomyTests();
-    // await runTraceTests(createCapsKit); // Skipped - pre-existing failure at line 435
+    await runTraceTests(createCapsKit);
     await runElysiaErrorMappingTests();
     console.log('✅ All automated test suites passed');
  }
