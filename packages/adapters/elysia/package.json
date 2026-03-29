@@ -1,0 +1,63 @@
+{
+  "name": "@capskit/adapter-elysia",
+  "version": "0.1.0",
+  "description": "Unified Elysia adapter for CapsKit with HTTP and WebSocket support",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./http": {
+      "types": "./dist/http/index.d.ts",
+      "import": "./dist/http/index.js",
+      "require": "./dist/http/index.cjs"
+    },
+    "./websocket": {
+      "types": "./dist/websocket/index.d.ts",
+      "import": "./dist/websocket/index.js",
+      "require": "./dist/websocket/index.cjs"
+    },
+    "./shared": {
+      "types": "./dist/shared/index.d.ts",
+      "import": "./dist/shared/index.js",
+      "require": "./dist/shared/index.cjs"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "capskit",
+    "elysia",
+    "http",
+    "websocket",
+    "adapter",
+    "router"
+  ],
+  "dependencies": {
+    "elysia": "^1.4.27"
+  },
+  "peerDependencies": {
+    "@mobtakronio/capskit": "^0.3.0"
+  },
+  "peerDependenciesMeta": {
+    "@mobtakronio/capskit": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "@mobtakronio/capskit": "*"
+  }
+}
