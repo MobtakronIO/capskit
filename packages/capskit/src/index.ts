@@ -8,5 +8,8 @@ export * from './kernel/error-mapping';
 export * from './capsules/http/src/types';
 export * from './capsules/websocket/src/types';
 
+// Cache module exports
+export * from './cache';
+
 // ESLint rules
 export { rule as noDirectCallRule } from './lint/no-direct-call';

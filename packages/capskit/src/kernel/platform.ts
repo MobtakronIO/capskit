@@ -1,4 +1,4 @@
-import { ActionHandler, ICapsKit, CapsKitConfig, CapsuleManifest, ActionInterceptor, ActionContext, ActionDefinition, CapsuleSource, TraceRecord, redactPayload } from '../types';
+import { ActionHandler, ICapsKit, CapsKitConfig, CapsuleManifest, ActionInterceptor, ActionContext, ActionDefinition, CapsuleSource, TraceRecord, redactPayload, ResiliencyConfig, CircuitBreakerState, CachedResult } from '../types';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { loadCapsules } from './loader';
@@ -7,6 +7,7 @@ import { ValidationError, NotFoundError, DependencyError, AuthorizationError, Tr
 import { AsyncLocalStorage } from 'async_hooks';
 import * as fs from 'fs';
 import * as crypto from 'crypto';
+import { CacheMiddleware, createCacheAdapter, parseCacheEnvDefault } from '../cache';
 
 /**
  * Pool configuration parsed from environment variables.
@@ -262,6 +263,14 @@ export class CapsKit implements ICapsKit {
   private dependencies: Record<string, any> = {};
   private capsuleSources = new Map<string, string>(); // capsule name -> source directory
   private config: CapsKitConfig;
+  private cacheAdapter: ReturnType<typeof createCacheAdapter> | null = null;
+
+  // Resiliency: circuit breaker states (actionName -> state)
+  private circuitBreakerStates = new Map<string, CircuitBreakerState>();
+  // Resiliency: cache for fallback-to-cache feature
+  private fallbackCache = new Map<string, CachedResult>();
+  // Resiliency: in-flight action call stack for fallback loop detection
+  private actionCallStack = new Set<string>();
 
   constructor(config: CapsKitConfig) {
     this.config = config;
@@ -281,6 +290,19 @@ export class CapsKit implements ICapsKit {
       } else {
         console.warn('[CapsKit] CAPSKIT_DB_URL is set but Drizzle failed to initialize. Install drizzle-orm and the appropriate driver.');
       }
+    }
+
+    // 1b. Initialize cache adapter based on CAPSKIT_CACHE_DEFAULT env var
+    const cacheStorageType = parseCacheEnvDefault();
+    try {
+      this.cacheAdapter = createCacheAdapter(cacheStorageType, {
+        // Pass existing Redis client if available in dependencies
+        redisClient: this.dependencies.redis,
+      });
+      console.log(`[CapsKit] Cache initialized: ${cacheStorageType}`);
+    } catch (error: any) {
+      console.warn(`[CapsKit] Cache initialization failed: ${error.message}. Falling back to memory.`);
+      this.cacheAdapter = createCacheAdapter('memory');
     }
 
     // 2. Register built-in capsules (explicit list for packaging safety)
@@ -333,7 +355,14 @@ export class CapsKit implements ICapsKit {
       }
     }
 
-    // 3. Execute boot action if specified
+    // 3b. Initialize cache middleware with registered actions
+    if (this.cacheAdapter) {
+      const cacheMiddleware = new CacheMiddleware(this.cacheAdapter, this.actions);
+      // Prepend cache interceptor so it runs before other interceptors
+      this.interceptors.unshift(cacheMiddleware.createInterceptor());
+    }
+
+    // 4. Execute boot action if specified
     // Boot is an internal use case - use internal call to avoid warning
     if (this.config.boot) {
       return await this.call(this.config.boot.action, this.config.boot.payload || {}, { fromUse: true });
@@ -568,38 +597,271 @@ export class CapsKit implements ICapsKit {
       }
     }
 
+  /**
+   * Validates a payload against a JSON Schema.
+   * Returns a ValidationResult with detailed field errors.
+   * Throws ValidationError if validation fails.
+   */
   private validatePayload(schema: any, payload: any, actionName: string): void {
       if (!schema) return;
       
-      if (schema.type !== 'object') {
+      if (schema.type && schema.type !== 'object') {
         throw new ValidationError(`Schema type '${schema.type}' not supported for action ${actionName}. Only 'object' is supported.`);
       }
       
-      if (schema.required) {
+      const errors: any[] = [];
+      
+      // Check required fields
+      if (schema.required && Array.isArray(schema.required)) {
         for (const key of schema.required) {
           if (payload?.[key] === undefined) {
-            throw new ValidationError(`Action ${actionName} requires field '${key}' in payload.`);
+            errors.push({
+              field: key,
+              message: `Field '${key}' is required`,
+              constraint: 'required',
+              value: undefined
+            });
           }
         }
       }
       
-      // Type validation against schema.properties
+      // Type and constraint validation against schema.properties
       if (schema.properties) {
         for (const [key, propSchema] of Object.entries(schema.properties)) {
           const value = payload?.[key];
-          if (value !== undefined && propSchema && typeof propSchema === 'object' && 'type' in propSchema) {
-            const expectedType = (propSchema as any).type;
+          
+          // Skip validation if value is undefined and field is not required
+          if (value === undefined) {
+            continue;
+          }
+          
+          const prop = propSchema as any;
+          if (!prop || typeof prop !== 'object') {
+            continue;
+          }
+          
+          // Type validation
+          if (prop.type) {
+            const expectedType = prop.type;
             const actualType = Array.isArray(value) ? 'array' : typeof value;
             
-            if (expectedType === 'array') {
+            // Handle nullable
+            if (prop.nullable && value === null) {
+              // null is allowed
+            } else if (expectedType === 'array') {
               if (!Array.isArray(value)) {
-                throw new ValidationError(`Action ${actionName} field '${key}' must be an array, got ${actualType}.`);
+                errors.push({
+                  field: key,
+                  message: `Field '${key}' must be an array, got ${actualType}`,
+                  constraint: `type:${expectedType}`,
+                  value
+                });
+              }
+            } else if (expectedType === 'integer') {
+              if (typeof value !== 'number' || !Number.isInteger(value)) {
+                errors.push({
+                  field: key,
+                  message: `Field '${key}' must be an integer, got ${actualType}`,
+                  constraint: `type:${expectedType}`,
+                  value
+                });
               }
             } else if (expectedType !== actualType) {
-              throw new ValidationError(`Action ${actionName} field '${key}' must be ${expectedType}, got ${actualType}.`);
+              errors.push({
+                field: key,
+                message: `Field '${key}' must be of type ${expectedType}, got ${actualType}`,
+                constraint: `type:${expectedType}`,
+                value
+              });
+            }
+          }
+          
+          // Format validation (only for strings)
+          if (prop.format && typeof value === 'string') {
+            if (prop.format === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+              errors.push({
+                field: key,
+                message: `Field '${key}' must be a valid email address`,
+                constraint: `format:${prop.format}`,
+                value
+              });
+            } else if (prop.format === 'uri' && !/^https?:\/\//.test(value)) {
+              errors.push({
+                field: key,
+                message: `Field '${key}' must be a valid URI`,
+                constraint: `format:${prop.format}`,
+                value
+              });
+            } else if (prop.format === 'date-time' && isNaN(Date.parse(value))) {
+              errors.push({
+                field: key,
+                message: `Field '${key}' must be a valid ISO 8601 date-time string`,
+                constraint: `format:${prop.format}`,
+                value
+              });
+            } else if (prop.format === 'date' && isNaN(Date.parse(value))) {
+              errors.push({
+                field: key,
+                message: `Field '${key}' must be a valid date string`,
+                constraint: `format:${prop.format}`,
+                value
+              });
+            } else if (prop.format === 'uuid' && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
+              errors.push({
+                field: key,
+                message: `Field '${key}' must be a valid UUID`,
+                constraint: `format:${prop.format}`,
+                value
+              });
+            }
+          }
+          
+          // String constraints
+          if (typeof value === 'string') {
+            if (prop.minLength !== undefined && value.length < prop.minLength) {
+              errors.push({
+                field: key,
+                message: `Field '${key}' must be at least ${prop.minLength} characters long`,
+                constraint: `minLength:${prop.minLength}`,
+                value
+              });
+            }
+            if (prop.maxLength !== undefined && value.length > prop.maxLength) {
+              errors.push({
+                field: key,
+                message: `Field '${key}' must be at most ${prop.maxLength} characters long`,
+                constraint: `maxLength:${prop.maxLength}`,
+                value
+              });
+            }
+            if (prop.pattern) {
+              const regex = new RegExp(prop.pattern);
+              if (!regex.test(value)) {
+                errors.push({
+                  field: key,
+                  message: `Field '${key}' does not match the required pattern`,
+                  constraint: `pattern:${prop.pattern}`,
+                  value
+                });
+              }
+            }
+          }
+          
+          // Number constraints
+          if (typeof value === 'number') {
+            if (prop.minimum !== undefined && value < prop.minimum) {
+              errors.push({
+                field: key,
+                message: `Field '${key}' must be at least ${prop.minimum}`,
+                constraint: `minimum:${prop.minimum}`,
+                value
+              });
+            }
+            if (prop.maximum !== undefined && value > prop.maximum) {
+              errors.push({
+                field: key,
+                message: `Field '${key}' must be at most ${prop.maximum}`,
+                constraint: `maximum:${prop.maximum}`,
+                value
+              });
+            }
+          }
+          
+          // Enum validation
+          if (prop.enum && Array.isArray(prop.enum)) {
+            if (!prop.enum.includes(value)) {
+              errors.push({
+                field: key,
+                message: `Field '${key}' must be one of: ${prop.enum.join(', ')}`,
+                constraint: `enum:${JSON.stringify(prop.enum)}`,
+                value
+              });
+            }
+          }
+          
+          // Array items validation
+          if (prop.items && Array.isArray(value)) {
+            const itemSchema = prop.items;
+            for (let i = 0; i < value.length; i++) {
+              const item = value[i];
+              if (itemSchema.type) {
+                const expectedItemType = itemSchema.type;
+                const actualItemType = typeof item;
+                
+                if (expectedItemType === 'integer') {
+                  if (typeof item !== 'number' || !Number.isInteger(item)) {
+                    errors.push({
+                      field: `${key}[${i}]`,
+                      message: `Item at index ${i} in '${key}' must be an integer`,
+                      constraint: `type:${expectedItemType}`,
+                      value: item
+                    });
+                  }
+                } else if (expectedItemType !== actualItemType) {
+                  errors.push({
+                    field: `${key}[${i}]`,
+                    message: `Item at index ${i} in '${key}' must be of type ${expectedItemType}`,
+                    constraint: `type:${expectedItemType}`,
+                    value: item
+                  });
+                }
+              }
             }
           }
         }
+      }
+      
+      // Check additionalProperties
+      if (schema.additionalProperties === false && schema.properties && payload && typeof payload === 'object') {
+        const allowedKeys = new Set(Object.keys(schema.properties));
+        for (const key of Object.keys(payload)) {
+          if (!allowedKeys.has(key)) {
+            errors.push({
+              field: key,
+              message: `Field '${key}' is not allowed. Allowed fields: ${Array.from(allowedKeys).join(', ')}`,
+              constraint: 'additionalProperties:false',
+              value: payload[key]
+            });
+          }
+        }
+      }
+      
+      // Throw validation error if any errors found
+      if (errors.length > 0) {
+        throw new ValidationError(
+          `Input validation failed for action ${actionName}: ${errors.map(e => e.message).join('; ')}`,
+          { fieldErrors: errors, action: actionName }
+        );
+      }
+    }
+    
+    /**
+     * Validates handler output against output schema.
+     * Throws ValidationError if validation fails in strict mode.
+     */
+    private validateOutput(output: any, outputSchema: any, actionName: string): void {
+      if (!outputSchema || !outputSchema.strict) {
+        return;
+      }
+      
+      const schema = outputSchema.schema;
+      if (!schema) {
+        return; // No schema to validate against
+      }
+      
+      // Use validatePayload to check the output
+      // We need to catch and re-throw with action context
+      try {
+        this.validatePayload(schema, output, actionName);
+      } catch (error: any) {
+        if (error.code === 'VALIDATION_ERROR') {
+          // Re-throw with output context
+          throw new ValidationError(
+            `Output validation failed for action ${actionName}: ${error.message}`,
+            { ...error.details, outputValidation: true }
+          );
+        }
+        throw error;
       }
     }
 
@@ -644,11 +906,36 @@ export class CapsKit implements ICapsKit {
         const normalizedPayload = isStructured ? payload : { body: payload, params: undefined, query: {} };
 
         // Validate input payload body against schema if defined
-        if (actionDef.schema) {
-          this.validatePayload(actionDef.schema, normalizedPayload.body, actionName);
+        // Support both new inputSchema and deprecated schema for backward compatibility
+        const inputSchema = actionDef.inputSchema || actionDef.schema;
+        if (inputSchema) {
+          this.validatePayload(inputSchema, normalizedPayload.body, actionName);
         }
 
         const handler = actionDef.handler as ActionHandler;
+        const resiliency = actionDef.resiliency;
+
+        // ============================================================
+        // RESILIENCY: Circuit Breaker Check
+        // ============================================================
+        if (resiliency?.circuitBreaker) {
+          const state = this.getCircuitBreakerState(actionName, resiliency.circuitBreaker);
+          if (state.status === 'open') {
+            // Fail fast - circuit is open
+            const cached = this.fallbackCache.get(actionName);
+            if (cached) {
+              return cached.result;
+            }
+            throw new InternalError(`Circuit breaker is open for action "${actionName}". Action temporarily unavailable.`);
+          }
+        }
+
+        // ============================================================
+        // RESILIENCY: Fallback Loop Detection
+        // ============================================================
+        if (this.actionCallStack.has(actionName)) {
+          throw new InternalError(`Circular fallback detected: action "${actionName}" is already being executed. Check your fallback configuration for cycles.`);
+        }
 
         const context: ActionContext = {
           params: normalizedPayload.params,
@@ -683,14 +970,167 @@ export class CapsKit implements ICapsKit {
             }
           }
 
+          // Validate output if outputSchema.strict is enabled
+          if (actionDef.outputSchema) {
+            this.validateOutput(result, actionDef.outputSchema, actionName);
+          }
+
             return result;
           }
           const interceptor = this.interceptors[i];
           return interceptor(actionName, normalizedPayload, context, () => dispatch(i + 1));
         };
 
-        return dispatch(0);
+        // ============================================================
+        // RESILIENCY: Execute with Failure Handling
+        // ============================================================
+        try {
+          // Mark action as in-flight for loop detection
+          this.actionCallStack.add(actionName);
+          const result = await dispatch(0);
+          
+          // Success: record in cache if fallback-to-cache is enabled, update circuit breaker
+          if (resiliency?.fallback?.type === 'cache') {
+            const cacheTtlMs = resiliency.fallback.cacheTtlMs ?? Infinity;
+            this.fallbackCache.set(actionName, {
+              result,
+              timestamp: Date.now(),
+              expiresAt: cacheTtlMs === Infinity ? null : Date.now() + cacheTtlMs
+            });
+          }
+          this.recordSuccess(actionName, resiliency?.circuitBreaker);
+          
+          return result;
+        } catch (error: any) {
+          // Failure: handle fallback
+          // Use 'await' so finally runs AFTER handleFailure completes (ensuring proper stack tracking)
+          return await this.handleFailure(actionName, error, payload, resiliency);
+        } finally {
+          // Always remove from in-flight stack
+          this.actionCallStack.delete(actionName);
+        }
       });
+    }
+
+    /**
+     * Get or initialize circuit breaker state for an action.
+     */
+    private getCircuitBreakerState(actionName: string, config: NonNullable<ResiliencyConfig>['circuitBreaker']): CircuitBreakerState {
+      let state = this.circuitBreakerStates.get(actionName);
+      if (!state) {
+        state = {
+          consecutiveFailures: 0,
+          consecutiveSuccesses: 0,
+          lastFailureTime: null,
+          lastSuccessTime: null,
+          nextResetTime: null,
+          status: 'closed'
+        };
+        this.circuitBreakerStates.set(actionName, state);
+      }
+      return state;
+    }
+
+    /**
+     * Record a successful action execution.
+     */
+    private recordSuccess(actionName: string, config?: NonNullable<ResiliencyConfig>['circuitBreaker']): void {
+      if (!config) return;
+      
+      const state = this.getCircuitBreakerState(actionName, config);
+      state.consecutiveFailures = 0;
+      state.consecutiveSuccesses++;
+      state.lastSuccessTime = Date.now();
+      
+      // If circuit is half-open, check if we have enough successes to close it
+      if (state.status === 'half-open') {
+        if (state.consecutiveSuccesses >= (config.successThreshold ?? 1)) {
+          state.status = 'closed';
+        }
+      }
+      
+      this.circuitBreakerStates.set(actionName, state);
+    }
+
+    /**
+     * Record a failed action execution.
+     */
+    private recordFailure(actionName: string, config?: NonNullable<ResiliencyConfig>['circuitBreaker']): void {
+      if (!config) return;
+      
+      const state = this.getCircuitBreakerState(actionName, config);
+      state.consecutiveFailures++;
+      state.consecutiveSuccesses = 0;
+      state.lastFailureTime = Date.now();
+      
+      // Check if we should open the circuit
+      if (state.consecutiveFailures >= (config.failureThreshold ?? 3)) {
+        state.status = 'open';
+        state.nextResetTime = Date.now() + (config.resetTimeoutMs ?? 30000);
+        // Schedule transition to half-open after resetTimeoutMs
+        setTimeout(() => {
+          const currentState = this.circuitBreakerStates.get(actionName);
+          if (currentState && currentState.status === 'open') {
+            currentState.status = 'half-open';
+            currentState.consecutiveSuccesses = 0;
+            this.circuitBreakerStates.set(actionName, currentState);
+          }
+        }, config.resetTimeoutMs ?? 30000);
+      }
+      
+      this.circuitBreakerStates.set(actionName, state);
+    }
+
+    /**
+     * Handle action failure and apply fallback if configured.
+     */
+    private async handleFailure(actionName: string, error: any, payload: any, resiliency?: ResiliencyConfig): Promise<any> {
+      // Record failure for circuit breaker
+      this.recordFailure(actionName, resiliency?.circuitBreaker);
+
+      if (!resiliency?.fallback) {
+        // No fallback configured - re-throw the error
+        throw error;
+      }
+
+      const { fallback } = resiliency;
+
+      if (fallback.type === 'cache') {
+        // Fallback to cached result
+        const cached = this.fallbackCache.get(actionName);
+        if (cached) {
+          // Check if cache is still valid
+          const now = Date.now();
+          const isExpired = cached.expiresAt !== null && now > cached.expiresAt;
+          if (!isExpired) {
+            return cached.result;
+          }
+        }
+        // Cache miss or expired - re-throw
+        throw error;
+      }
+
+      if (fallback.type === 'action') {
+        // Fallback to alternate action
+        const fallbackActionName = fallback.action;
+        
+        // Validate fallback action exists and is different to avoid immediate loop
+        if (fallbackActionName === actionName) {
+          throw new InternalError(`Fallback action cannot be the same as the primary action: "${actionName}".`);
+        }
+
+        // Verify fallback action exists
+        const fallbackDef = this.actions.get(fallbackActionName!);
+        if (!fallbackDef) {
+          throw new NotFoundError(`Fallback action "${fallbackActionName}" not found.`);
+        }
+
+        // Execute fallback action recursively (loop detection will catch any cycles)
+        return this.call(fallbackActionName!, payload, { fromUse: true });
+      }
+
+      // Unknown fallback type - re-throw
+      throw error;
     }
 
   use<TCapsule = any>(capsuleName: string): TCapsule {

@@ -192,7 +192,7 @@ export async function runPlatformTests(kitFactory: (config: any) => Promise<any>
   if (caughtError.code !== 'VALIDATION_ERROR') {
     throw new Error(`Expected VALIDATION_ERROR, got ${caughtError.code}`);
   }
-  if (!caughtError.message.includes('requires field')) {
+  if (!caughtError.message.includes('is required')) {
     throw new Error(`Error message should indicate required field, got: ${caughtError.message}`);
   }
 
