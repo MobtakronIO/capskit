@@ -358,11 +358,14 @@ export class CapsKit implements ICapsKit {
         throw new ValidationError(`Capsule "${manifest.name}" must have at least one action.`);
       }
 
-      // Check for duplicate action keys (JS silently overwrites duplicates with same name)
+      // Check for duplicate action keys
+      // NOTE: JavaScript silently overwrites duplicate keys in object literals at parse time,
+      // so this validation only catches duplicates from JSON-parsed objects or dynamic sources.
+      // With object literals like { a: 1, a: 2 }, JS keeps only { a: 2 } before we see it.
       const uniqueKeys = new Set(actionKeys);
       if (actionKeys.length !== uniqueKeys.size) {
         const duplicates = actionKeys.filter((key, index) => actionKeys.indexOf(key) !== index);
-        throw new ValidationError(`Capsule "${manifest.name}" has duplicate action keys: ${[...new Set(duplicates)].join(', ')}`);
+        console.warn(`[CapsKit] Warning: Capsule "${manifest.name}" has duplicate action keys: ${[...new Set(duplicates)].join(', ')}. With object literals, JS silently keeps only the last value - this warning may indicate a source-level duplicate that was already resolved.`);
       }
 
       // Validate action definitions

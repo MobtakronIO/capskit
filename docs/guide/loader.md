@@ -111,10 +111,13 @@ const capskit = await createCapsKit({
 
 ### Name Collision Policy
 
-If two capsules have the same name:
-- The **later** one wins
-- The earlier one is **not** registered
-- A warning is logged (enable debug logging to see)
+Capsule names must be unique. If two capsules have the same name, an error is thrown during registration:
+
+```
+Error: Duplicate capsule name: 'auth-capsule' is already registered
+```
+
+**Fix**: Ensure each capsule has a unique name.
 
 ### Dependency Resolution
 
@@ -128,13 +131,21 @@ The loader performs several validations on capsule manifests during the loading 
 
 ### Action Key Uniqueness
 
-Each action key within a capsule must be unique. The loader rejects manifests with duplicate action keys:
+Each action key within a capsule should be unique. The loader warns when it detects duplicate action keys, but cannot catch true duplicates in JavaScript object literals because JS silently overwrites them at parse time (keeping the last value).
 
 ```
-Error: Capsule 'my-capsule' has duplicate action key: 'create'
+Warning: Capsule 'my-capsule' has duplicate action key: 'create'. With object literals, JS silently keeps only the last value.
 ```
 
-**Fix**: Ensure each action in the `actions` object has a unique key.
+**Note**: This warning only fires for duplicates from JSON-parsed sources or dynamic object construction. If you write:
+
+```ts
+actions: { create: fn1, create: fn2 }  // JS silently keeps only fn2
+```
+
+...the loader will not detect this duplicate because JavaScript resolves it before validation runs.
+
+**Fix**: Use unique keys for all actions. Consider using suffix-based naming like `createUser`, `createAdmin` instead of multiple `create` entries.
 
 ### Name Format Validation
 
@@ -195,15 +206,20 @@ Error: Capsule 'my-capsule' events must be an object with 'subscribes' and/or 'p
 {
   name: 'my-capsule',
   events: {
-    subscribes: ['user.created', 'order.placed'],   // Valid
-    publishes: ['notification.sent']                // Valid
+    subscribes: [
+      { event: 'user.created', action: 'handleUserCreated' },
+      { event: 'order.placed', action: 'handleOrderPlaced' }
+    ],
+    publishes: ['notification.sent']
   },
   actions: { /* ... */ }
 }
 
 // Or with both:
 events: {
-  subscribes: ['user.created'],
+  subscribes: [
+    { event: 'user.created', action: 'handleUserCreated' }
+  ],
   publishes: ['notification.sent']
 }
 ```

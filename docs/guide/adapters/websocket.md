@@ -14,14 +14,14 @@ const { capskit } = await createCapsKit({
 })
 
 // Build WebSocket router
-const { websocket } = await capskit.use('websocket').buildRouter({
+const { sockets } = await capskit.call('websocket.buildSocket', {
   adapter: 'elysia'
 })
 
 new Elysia()
   .use(
     ws({
-      '/ws': websocket
+      '/ws': sockets
     })
   )
   .listen(3000)
@@ -274,7 +274,7 @@ import { test, expect } from 'bun:test'
 import { WebSocket } from 'bun'
 
 test('websocket chat message', async () => {
-  const app = new Elysia().use(ws({ '/ws': websocket }))
+  const app = new Elysia().use(ws({ '/ws': sockets }))
   const server = app.listen(0)
   const port = server.port
   

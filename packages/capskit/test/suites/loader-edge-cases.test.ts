@@ -579,23 +579,12 @@ export async function runLoaderEdgeCaseTests() {
   }
   console.log('✅ invalid action name format rejected');
 
-  // Test 16: Duplicate action key detection (actual duplicate in single manifest)
-  // Note: In JS object literals, duplicate keys are silently overwritten (last wins),
-  // so we need to simulate the detection by creating a manifest object that has
-  // the validation trigger. However, with object literals TypeScript/JavaScript will
-  // just use the last value. The loader's validateManifestShape catches this by
-  // checking actionKeys.length vs uniqueKeys.size.
-  // To test this properly, we need to either:
-  // 1. Test at a lower level (manifest validation directly)
-  // 2. Or test that the behavior is consistent (last one wins, but no crash)
-  // Since the validation happens during manifest shape validation, we test it directly.
-  console.log('Test: duplicate action key detection in manifest validation');
-  
-  // We can verify the validation logic works by checking that when we have a manifest
-  // with actions that would have duplicate keys (after some transformation),
-  // the validation rejects it. Since we can't easily create true duplicate keys
-  // in an object literal, we trust the unit test in loader validation.
-  // But we CAN test that manifest shape validation is triggered:
+  // Test 16: Duplicate action key handling
+  // NOTE: JavaScript silently overwrites duplicate keys in object literals at parse time.
+  // By the time validation runs, duplicates are already resolved. The validation CAN catch
+  // duplicates from JSON-parsed objects or other sources that preserve duplicates.
+  // We test that single-action manifests work (duplicates from object literals are silently handled).
+  console.log('Test: duplicate action key handling');
   
   try {
     await createCapsKit({
@@ -605,15 +594,12 @@ export async function runLoaderEdgeCaseTests() {
           manifest: {
             name: 'dup-action-test',
             actions: {
-              // This tests that validation runs and checks for duplicate keys
-              // In real scenarios with duplicate keys, JS would silently overwrite
               action1: { handler: async () => ({ v: 1 }) }
             }
           } as any
         }
       ]
     });
-    // Single action should work fine
     console.log('✅ single action passes validation');
   } catch (error: any) {
     throw new Error(`single action should not fail: ${error.message}`);
