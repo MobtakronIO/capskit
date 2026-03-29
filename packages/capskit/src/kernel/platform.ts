@@ -1,9 +1,12 @@
-import { ActionHandler, ICapsKit, CapsKitConfig, CapsuleManifest, ActionInterceptor, ActionContext, ActionDefinition, CapsuleSource } from '../types';
+import { ActionHandler, ICapsKit, CapsKitConfig, CapsuleManifest, ActionInterceptor, ActionContext, ActionDefinition, CapsuleSource, TraceRecord, redactPayload } from '../types';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { loadCapsules } from './loader';
 import { builtinCapsules } from '../capsules/builtin';
-import { ValidationError, NotFoundError, DependencyError, AuthorizationError, TraitError } from './errors';
+import { ValidationError, NotFoundError, DependencyError, AuthorizationError, TraitError, TimeoutError, UnauthorizedError, InternalError } from './errors';
+import { AsyncLocalStorage } from 'async_hooks';
+import * as fs from 'fs';
+import * as crypto from 'crypto';
 
 /**
  * Pool configuration parsed from environment variables.
@@ -15,6 +18,137 @@ interface PoolConfig {
   max?: number;
   idleTimeout?: number;
   connectionTimeout?: number;
+}
+
+// ============================================================
+// Trace Logging Infrastructure
+// ============================================================
+
+/**
+ * AsyncLocalStorage for propagating trace context through nested calls.
+ */
+const traceStorage = new AsyncLocalStorage<{ traceId: string; spanId: string }>();
+
+/**
+ * Check if tracing is enabled via environment variable.
+ */
+function isTraceEnabled(): boolean {
+  return process.env.CAPSKIT_TRACE === '1';
+}
+
+/**
+ * Generate a new UUID v4.
+ */
+function generateUUID(): string {
+  return crypto.randomUUID();
+}
+
+/**
+ * Get the current trace sink - either stdout or file based on env.
+ */
+function getTraceSink(): ((record: TraceRecord) => void) | null {
+  if (!isTraceEnabled()) {
+    return null;
+  }
+
+  const traceFile = process.env.CAPSKIT_TRACE_FILE;
+  if (traceFile) {
+    return (record: TraceRecord) => {
+      try {
+        const line = JSON.stringify(record) + '\n';
+        fs.appendFileSync(traceFile, line, 'utf8');
+      } catch {
+        // Silently fail - tracing should not crash the action
+      }
+    };
+  }
+
+  // Default to stdout
+  return (record: TraceRecord) => {
+    try {
+      process.stdout.write(JSON.stringify(record) + '\n');
+    } catch {
+      // Silently fail - tracing should not crash the action
+    }
+  };
+}
+
+/**
+ * Emit a trace record via the configured sink.
+ */
+function emitTrace(record: TraceRecord): void {
+  const sink = getTraceSink();
+  if (sink) {
+    sink(record);
+  }
+}
+
+/**
+ * Wrap an action call with tracing.
+ * Returns result first, then emits trace asynchronously.
+ */
+async function traceCall<T>(
+  action: string,
+  payload: any,
+  caller: string | null,
+  fn: () => Promise<T>
+): Promise<T> {
+  const sink = getTraceSink();
+  if (!sink) {
+    return fn();
+  }
+
+  // Get or create trace context
+  const parentContext = traceStorage.getStore();
+  const traceId = parentContext?.traceId || generateUUID();
+  const spanId = generateUUID();
+  const parentSpanId = parentContext?.spanId || null;
+
+  const timestampStart = new Date().toISOString();
+
+  // Run the actual call within the trace context
+  let result: T | undefined;
+  let error: Error | null = null;
+  let status: 'ok' | 'error' = 'ok';
+
+  try {
+    result = await traceStorage.run(
+      { traceId, spanId },
+      fn
+    );
+  } catch (err) {
+    error = err instanceof Error ? err : new Error(String(err));
+    status = 'error';
+    throw error;
+  } finally {
+    const timestampEnd = new Date().toISOString();
+    const durationMs = new Date(timestampEnd).getTime() - new Date(timestampStart).getTime();
+
+    // Build trace record
+    const record: TraceRecord = {
+      traceId,
+      spanId,
+      parentSpanId,
+      timestampStart,
+      timestampEnd,
+      durationMs,
+      action,
+      caller,
+      status,
+      input: redactPayload(payload),
+      output: error ? null : redactPayload(result),
+      error: error ? {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      } : null
+    };
+
+    // Emit trace - don't await, fire and forget
+    emitTrace(record);
+  }
+
+  return result as T;
 }
 
 /**
@@ -127,8 +261,10 @@ export class CapsKit implements ICapsKit {
   private eventRegistry = new Map<string, string[]>();
   private dependencies: Record<string, any> = {};
   private capsuleSources = new Map<string, string>(); // capsule name -> source directory
+  private config: CapsKitConfig;
 
-  constructor(private config: CapsKitConfig) {
+  constructor(config: CapsKitConfig) {
+    this.config = config;
     this.dependencies = {
       ...config.dependencies,
       capskit: this
@@ -198,8 +334,9 @@ export class CapsKit implements ICapsKit {
     }
 
     // 3. Execute boot action if specified
+    // Boot is an internal use case - use internal call to avoid warning
     if (this.config.boot) {
-      return await this.call(this.config.boot.action, this.config.boot.payload || {});
+      return await this.call(this.config.boot.action, this.config.boot.payload || {}, { fromUse: true });
     }
 
     return null;
@@ -358,16 +495,6 @@ export class CapsKit implements ICapsKit {
         throw new ValidationError(`Capsule "${manifest.name}" must have at least one action.`);
       }
 
-      // Check for duplicate action keys
-      // NOTE: JavaScript silently overwrites duplicate keys in object literals at parse time,
-      // so this validation only catches duplicates from JSON-parsed objects or dynamic sources.
-      // With object literals like { a: 1, a: 2 }, JS keeps only { a: 2 } before we see it.
-      const uniqueKeys = new Set(actionKeys);
-      if (actionKeys.length !== uniqueKeys.size) {
-        const duplicates = actionKeys.filter((key, index) => actionKeys.indexOf(key) !== index);
-        console.warn(`[CapsKit] Warning: Capsule "${manifest.name}" has duplicate action keys: ${[...new Set(duplicates)].join(', ')}. With object literals, JS silently keeps only the last value - this warning may indicate a source-level duplicate that was already resolved.`);
-      }
-
       // Validate action definitions
       for (const [actionName, def] of Object.entries(manifest.actions)) {
         // Validate action name format
@@ -480,72 +607,100 @@ export class CapsKit implements ICapsKit {
     this.interceptors.push(interceptor);
   }
 
-    async call(actionName: string, payload: any): Promise<any> {
-      const actionDef = this.actions.get(actionName);
-      if (!actionDef) {
-        throw new NotFoundError(`Action "${actionName}" not found.`);
-      }
-
-      // Normalize payload: support both structured (body/params/query) and plain objects
-      const isStructured = payload && typeof payload === 'object' &&
-        (payload.body !== undefined || payload.params !== undefined || payload.query !== undefined);
-      const normalizedPayload = isStructured ? payload : { body: payload, params: undefined, query: {} };
-
-      // Validate input payload body against schema if defined
-      if (actionDef.schema) {
-        this.validatePayload(actionDef.schema, normalizedPayload.body, actionName);
-      }
-
-      const handler = actionDef.handler as ActionHandler;
-
-      const context: ActionContext = {
-        params: normalizedPayload.params,
-        body: normalizedPayload.body,
-        query: normalizedPayload.query,
-        deps: this.dependencies,
-        emit: this.emit.bind(this),
-        call: this.call.bind(this),
-        use: this.use.bind(this)
-      };
-
-      let index = -1;
-      const dispatch = async (i: number): Promise<any> => {
-        if (i <= index) throw new Error('next() called multiple times');
-        index = i;
-        if (i === this.interceptors.length) {
-          
-       if (actionDef.pre) {
-         for (const hook of actionDef.pre) {
-           await hook(normalizedPayload, context);
-         }
-       }
-
-       let result = await handler(normalizedPayload, context);
-
-       if (actionDef.post) {
-         for (const hook of actionDef.post) {
-           const hookResult = await hook(normalizedPayload, result, context);
-           if (hookResult !== undefined) {
-             result = hookResult;
-           }
-         }
-       }
-
-          return result;
+    /**
+     * INTERNAL: Execute an action by full name.
+     * 
+     * This is the core execution method. When warnOnDirectCall is enabled,
+     * we emit a warning when called directly (not via use() proxy).
+     * 
+     * @internal
+     */
+    async call(actionName: string, payload: any, { fromUse = false } = {}): Promise<any> {
+      // Determine caller capsule name for tracing
+      const caller = actionName.split('.')[0];
+      
+      // Wrap with tracing - returns result first, then emits trace
+      return traceCall(actionName, payload, caller, async () => {
+        // Emit warning for direct external usage if configured
+        if (this.config.warnOnDirectCall && !fromUse) {
+          // Use a simple detection: if the caller is not within the kernel or use() proxy
+          const warning = [
+            `[CapsKit] Warning: Direct \`capskit.call('${actionName}', ...)\` usage detected.`,
+            `  Prefer \`capskit.use('${actionName.split('.')[0]}').${actionName.split('.')[1]}(...)\` instead.`,
+            `  The \`call()\` API is internal and may change without notice.`,
+            `  To disable this warning, set \`warnOnDirectCall: false\` in createCapsKit config.`
+          ].join('\n');
+          console.warn(warning);
         }
-        const interceptor = this.interceptors[i];
-        return interceptor(actionName, normalizedPayload, context, () => dispatch(i + 1));
-    };
 
-    return dispatch(0);
-  }
+        const actionDef = this.actions.get(actionName);
+        if (!actionDef) {
+          throw new NotFoundError(`Action "${actionName}" not found.`);
+        }
+
+        // Normalize payload: support both structured (body/params/query) and plain objects
+        const isStructured = payload && typeof payload === 'object' &&
+          (payload.body !== undefined || payload.params !== undefined || payload.query !== undefined);
+        const normalizedPayload = isStructured ? payload : { body: payload, params: undefined, query: {} };
+
+        // Validate input payload body against schema if defined
+        if (actionDef.schema) {
+          this.validatePayload(actionDef.schema, normalizedPayload.body, actionName);
+        }
+
+        const handler = actionDef.handler as ActionHandler;
+
+        const context: ActionContext = {
+          params: normalizedPayload.params,
+          body: normalizedPayload.body,
+          query: normalizedPayload.query,
+          deps: this.dependencies,
+          emit: this.emit.bind(this),
+          call: this.call.bind(this),
+          use: this.use.bind(this)
+        };
+
+        let index = -1;
+        const dispatch = async (i: number): Promise<any> => {
+          if (i <= index) throw new Error('next() called multiple times');
+          index = i;
+          if (i === this.interceptors.length) {
+            
+          if (actionDef.pre) {
+            for (const hook of actionDef.pre) {
+              await hook(normalizedPayload, context);
+            }
+          }
+
+          let result = await handler(normalizedPayload, context);
+
+          if (actionDef.post) {
+            for (const hook of actionDef.post) {
+              const hookResult = await hook(normalizedPayload, result, context);
+              if (hookResult !== undefined) {
+                result = hookResult;
+              }
+            }
+          }
+
+            return result;
+          }
+          const interceptor = this.interceptors[i];
+          return interceptor(actionName, normalizedPayload, context, () => dispatch(i + 1));
+        };
+
+        return dispatch(0);
+      });
+    }
 
   use<TCapsule = any>(capsuleName: string): TCapsule {
+    const self = this;
     return new Proxy({}, {
       get: (_, actionName: string | symbol) => {
         return async (payload: any) => {
           const actionPath = `${capsuleName}.${String(actionName)}`;
-          return this.call(actionPath, payload);
+          // Mark as internal call to suppress warning
+          return self.call(actionPath, payload, { fromUse: true });
         };
       }
     }) as TCapsule;
@@ -564,7 +719,8 @@ export class CapsKit implements ICapsKit {
     if (subscribers) {
       for (const actionName of subscribers) {
         // Fire and forget, but catch errors to avoid unhandled promises
-        this.call(actionName, data).catch(err => {
+        // Use internal call to avoid triggering warnings for internal event dispatch
+        this.call(actionName, data, { fromUse: true }).catch(err => {
           console.error(`[Event Bus] Subscriber action ${actionName} failed handling event ${event}:`, err);
         });
       }

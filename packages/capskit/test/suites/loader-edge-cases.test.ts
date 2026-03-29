@@ -579,12 +579,11 @@ export async function runLoaderEdgeCaseTests() {
   }
   console.log('✅ invalid action name format rejected');
 
-  // Test 16: Duplicate action key handling
-  // NOTE: JavaScript silently overwrites duplicate keys in object literals at parse time.
-  // By the time validation runs, duplicates are already resolved. The validation CAN catch
-  // duplicates from JSON-parsed objects or other sources that preserve duplicates.
-  // We test that single-action manifests work (duplicates from object literals are silently handled).
-  console.log('Test: duplicate action key handling');
+  // Test 16: Single action manifest validation
+  // JavaScript object literals silently resolve duplicate keys (last value wins) at parse time,
+  // so duplicate action keys cannot exist in JS objects at runtime. This test verifies that
+  // a valid single-action manifest passes validation correctly.
+  console.log('Test: single action manifest validation works');
   
   try {
     await createCapsKit({

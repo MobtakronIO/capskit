@@ -97,14 +97,14 @@ export default {
 
 ## Load Precedence
 
-Sources are loaded in the order they appear in the `capsules` array. Later sources **override** earlier ones:
+Sources are loaded in the order they appear in the `capsules` array for dependency resolution. Each capsule must have a unique name — duplicates cause an error:
 
 ```ts
 const capskit = await createCapsKit({
   capsules: [
     { type: 'directory', path: './src/capsules' }, // Loaded first
-    { type: 'manifest', manifest: localMath },     // Overrides if same name
-    { type: 'package', name: '@myorg/analytics' }  // Loaded last, highest priority
+    { type: 'manifest', manifest: localMath },     // Error if name conflicts
+    { type: 'package', name: '@myorg/analytics' }  // Loaded last
   ]
 })
 ```
