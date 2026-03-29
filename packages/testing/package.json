@@ -1,0 +1,45 @@
+{
+  "name": "@capskit/testing",
+  "version": "0.1.0",
+  "description": "Testing toolkit for capskit capsules and actions",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "bun test/",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "bun": "^1.1.0",
+    "sinon": "^18.0.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "@mobtakronio/capskit": "*"
+  },
+  "peerDependenciesMeta": {
+    "@mobtakronio/capskit": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "sinon": "^18.0.0"
+  }
+}
