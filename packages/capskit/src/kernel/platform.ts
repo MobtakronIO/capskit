@@ -1,13 +1,13 @@
-import { ICapsKit, CapsKitConfig, CapsuleManifest, CapsuleSource, ActionInterceptor, ActionContext, ActionHandler } from '../types';
+import { ICapsKit, CapsKitConfig, CapsuleManifest, CapsuleSource, ActionInterceptor, ActionContext, ActionHandler, ResiliencyConfig, CircuitBreakerState } from '../types';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { loadCapsules } from './loader';
 import { builtinCapsules } from '../capsules/builtin';
-import { NotFoundError, InternalError, ValidationError } from './errors';
+import { NotFoundError, InternalError, ValidationError, DependencyError } from './errors';
 
 
 
-import { CacheMiddleware, createCacheAdapter, parseCacheEnvDefault } from '../cache';
+import { CacheMiddleware, createCacheAdapter, parseCacheEnvDefault, CacheAdapter } from '../cache';
 // Import kernel modules (extracted from platform.ts)
 import { KernelState, validateDependencies, resolveStringHandler } from './kernel-state';
 import { validateManifestShape, validateInput, validateOutput } from './validation';
@@ -90,14 +90,15 @@ async function createDrizzleFromEnv(): Promise<unknown> {
   try {
     if (provider === 'postgres') {
       // Dynamic import for optional dependency
-      const { default: neon } = await import('@neondatabase/serverless');
-      const drizzle = await import('drizzle-orm');
+      const neonModule = await import('@neondatabase/serverless');
+      const neon = ('default' in neonModule ? neonModule.default : neonModule) as any;
+      const drizzleModule = await import('drizzle-orm');
 
       // Pass pool configuration to neon if provided
       const sql = neon(dbUrl, hasPoolConfig ? { poolConfig } : undefined);
 
       // Create drizzle instance with Postgres
-      const drizzleInstance = drizzle.drizzle(sql);
+      const drizzleInstance = (drizzleModule as any).drizzle(sql);
 
       return drizzleInstance;
     } else if (provider === 'sqlite') {
@@ -109,14 +110,14 @@ async function createDrizzleFromEnv(): Promise<unknown> {
 
       // Dynamic import for optional dependency
       const betterSqlite3Module = await import('better-sqlite3');
-      const drizzle = await import('drizzle-orm');
+      const drizzleModule2 = await import('drizzle-orm');
 
       // Safe access: better-sqlite3 may or may not have a default export depending on ESM/CJS interop
       const BetterSQLite3 = ('default' in betterSqlite3Module 
         ? betterSqlite3Module.default 
-        : betterSqlite3Module) as typeof import('better-sqlite3');
+        : betterSqlite3Module) as any;
       const db = new BetterSQLite3(dbUrl);
-      const drizzleInstance = drizzle.drizzle(db);
+      const drizzleInstance = (drizzleModule2 as any).drizzle(db);
 
       return drizzleInstance;
     }
@@ -132,6 +133,8 @@ async function createDrizzleFromEnv(): Promise<unknown> {
 export class CapsKit implements ICapsKit {
   private capsuleSources = new Map<string, string>();
   private actionCallStack = new Set<string>();
+  private circuitBreakerStates = new Map<string, CircuitBreakerState>();
+  private fallbackCache = new Map<string, { result: any; timestamp: number; expiresAt: number | null }>();
   private eventRegistry = new Map<string, string[]>();
   private state: KernelState;
   
@@ -154,8 +157,8 @@ export class CapsKit implements ICapsKit {
   get manifests() { return this.state.manifests; }
   get actions() { return this.state.actions; }
   get dependencies() { return this.state.dependencies; }
-  get cacheAdapter() { return this.state.cacheAdapter; }
-  set cacheAdapter(adapter) { this.state.setCacheAdapter(adapter); }
+  get cacheAdapter(): CacheAdapter | null { return this.state.cacheAdapter; }
+  set cacheAdapter(adapter: CacheAdapter | null) { if (adapter) this.state.setCacheAdapter(adapter); else this.state.setCacheAdapter(null as any); }
   get interceptors() { return this.state.interceptors; }
   constructor(config: CapsKitConfig) {
     this.config = config;
@@ -185,14 +188,16 @@ export class CapsKit implements ICapsKit {
     // 1b. Initialize cache adapter based on CAPSKIT_CACHE_DEFAULT env var
     const cacheStorageType = parseCacheEnvDefault();
     try {
-      this.cacheAdapter = createCacheAdapter(cacheStorageType, {
+      const newAdapter = createCacheAdapter(cacheStorageType, {
         // Pass existing Redis client if available in dependencies
         redisClient: this.dependencies.redis,
       });
+      if (newAdapter) this.cacheAdapter = newAdapter;
       console.log(`[CapsKit] Cache initialized: ${cacheStorageType}`);
     } catch (error: any) {
       console.warn(`[CapsKit] Cache initialization failed: ${error.message}. Falling back to memory.`);
-      this.cacheAdapter = createCacheAdapter('memory');
+      const memAdapter = createCacheAdapter('memory');
+      if (memAdapter) this.cacheAdapter = memAdapter;
     }
 
     // 2. Register built-in capsules (explicit list for packaging safety)
