@@ -1,13 +1,18 @@
-import { ActionHandler, ICapsKit, CapsKitConfig, CapsuleManifest, ActionInterceptor, ActionContext, ActionDefinition, CapsuleSource, TraceRecord, redactPayload, ResiliencyConfig, CircuitBreakerState, CachedResult } from '../types';
+import { ICapsKit, CapsKitConfig, CapsuleManifest, CapsuleSource, ActionInterceptor, ActionContext, ActionHandler } from '../types';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { loadCapsules } from './loader';
 import { builtinCapsules } from '../capsules/builtin';
-import { ValidationError, NotFoundError, DependencyError, AuthorizationError, TraitError, TimeoutError, UnauthorizedError, InternalError } from './errors';
-import { AsyncLocalStorage } from 'async_hooks';
-import * as fs from 'fs';
-import * as crypto from 'crypto';
+import { NotFoundError, InternalError, ValidationError } from './errors';
+
+
+
 import { CacheMiddleware, createCacheAdapter, parseCacheEnvDefault } from '../cache';
+// Import kernel modules (extracted from platform.ts)
+import { KernelState, validateDependencies, resolveStringHandler } from './kernel-state';
+import { validateManifestShape, validateInput, validateOutput } from './validation';
+import { traceCall } from './tracing';
+import { validateFallbackChain } from './resiliency';
 
 /**
  * Pool configuration parsed from environment variables.
@@ -19,137 +24,6 @@ interface PoolConfig {
   max?: number;
   idleTimeout?: number;
   connectionTimeout?: number;
-}
-
-// ============================================================
-// Trace Logging Infrastructure
-// ============================================================
-
-/**
- * AsyncLocalStorage for propagating trace context through nested calls.
- */
-const traceStorage = new AsyncLocalStorage<{ traceId: string; spanId: string }>();
-
-/**
- * Check if tracing is enabled via environment variable.
- */
-function isTraceEnabled(): boolean {
-  return process.env.CAPSKIT_TRACE === '1';
-}
-
-/**
- * Generate a new UUID v4.
- */
-function generateUUID(): string {
-  return crypto.randomUUID();
-}
-
-/**
- * Get the current trace sink - either stdout or file based on env.
- */
-function getTraceSink(): ((record: TraceRecord) => void) | null {
-  if (!isTraceEnabled()) {
-    return null;
-  }
-
-  const traceFile = process.env.CAPSKIT_TRACE_FILE;
-  if (traceFile) {
-    return (record: TraceRecord) => {
-      try {
-        const line = JSON.stringify(record) + '\n';
-        fs.appendFileSync(traceFile, line, 'utf8');
-      } catch {
-        // Silently fail - tracing should not crash the action
-      }
-    };
-  }
-
-  // Default to stdout
-  return (record: TraceRecord) => {
-    try {
-      process.stdout.write(JSON.stringify(record) + '\n');
-    } catch {
-      // Silently fail - tracing should not crash the action
-    }
-  };
-}
-
-/**
- * Emit a trace record via the configured sink.
- */
-function emitTrace(record: TraceRecord): void {
-  const sink = getTraceSink();
-  if (sink) {
-    sink(record);
-  }
-}
-
-/**
- * Wrap an action call with tracing.
- * Returns result first, then emits trace asynchronously.
- */
-async function traceCall<T>(
-  action: string,
-  payload: any,
-  caller: string | null,
-  fn: () => Promise<T>
-): Promise<T> {
-  const sink = getTraceSink();
-  if (!sink) {
-    return fn();
-  }
-
-  // Get or create trace context
-  const parentContext = traceStorage.getStore();
-  const traceId = parentContext?.traceId || generateUUID();
-  const spanId = generateUUID();
-  const parentSpanId = parentContext?.spanId || null;
-
-  const timestampStart = new Date().toISOString();
-
-  // Run the actual call within the trace context
-  let result: T | undefined;
-  let error: Error | null = null;
-  let status: 'ok' | 'error' = 'ok';
-
-  try {
-    result = await traceStorage.run(
-      { traceId, spanId },
-      fn
-    );
-  } catch (err) {
-    error = err instanceof Error ? err : new Error(String(err));
-    status = 'error';
-    throw error;
-  } finally {
-    const timestampEnd = new Date().toISOString();
-    const durationMs = new Date(timestampEnd).getTime() - new Date(timestampStart).getTime();
-
-    // Build trace record
-    const record: TraceRecord = {
-      traceId,
-      spanId,
-      parentSpanId,
-      timestampStart,
-      timestampEnd,
-      durationMs,
-      action,
-      caller,
-      status,
-      input: redactPayload(payload),
-      output: error ? null : redactPayload(result),
-      error: error ? {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      } : null
-    };
-
-    // Emit trace - don't await, fire and forget
-    emitTrace(record);
-  }
-
-  return result as T;
 }
 
 /**
@@ -256,28 +130,44 @@ async function createDrizzleFromEnv(): Promise<unknown> {
 }
 
 export class CapsKit implements ICapsKit {
-  private actions = new Map<string, ActionDefinition>();
-  private manifests = new Map<string, CapsuleManifest>();
-  private interceptors: ActionInterceptor[] = [];
-  private eventRegistry = new Map<string, string[]>();
-  private dependencies: Record<string, any> = {};
-  private capsuleSources = new Map<string, string>(); // capsule name -> source directory
-  private config: CapsKitConfig;
-  private cacheAdapter: ReturnType<typeof createCacheAdapter> | null = null;
-
-  // Resiliency: circuit breaker states (actionName -> state)
-  private circuitBreakerStates = new Map<string, CircuitBreakerState>();
-  // Resiliency: cache for fallback-to-cache feature
-  private fallbackCache = new Map<string, CachedResult>();
-  // Resiliency: in-flight action call stack for fallback loop detection
+  private capsuleSources = new Map<string, string>();
   private actionCallStack = new Set<string>();
+  private eventRegistry = new Map<string, string[]>();
+  private state: KernelState;
+  
+  
+  
+  
+  
+  
+  private config: CapsKitConfig;
+  
 
+  
+  
+  
+  
+  
+  
+
+
+  get manifests() { return this.state.manifests; }
+  get actions() { return this.state.actions; }
+  get dependencies() { return this.state.dependencies; }
+  get cacheAdapter() { return this.state.cacheAdapter; }
+  set cacheAdapter(adapter) { this.state.setCacheAdapter(adapter); }
+  get interceptors() { return this.state.interceptors; }
   constructor(config: CapsKitConfig) {
     this.config = config;
-    this.dependencies = {
-      ...config.dependencies,
-      capskit: this
-    };
+    this.state = new KernelState();
+    this.state.setDependency('capskit', this);
+    if (config.dependencies) {
+      for (const [key, value] of Object.entries(config.dependencies)) {
+        if (key !== 'capskit') {
+          this.state.setDependency(key, value);
+        }
+      }
+    }
   }
 
   async start(): Promise<any> {

@@ -1,6 +1,6 @@
 {
   "name": "@mobtakronio/elysia",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Elysia integration for CapsKit with HTTP and WebSocket support",
   "type": "module",
   "main": "./dist/index.cjs",

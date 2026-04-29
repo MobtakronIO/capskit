@@ -1,6 +1,6 @@
 {
   "name": "@capskit/testing",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Testing toolkit for capskit capsules and actions",
   "license": "MIT",
   "type": "module",
