@@ -17,6 +17,7 @@ import {
   CapRoute,
   CapEventSubscription,
   CapsuleManifest,
+  CapsuleRegistry,
   ActionDefinition,
 } from '../types';
 
@@ -591,6 +592,361 @@ export function convertCapToManifest(
  */
 export function convertCapsToManifests(capDefs: CapDefinition[]): CapsuleManifest[] {
   return capDefs.map((def) => convertCapToManifest(def));
+}
+
+// ---------------------------------------------------------------------------
+// Load caps.ts registry file (CapsuleRegistry)
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve the export from a caps.ts module.
+ *
+ * Convention:
+ * - Looks for `default` export first, then named `capsule` or `registry`.
+ */
+function resolveRegistryExport(module: any, filePath: string): any {
+  // Prefer default export
+  if (module.default !== undefined && module.default !== null) {
+    return module.default;
+  }
+
+  // Fallback to named exports
+  if (module.capsule !== undefined && module.capsule !== null) {
+    return module.capsule;
+  }
+
+  if (module.registry !== undefined && module.registry !== null) {
+    return module.registry;
+  }
+
+  throw new CapLoadError(
+    `caps.ts at "${filePath}" does not export a CapsuleRegistry (default or named "capsule" / "registry").`,
+    filePath,
+  );
+}
+
+/**
+ * Validate that an exported value conforms to the CapsuleRegistry shape.
+ * Throws CapLoadError on any structural issue.
+ */
+export function validateCapsuleRegistry(registry: any, filePath: string): CapsuleRegistry {
+  if (!registry || typeof registry !== 'object') {
+    throw new CapLoadError(
+      `caps.ts at "${filePath}" must export an object (got ${typeof registry}).`,
+      filePath,
+    );
+  }
+
+  if (typeof registry.name !== 'string' || !registry.name.trim()) {
+    throw new CapLoadError(
+      `caps.ts at "${filePath}" has invalid "name": must be a non-empty string.`,
+      filePath,
+    );
+  }
+
+  // Validate name format (same rules as CapMeta name)
+  if (!/^[a-zA-Z0-9_-]+$/.test(registry.name)) {
+    throw new CapLoadError(
+      `caps.ts "${registry.name}" has invalid name format. ` +
+        `Names must match /^[a-zA-Z0-9_-]+$/.`,
+      filePath,
+    );
+  }
+
+  if (!Array.isArray(registry.caps)) {
+    throw new CapLoadError(
+      `caps.ts at "${filePath}" must export a "caps" array of CapDefinitions.`,
+      filePath,
+    );
+  }
+
+  if (registry.caps.length === 0) {
+    throw new CapLoadError(
+      `caps.ts at "${filePath}" has an empty "caps" array. At least one CapDefinition is required.`,
+      filePath,
+    );
+  }
+
+  // Validate each entry in the caps array
+  for (let i = 0; i < registry.caps.length; i++) {
+    const capDef = registry.caps[i];
+    if (!capDef || typeof capDef !== 'object') {
+      throw new CapLoadError(
+        `caps.ts at "${filePath}": caps[${i}] must be a CapDefinition object.`,
+        filePath,
+      );
+    }
+    if (typeof capDef.class !== 'function') {
+      throw new CapLoadError(
+        `caps.ts at "${filePath}": caps[${i}].class must be an instantiable class (got ${typeof capDef.class}).`,
+        filePath,
+      );
+    }
+    if (!capDef.meta || typeof capDef.meta !== 'object') {
+      throw new CapLoadError(
+        `caps.ts at "${filePath}": caps[${i}].meta must be a CapMeta object.`,
+        filePath,
+      );
+    }
+    // Inline-validate the cap's meta and class
+    validateCapMeta(capDef.meta, `${filePath} → caps[${i}].meta`);
+    validateCapClass(capDef.class, `${filePath} → caps[${i}].class`);
+  }
+
+  return registry as CapsuleRegistry;
+}
+
+/**
+ * Load a CapsuleRegistry from a caps.ts (or caps.js) file in a directory.
+ *
+ * Looks for `caps.ts` (or `caps.js`, `caps.mjs`, `caps.cjs`) inside the
+ * given directory, dynamically imports it, validates the exported
+ * CapsuleRegistry shape, and returns it.
+ *
+ * Falls back to `null` when no caps.* file is found — callers can then
+ * attempt alternative loading strategies (e.g., scanning for .cap
+ * subdirectories).
+ *
+ * @param dirPath - Absolute path to the capsule root directory
+ * @returns CapsuleRegistry or null if no caps.* file exists
+ * @throws CapLoadError for malformed exports
+ *
+ * @example
+ * ```ts
+ * const registry = await loadCapsRegistry('./src/capsules/calculator');
+ * if (registry) {
+ *   console.log(registry.name); // 'calculator'
+ *   console.log(registry.caps.length); // 2
+ * }
+ * ```
+ */
+export async function loadCapsRegistry(dirPath: string): Promise<CapsuleRegistry | null> {
+  const capsPath = findCapFile(dirPath, 'caps');
+
+  if (!capsPath) {
+    // No caps.ts file — graceful fallback
+    return null;
+  }
+
+  let registryExport: any;
+  try {
+    const module = await import(pathToFileURL(capsPath).href);
+    registryExport = resolveRegistryExport(module, capsPath);
+  } catch (err: any) {
+    if (err instanceof CapLoadError) throw err;
+    throw new CapLoadError(
+      `Failed to load caps.ts at "${capsPath}": ${err.message}`,
+      capsPath,
+    );
+  }
+
+  return validateCapsuleRegistry(registryExport, capsPath);
+}
+
+/**
+ * Convert a CapsuleRegistry into a single CapsuleManifest.
+ *
+ * Merges all CapDefinitions in the registry into one manifest:
+ * - **Actions**: Action methods from every cap class are combined into a
+ *   single `actions` record. Cap name prefixes are NOT added by default;
+ *   if multiple caps define the same method name, a warning is emitted
+ *   and the last one wins.
+ * - **Routes**: Routes from all caps' meta are concatenated.
+ * - **Events**: Publishes and subscribes are merged (duplicates removed).
+ * - **Dependencies**: `requires` is built from the union of all caps'
+ *   dependencies.
+ *
+ * @param registry - The CapsuleRegistry to convert
+ * @returns A CapsuleManifest ready for kernel registration
+ *
+ * @example
+ * ```ts
+ * const registry = await loadCapsRegistry('./calculator');
+ * const manifest = convertRegistryToManifest(registry);
+ * // manifest.name === 'calculator'
+ * // manifest.actions.sum, manifest.actions.multiply, ...
+ * ```
+ */
+export function convertRegistryToManifest(registry: CapsuleRegistry): CapsuleManifest {
+  const { name, caps } = registry;
+
+  const allActions: Record<string, ActionDefinition> = {};
+  const allRoutes: CapRoute[] = [];
+  const allPublishes: Set<string> = new Set();
+  const allSubscribes: CapEventSubscription[] = [];
+  const allDependencies: Set<string> = new Set();
+
+  for (const capDef of caps) {
+    const { class: CapClassCtor, meta } = capDef;
+    const instance = new CapClassCtor();
+    const proto = Object.getPrototypeOf(instance);
+    const methodNames = Object.getOwnPropertyNames(proto).filter(
+      (n) => n !== 'constructor' && typeof (instance as any)[n] === 'function',
+    );
+
+    // Register actions for this cap
+    for (const methodName of methodNames) {
+      if (allActions[methodName]) {
+        // Duplicate action name across caps — last wins (as documented)
+        console.warn(
+          `[CapLoader] Action "${methodName}" defined in multiple caps within ` +
+          `capsule "${name}". The last definition will be used.`,
+        );
+      }
+      allActions[methodName] = {
+        handler: (instance as any)[methodName].bind(instance),
+        description: `Cap "${meta.name}" action: ${methodName}`,
+      };
+    }
+
+    // Merge routes
+    if (meta.routes && meta.routes.length > 0) {
+      allRoutes.push(...meta.routes);
+    }
+
+    // Merge events
+    if (meta.events) {
+      if (meta.events.publishes) {
+        for (const ev of meta.events.publishes) {
+          allPublishes.add(ev);
+        }
+      }
+      if (meta.events.subscribes) {
+        allSubscribes.push(...meta.events.subscribes);
+      }
+    }
+
+    // Merge dependencies
+    if (meta.dependencies) {
+      for (const dep of meta.dependencies) {
+        allDependencies.add(dep);
+      }
+    }
+  }
+
+  if (Object.keys(allActions).length === 0) {
+    throw new CapLoadError(
+      `CapsuleRegistry "${name}" has no action methods across its caps.`,
+    );
+  }
+
+  const manifest: CapsuleManifest = {
+    name,
+    actions: allActions,
+  };
+
+  // Attach dependencies (union)
+  if (allDependencies.size > 0) {
+    manifest.requires = [...allDependencies];
+  }
+
+  // Attach events
+  if (allPublishes.size > 0 || allSubscribes.length > 0) {
+    manifest.events = {};
+    if (allPublishes.size > 0) {
+      manifest.events.publishes = [...allPublishes];
+    }
+    if (allSubscribes.length > 0) {
+      manifest.events.subscribes = allSubscribes.map((sub) => ({
+        event: sub.event,
+        action: sub.action,
+      }));
+    }
+  }
+
+  // Attach routes
+  if (allRoutes.length > 0) {
+    (manifest as any).routes = allRoutes;
+  }
+
+  return manifest;
+}
+
+/**
+ * Convert an array of CapsuleRegistries into an array of CapsuleManifests.
+ * Each registry becomes its own capsule manifest.
+ */
+export function convertRegistriesToManifests(registries: CapsuleRegistry[]): CapsuleManifest[] {
+  return registries.map((reg) => convertRegistryToManifest(reg));
+}
+
+/**
+ * Scan a directory for capsule subdirectories that contain a caps.ts
+ * registry file, load each registry, and return them.
+ *
+ * This is the "caps.ts registry" loading strategy. Directories that do
+ * NOT contain a caps.ts file are silently skipped — callers can choose
+ * to fall back to `.cap` directory scanning for those.
+ *
+ * @param rootDir - Absolute path to scan for capsule directories
+ * @returns Array of loaded CapsuleRegistry objects
+ *
+ * @example
+ * ```ts
+ * // Given:
+ * // src/capsules/
+ * //   calculator/
+ * //     caps.ts          ← exports CapsuleRegistry
+ * //     cap/
+ * //       sum.cap.ts
+ * //       sum.cap.meta.ts
+ * //   auth/
+ * //     caps.ts          ← exports CapsuleRegistry
+ * //   legacy/
+ * //     manifest.ts      ← not a caps.ts, skipped
+ *
+ * const registries = await loadCapsRegistriesFromDirectory('./src/capsules');
+ * // Returns [calculatorRegistry, authRegistry]
+ * ```
+ */
+export async function loadCapsRegistriesFromDirectory(
+  rootDir: string,
+): Promise<CapsuleRegistry[]> {
+  const registries: CapsuleRegistry[] = [];
+
+  if (!fs.existsSync(rootDir)) {
+    return registries;
+  }
+
+  const entries = fs.readdirSync(rootDir, { withFileTypes: true });
+
+  // Collect errors to report all at once
+  const errors: CapLoadError[] = [];
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    const dirPath = path.resolve(rootDir, entry.name);
+
+    try {
+      const registry = await loadCapsRegistry(dirPath);
+      if (registry) {
+        registries.push(registry);
+      }
+    } catch (err: any) {
+      if (err instanceof CapLoadError) {
+        errors.push(err);
+      } else {
+        errors.push(
+          new CapLoadError(
+            `Unexpected error loading caps.ts from "${dirPath}": ${err.message}`,
+            dirPath,
+          ),
+        );
+      }
+    }
+  }
+
+  if (errors.length > 0) {
+    const messages = errors.map((e) => `  - ${e.message}`).join('\n');
+    throw new CapLoadError(
+      `Failed to load ${errors.length} caps.ts registries:\n${messages}`,
+    );
+  }
+
+  return registries;
 }
 
 // ---------------------------------------------------------------------------

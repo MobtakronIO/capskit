@@ -2,7 +2,7 @@ import { ICapsKit, CapsKitConfig, CapsuleManifest, CapsuleSource, ActionIntercep
 import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { loadCapsules } from './loader';
-import { loadCapsFromDirectory, convertCapsToManifests } from './cap-loader';
+import { loadCapsFromDirectory, convertCapsToManifests, loadCapsRegistriesFromDirectory, convertRegistriesToManifests, loadCapsRegistry, convertRegistryToManifest } from './cap-loader';
 import { builtinCapsules } from '../capsules/builtin';
 import { NotFoundError, InternalError, ValidationError, DependencyError } from './errors';
 
@@ -232,10 +232,21 @@ export class CapsKit implements ICapsKit {
         }
       } else if (source.type === 'cap-directory') {
         const absoluteDir = path.resolve(source.path);
-        const capDefs = await loadCapsFromDirectory(absoluteDir);
-        const manifests = convertCapsToManifests(capDefs);
-        for (const manifest of manifests) {
+
+        // Strategy: try caps.ts registry first, fall back to .cap directory scanning
+        const registry = await loadCapsRegistry(absoluteDir);
+
+        if (registry) {
+          // caps.ts found — convert the single registry to a manifest
+          const manifest = convertRegistryToManifest(registry);
           await this.registerCapsule(manifest, absoluteDir);
+        } else {
+          // No caps.ts — scan for .cap subdirectories (legacy cap-per-directory mode)
+          const capDefs = await loadCapsFromDirectory(absoluteDir);
+          const manifests = convertCapsToManifests(capDefs);
+          for (const manifest of manifests) {
+            await this.registerCapsule(manifest, absoluteDir);
+          }
         }
       } else if (source.type === 'manifest') {
         await this.registerCapsule(source.manifest, undefined);
