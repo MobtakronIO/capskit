@@ -232,6 +232,13 @@ export interface TraceSpan {
 }
 
 /**
+ * Alias for {@link TraceSpan} used by the tracing infrastructure.
+ * @deprecated Use `TraceSpan` directly. Kept for backward compatibility
+ * with kernel tracing module imports.
+ */
+export type TraceRecord = TraceSpan;
+
+/**
  * Internal trace context stored in AsyncLocalStorage.
  */
 export interface TraceContext {
@@ -360,93 +367,96 @@ export interface ActionDefinition {
  */
 export interface ResiliencyConfig {
   /**
-   * Fallback behavior to use when the action fails.
-   * If not provided, failures will surface normally.
+   * Fallback behavior to invoke when the action fails.
+   * Supports retry, cache lookup, or invoking another action.
    */
   fallback?: FallbackConfig;
   /**
-   * Circuit breaker configuration to prevent repeated failing calls.
-   * If not provided, circuit breaker is disabled for this action.
+   * Circuit breaker configuration.
+   * When consecutive failures exceed the threshold, the circuit opens
+   * and subsequent calls fail fast (or use fallback).
    */
   circuitBreaker?: CircuitBreakerConfig;
 }
 
 /**
- * Fallback configuration for when an action fails.
+ * Fallback configuration for a resilient action.
  */
 export interface FallbackConfig {
   /**
-   * The type of fallback: 'cache' or 'action'.
-   * - 'cache': Return cached result from a previous successful call
-   * - 'action': Call a different action as fallback
+   * Fallback type:
+   * - 'retry': Retry the same action with backoff
+   * - 'cache': Return cached result from previous successful calls
+   * - 'action': Invoke a different action as fallback
    */
-  type: 'cache' | 'action';
+  type: 'retry' | 'cache' | 'action';
   /**
-   * For 'cache' type: maximum age of cached result to use (ms).
-   * For 'action' type: the fallback action name (e.g., 'users.getCached').
+   * Max number of retries when type is 'retry'.
    */
-  value?: string | number;
+  maxRetries?: number;
+  /**
+   * Backoff delay in milliseconds between retries.
+   */
+  retryDelayMs?: number;
+  /**
+   * Cache TTL in milliseconds when type is 'cache'.
+   * Fallback cache entries expire after this duration.
+   */
+  cacheTtlMs?: number;
+  /**
+   * Fallback action name when type is 'action'.
+   * Must be a fully qualified action name (e.g., 'user.createGuest').
+   */
+  action?: string;
 }
 
 /**
- * Circuit breaker configuration to prevent cascading failures.
+ * Circuit breaker configuration.
  */
 export interface CircuitBreakerConfig {
   /**
    * Number of consecutive failures before opening the circuit.
-   * When circuit is open, calls fail immediately without attempting handler.
-   * 
    * @default 3
    */
   failureThreshold?: number;
   /**
-   * Number of successful calls required to close a half-open circuit.
-   * After opening, circuit enters half-open state and allows test calls.
-   * 
-   * @default 1
-   */
-  successThreshold?: number;
-  /**
-   * Time window in milliseconds to track consecutive failures.
-   * Failures outside this window are not counted.
-   * 
-   * @default 60000 (60 seconds)
-   */
-  windowMs?: number;
-  /**
-   * Time in milliseconds to wait before transitioning from open to half-open.
-   * During open state, all calls fail immediately.
-   * 
+   * Time in milliseconds before the circuit transitions from open to half-open.
    * @default 30000 (30 seconds)
    */
   resetTimeoutMs?: number;
+  /**
+   * Number of consecutive successes required in half-open state to close the circuit.
+   * @default 1
+   */
+  successThreshold?: number;
 }
 
 /**
- * Circuit breaker state for a single action.
+ * Circuit breaker state tracked per-action by the kernel.
+ *
+ * The circuit breaker follows the standard three-state model:
+ * - `closed`: Normal operation; failures are counted.
+ * - `open`: Failures exceeded threshold; calls fail fast.
+ * - `half-open`: After resetTimeoutMs, a limited number of trial calls are allowed.
  */
 export interface CircuitBreakerState {
-  status: 'closed' | 'open' | 'half-open';
+  /** Number of consecutive failures in the current window */
   consecutiveFailures: number;
+  /** Number of consecutive successes (relevant in half-open state) */
   consecutiveSuccesses: number;
+  /** Timestamp (ms) of the last failure, or null if never failed */
   lastFailureTime: number | null;
+  /** Timestamp (ms) of the last success, or null if never succeeded */
   lastSuccessTime: number | null;
-  nextResetTime: number | null; // When 'open' state should transition to 'half-open'
+  /**
+   * Timestamp (ms) when the circuit will transition from open to half-open.
+   * Set when the circuit opens. `null` when the circuit is closed or half-open.
+   */
+  nextResetTime: number | null;
+  /** Current circuit state: closed, open, or half-open */
+  status: 'closed' | 'open' | 'half-open';
 }
 
-/**
- * Cached result entry with expiration.
- */
-export interface CachedResult {
-  result: any;
-  timestamp: number;
-  expiresAt: number | null; // null = never expires
-}
-
-/**
- * Schema contract types for action input/output validation.
- * Uses JSON Schema draft-07 compatible structure.
- */
 export interface ActionSchema {
   type: 'object';
   properties?: Record<string, JsonSchemaProperty>;
@@ -530,24 +540,456 @@ export interface EventSubscription {
 // Cap & Capsule Registry Types
 // ============================================================
 
+// ============================================================
+// Cap Message Model Types
+// ============================================================
+
+/**
+ * Discriminated message kind for Cap communication.
+ * The kernel routes messages based on their kind:
+ * - `invoke`: Request/response RPC — sender expects a response.
+ * - `tell`: Fire-and-forget — sender does NOT wait for a response.
+ */
+export type CapMessageKind = 'invoke' | 'tell';
+
+/**
+ * Unique correlation identifier for request/response pairing.
+ * Generated by the kernel when an invoke message is dispatched.
+ * The response message echoes this correlationId so the caller
+ * can match the response to the original request.
+ */
+export type CorrelationId = string;
+
+/**
+ * Fully qualified action name (e.g., `"users.create"`, `"orders.fulfill"`).
+ * Combines the capsule name with the action name, separated by a dot.
+ */
+export type ActionName = string;
+
+/**
+ * Base message envelope shared by all Cap messages.
+ *
+ * Every message flowing through the kernel carries this envelope.
+ * It provides the metadata the kernel needs to route, trace,
+ * and optionally correlate messages.
+ *
+ * @template TKind - The message kind (invoke or tell)
+ * @template TPayload - The payload shape carried by the message
+ */
+export interface CapMessageEnvelope<TKind extends CapMessageKind = CapMessageKind, TPayload = any> {
+  /**
+   * Discriminator for message routing.
+   * - `invoke`: Expect a response (request/response pattern).
+   * - `tell`: Fire-and-forget (no response expected).
+   */
+  kind: TKind;
+
+  /**
+   * Fully qualified target action name.
+   * Format: `"<capsule>.<action>"` (e.g., `"calculator.sum"`).
+   */
+  action: ActionName;
+
+  /**
+   * The payload to deliver to the action handler.
+   * Must conform to the {@link ActionInput} shape (with `body`, optional `params`, `query`).
+   */
+  payload: TPayload;
+
+  /**
+   * Correlation ID for request/response pairing.
+   * Required for `invoke` messages so the response can be routed back.
+   * Optional for `tell` messages (may be present for tracing but not required).
+   */
+  correlationId?: CorrelationId;
+
+  /**
+   * Timestamp (ISO 8601) when the message was created.
+   * Set by the kernel at dispatch time. Useful for tracing and timeout computation.
+   */
+  timestamp: string;
+
+  /**
+   * Optional trace context for distributed tracing.
+   * Carries the trace ID and parent span ID across asynchronous boundaries.
+   */
+  trace?: TraceContext;
+
+  /**
+   * Optional headers/metadata bag for cross-cutting concerns
+   * (e.g., idempotency keys, tenant IDs, locale hints).
+   */
+  headers?: Record<string, string>;
+}
+
+/**
+ * An invoke message — the sender expects a response.
+ *
+ * This is the core request/response (RPC) pattern.
+ * The kernel dispatches the message, waits for the handler to complete,
+ * and returns the result (or an error) to the caller.
+ *
+ * @template TPayload - The payload shape for the target action
+ * @template TResponse - The expected response shape
+ *
+ * @example
+ * ```typescript
+ * const msg: CapInvokeMessage<{ a: number; b: number }, { result: number }> = {
+ *   kind: 'invoke',
+ *   action: 'calculator.sum',
+ *   payload: { body: { a: 5, b: 3 } },
+ *   correlationId: crypto.randomUUID(),
+ *   timestamp: new Date().toISOString()
+ * };
+ * ```
+ */
+export interface CapInvokeMessage<TPayload = any, TResponse = any> extends CapMessageEnvelope<'invoke', TPayload> {
+  kind: 'invoke';
+  /** Required for invoke — the response echoes this ID */
+  correlationId: CorrelationId;
+}
+
+/**
+ * A tell message — fire-and-forget, no response expected.
+ *
+ * The kernel dispatches the message and returns immediately.
+ * The caller does not wait for the handler to complete.
+ * This is useful for notifications, logging, async side-effects,
+ * and event-driven workflows.
+ *
+ * @template TPayload - The payload shape for the target action
+ *
+ * @example
+ * ```typescript
+ * const msg: CapTellMessage<{ userId: string; event: string }> = {
+ *   kind: 'tell',
+ *   action: 'analytics.track',
+ *   payload: { body: { userId: 'u-42', event: 'page.viewed' } },
+ *   timestamp: new Date().toISOString()
+ * };
+ * ```
+ */
+export interface CapTellMessage<TPayload = any> extends CapMessageEnvelope<'tell', TPayload> {
+  kind: 'tell';
+  /** Optional for tell — may be present for tracing but not required */
+  correlationId?: CorrelationId;
+}
+
+/**
+ * Union of all possible Cap message types.
+ * The kernel uses the `kind` discriminant to determine routing behavior.
+ */
+export type CapMessage =
+  | CapInvokeMessage
+  | CapTellMessage;
+
+/**
+ * Response message returned after an invoke completes.
+ *
+ * When an `invoke` message is processed, the kernel constructs
+ * a response message that carries either the successful result
+ * or an error.
+ *
+ * @template TResponse - The shape of the successful response payload
+ */
+export interface CapResponseMessage<TResponse = any> {
+  /**
+   * Echoes the correlationId from the original invoke message.
+   * The caller uses this to match the response to the pending request.
+   */
+  correlationId: CorrelationId;
+
+  /**
+   * Whether the action completed successfully.
+   * - `true`: The `result` field contains the handler's return value.
+   * - `false`: The `error` field contains error details.
+   */
+  success: boolean;
+
+  /**
+   * The action handler's return value when `success` is true.
+   * `null` when `success` is false.
+   */
+  result: TResponse | null;
+
+  /**
+   * Error details when `success` is false.
+   * `null` when `success` is true.
+   */
+  error: CapResponseError | null;
+
+  /**
+   * ISO 8601 timestamp when the response was created.
+   */
+  timestamp: string;
+
+  /**
+   * Duration in milliseconds from the original invoke message timestamp
+   * to when the response was created. Useful for performance monitoring.
+   */
+  durationMs: number;
+}
+
+/**
+ * Error shape carried in a failed CapResponseMessage.
+ */
+export interface CapResponseError {
+  /** Error name (e.g., "ValidationError", "NotFoundError") */
+  name: string;
+  /** Human-readable error message */
+  message: string;
+  /** Optional error code for programmatic handling */
+  code?: string;
+  /** Optional stack trace (may be stripped in production) */
+  stack?: string;
+  /** Optional additional error context */
+  details?: any;
+}
+
+// ============================================================
+// CapContext — Execution Context for Cap Methods
+// ============================================================
+
+/**
+ * The execution context passed to every Cap method.
+ *
+ * `CapContext` is the primary interface through which Cap business logic
+ * interacts with the CapsKit runtime. It provides four core capabilities:
+ *
+ * | Capability   | Method              | Pattern                  |
+ * |--------------|---------------------|--------------------------|
+ * | Request/Resp | `ctx.invoke()`      | RPC — wait for response  |
+ * | Fire-forget  | `ctx.tell()`        | Async — no response      |
+ * | Events       | `ctx.emit()`        | Publish to event bus     |
+ * | Dependencies | `ctx.deps`          | Injected services        |
+ *
+ * Additionally, `ctx.use()` provides a typed proxy for direct capsule access,
+ * and `ctx.body`/`ctx.params`/`ctx.query` carry the parsed request data
+ * when the action is invoked via an HTTP transport.
+ *
+ * @example
+ * ```typescript
+ * class OrderCap implements CapClass {
+ *   async placeOrder(input: ActionInput, ctx: CapContext): Promise<{ orderId: string }> {
+ *     // Validate via injected service
+ *     const valid = await ctx.invoke('inventory.check', { body: input.body.items });
+ *
+ *     // Create order
+ *     const order = await ctx.deps.database.orders.create(input.body);
+ *
+ *     // Fire-and-forget notification
+ *     ctx.tell('notifications.send', {
+ *       body: { userId: input.body.userId, type: 'order.placed', orderId: order.id }
+ *     });
+ *
+ *     // Emit domain event
+ *     ctx.emit('order.placed', { orderId: order.id });
+ *
+ *     return { orderId: order.id };
+ *   }
+ * }
+ * ```
+ */
+export interface CapContext {
+  // ── Transport-agnostic input ──────────────────────────────
+
+  /**
+   * The request body (when invoked via HTTP or similar transport).
+   * This is the primary payload for the action.
+   */
+  body: any;
+
+  /**
+   * Route/path parameters extracted from the URL pattern.
+   * Example: `{ id: '42' }` for route `/users/:id`.
+   */
+  params?: any;
+
+  /**
+   * Query string parameters parsed as an object.
+   * Always an object (never undefined), even for non-HTTP invocations.
+   */
+  query?: Record<string, any>;
+
+  // ── Dependency injection ──────────────────────────────────
+
+  /**
+   * Injected dependencies provided at platform startup.
+   *
+   * Contains both external dependencies (database, redis, third-party clients)
+   * and the capsule's declared dependencies (other capsules via `ctx.use()`).
+   *
+   * Dependencies are keyed by their registered name and are available
+   * to all actions across all capsules.
+   *
+   * @example
+   * ```typescript
+   * const db = ctx.deps.database;
+   * const redis = ctx.deps.redis;
+   * ```
+   */
+  deps: Record<string, any>;
+
+  // ── Inter-cap communication ───────────────────────────────
+
+  /**
+   * **Request/Response (RPC) proxy.**
+   *
+   * Invokes another action and waits for its response.
+   * This is the primary way to call across cap/capsule boundaries.
+   *
+   * Under the hood, `invoke` constructs a {@link CapInvokeMessage}, dispatches it
+   * through the kernel's interceptor pipeline, and returns the handler's result.
+   *
+   * @param action - Fully qualified action name (e.g., `"inventory.check"`)
+   * @param payload - The payload to send (must have a `body` property)
+   * @returns A Promise resolving to the action handler's return value
+   *
+   * @example
+   * ```typescript
+   * const stock = await ctx.invoke('inventory.check', { body: { sku: 'ABC-123' } });
+   * ```
+   */
+  invoke: (action: ActionName, payload: CapInvokePayload) => Promise<any>;
+
+  /**
+   * **Fire-and-forget proxy.**
+   *
+   * Dispatches a message to another action without waiting for a response.
+   * The kernel delivers the message asynchronously; the caller continues
+   * immediately. Ideal for notifications, logging, side-effects, and
+   * event-driven workflows where the caller does not need the result.
+   *
+   * Under the hood, `tell` constructs a {@link CapTellMessage} and dispatches it
+   * through the kernel. No response is produced.
+   *
+   * @param action - Fully qualified action name (e.g., `"analytics.track"`)
+   * @param payload - The payload to send (must have a `body` property)
+   *
+   * @example
+   * ```typescript
+   * ctx.tell('analytics.track', { body: { event: 'page.viewed', userId: 'u-42' } });
+   * ```
+   */
+  tell: (action: ActionName, payload: CapTellPayload) => void;
+
+  // ── Event emission ────────────────────────────────────────
+
+  /**
+   * Publishes an event to the CapsKit event bus.
+   *
+   * Events are routed to all subscribers that match the event name.
+   * Subscriptions are declared in capsule manifests (`events.subscribes`)
+   * or CapMeta (`events.subscribes`).
+   *
+   * @param event - Event name (e.g., `"order.placed"`, `"user.created"`)
+   * @param data - Arbitrary event payload (must be serializable)
+   *
+   * @example
+   * ```typescript
+   * ctx.emit('order.placed', { orderId: 'ord-789', total: 42.99 });
+   * ```
+   */
+  emit: (event: string, data: any) => void;
+
+  // ── Typed capsule proxy ───────────────────────────────────
+
+  /**
+   * Returns a typed proxy for calling actions on a capsule directly.
+   *
+   * Prefer `ctx.invoke()` for explicit cross-capsule calls.
+   * `ctx.use()` is a convenience for cases where you want IDE autocompletion
+   * and type-safety when calling actions on a known capsule.
+   *
+   * @param capsuleName - Name of the capsule to proxy
+   * @returns A typed proxy whose methods map to the capsule's actions
+   *
+   * @example
+   * ```typescript
+   * const users = ctx.use<UsersCapsule>('users');
+   * const profile = await users.getProfile({ body: { id: 'u-42' } });
+   * ```
+   */
+  use: <TCapsule = any>(capsuleName: string) => TCapsule;
+}
+
+/**
+ * Payload shape for `ctx.invoke()` calls.
+ * Mirrors {@link ActionInput} to maintain consistency with action handler signatures.
+ */
+export interface CapInvokePayload {
+  /** The primary payload body for the target action */
+  body: any;
+  /** Optional route/path parameters */
+  params?: any;
+  /** Optional query parameters */
+  query?: Record<string, any>;
+}
+
+/**
+ * Payload shape for `ctx.tell()` calls.
+ * Same structure as invoke payload, but the caller does not expect a response.
+ */
+export interface CapTellPayload {
+  /** The primary payload body for the target action */
+  body: any;
+  /** Optional route/path parameters */
+  params?: any;
+  /** Optional query parameters */
+  query?: Record<string, any>;
+}
+
+// ============================================================
+// Cap Handler Signature
+// ============================================================
+
+/**
+ * Signature for a Cap action handler method.
+ *
+ * Every public method on a Cap class is an action handler.
+ * It receives the parsed input and the Cap execution context,
+ * and returns a Promise resolving to the action's result.
+ *
+ * This type alias provides a convenient shorthand for declaring
+ * Cap method signatures.
+ *
+ * @template TInput - The expected shape of `input.body`
+ * @template TResult - The expected return type
+ *
+ * @example
+ * ```typescript
+ * type SumHandler = CapHandler<{ a: number; b: number }, { result: number }>;
+ * // Equivalent to:
+ * // (input: ActionInput, ctx: CapContext) => Promise<{ result: number }>
+ * ```
+ */
+export type CapHandler<TInput = any, TResult = any> = (
+  input: ActionInput,
+  ctx: CapContext
+) => Promise<TResult>;
+
+// ============================================================
+// CapClass Interface
+// ============================================================
+
 /**
  * Interface for cap business logic classes.
  * A Cap is a unit of business logic within a Capsule.
  * Cap classes must be instantiable (support `new`) and their
  * public methods serve as action handlers.
  *
- * Each action method receives an {@link ActionInput} and an {@link ActionContext},
+ * Each action method receives an {@link ActionInput} and a {@link CapContext},
  * and must return a Promise resolving to the action's result.
  *
  * @example
  * ```typescript
  * class CalculatorCap implements CapClass {
- *   async sum(input: ActionInput, ctx: ActionContext): Promise<{ result: number }> {
+ *   async sum(input: ActionInput, ctx: CapContext): Promise<{ result: number }> {
  *     const { a, b } = input.body;
  *     return { result: a + b };
  *   }
  *
- *   async multiply(input: ActionInput, ctx: ActionContext): Promise<{ result: number }> {
+ *   async multiply(input: ActionInput, ctx: CapContext): Promise<{ result: number }> {
  *     const { a, b } = input.body;
  *     return { result: a * b };
  *   }
@@ -558,8 +1000,8 @@ export interface CapClass {
   /**
    * Action handler methods.
    * Each method name corresponds to an action name exposed by the cap.
-   * Methods must be async and follow the ActionHandler signature:
-   * (input: ActionInput, context: ActionContext) => Promise<any>
+   * Methods must be async and follow the CapHandler signature:
+   * (input: ActionInput, context: CapContext) => Promise<any>
    */
   [action: string]: (input: ActionInput, context: ActionContext) => Promise<any>;
 }
