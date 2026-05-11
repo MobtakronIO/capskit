@@ -1,5 +1,5 @@
 export * from './kernel/platform';
-export { loadCapsules } from './kernel/loader';
+export { loadCapsules, loadCapCapsules } from './kernel/loader';
 export * from './types';
 export * from './kernel/errors';
 export * from './kernel/error-mapping';

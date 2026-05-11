@@ -1263,6 +1263,7 @@ export interface CapsKitConfig {
 
 export type CapsuleSource = 
   | { type: 'directory'; path: string }
+  | { type: 'cap-directory'; path: string }
   | { type: 'manifest'; manifest: CapsuleManifest }
   | { type: 'package'; name: string };
 
