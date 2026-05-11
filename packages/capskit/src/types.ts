@@ -184,19 +184,23 @@ const TRACE_REDACT_KEYS = [
   'accessToken',
   'access_token',
   'refreshToken',
-  'refresh_token',
-  'sessionId',
-  'session_id',
-  'privateKey',
-  'private_key',
-  'clientSecret',
-  'client_secret',
-] as const;
+  
+  // Additional PII/sensitive fields
+  'ssn',
+  'socialSecurity',
+  'creditCard',
+  'credit_card',
+  'cardNumber',
+  'card_number',
+  'cvv',
+  'cvc',
+  'pin',
+];
 
 /**
- * Trace record schema for line-delimited JSON output.
+ * A single trace span representing an action execution.
  */
-export interface TraceRecord {
+export interface TraceSpan {
   /** Unique UUID for the entire trace (top-level call) */
   traceId: string;
   /** Unique UUID for this specific call span */
@@ -374,26 +378,14 @@ export interface FallbackConfig {
   /**
    * The type of fallback: 'cache' or 'action'.
    * - 'cache': Return cached result from a previous successful call
-   * - 'action': Call an alternate action instead
+   * - 'action': Call a different action as fallback
    */
   type: 'cache' | 'action';
   /**
-   * For type='action': The full name of the fallback action to call.
-   * e.g., 'user.getCachedUser' or 'cache.getUser'
-   * 
-   * NOTE: To prevent infinite loops, the fallback action should NOT
-   * reference the same action as its fallback, or a validation error
-   * will be thrown at registration time.
+   * For 'cache' type: maximum age of cached result to use (ms).
+   * For 'action' type: the fallback action name (e.g., 'users.getCached').
    */
-  action?: string;
-  /**
-   * Optional TTL in milliseconds for cached results.
-   * Only applicable when type='cache'.
-   * If not provided, cached results never expire.
-   * 
-   * @default Infinity (no expiration)
-   */
-  cacheTtlMs?: number;
+  value?: string | number;
 }
 
 /**
@@ -712,6 +704,99 @@ export interface CapEventSubscription {
    * Must correspond to a method name on the CapClass implementation.
    */
   action: string;
+}
+
+/**
+ * Pairs a Cap business logic class with its metadata.
+ *
+ * CapDefinition is the atomic building block for composing a Capsule.
+ * Each definition bundles a {@link CapClass} constructor (the implementation)
+ * with its {@link CapMeta} (declarative configuration: routes, events, dependencies).
+ *
+ * When the kernel boots a CapsuleRegistry, it iterates the `caps` array,
+ * instantiates each CapClass, and wires its actions into the action registry
+ * using the metadata from CapMeta.
+ *
+ * @template TCap - The specific CapClass implementation type, providing
+ *                   intellisense for the cap's action methods.
+ *
+ * @example
+ * ```typescript
+ * import { CalculatorCap } from './calculator.cap';
+ * import { calculatorMeta } from './calculator.cap.meta';
+ *
+ * const calcDef: CapDefinition<CalculatorCap> = {
+ *   class: CalculatorCap,
+ *   meta: calculatorMeta
+ * };
+ * ```
+ */
+export interface CapDefinition<TCap extends CapClass = CapClass> {
+  /**
+   * The CapClass constructor. Must be instantiable with `new`.
+   * The kernel calls `new capDef.class()` and registers the resulting
+   * instance's methods as action handlers.
+   */
+  class: new (...args: any[]) => TCap;
+
+  /**
+   * Metadata that describes this cap's identity, routes, events, and dependencies.
+   * The kernel uses this metadata to:
+   * - Register HTTP routes (method + path → action mapping)
+   * - Wire event subscriptions (event name → action mapping)
+   * - Validate and inject dependencies
+   * - Resolve inter-cap references within the capsule
+   */
+  meta: CapMeta;
+}
+
+/**
+ * Registry that composes a Capsule from its constituent Cap definitions.
+ *
+ * A CapsuleRegistry is the top-level entry point for defining a Capsule
+ * using the Cap-based composition model. It groups related Caps (each a
+ * {@link CapDefinition}) under a unique name, forming a deployable unit
+ * of business capabilities.
+ *
+ * This is the preferred way to define new Capsules, replacing the legacy
+ * flat {@link CapsuleManifest} for new development. The kernel's boot
+ * sequence converts CapsuleRegistry entries into the internal CapsuleManifest
+ * representation.
+ *
+ * @example
+ * ```typescript
+ * import { CapsuleRegistry } from '@mobtakronio/capskit';
+ * import { CalculatorCap, calculatorMeta } from './caps/calculator';
+ * import { ScientificCap, scientificMeta } from './caps/scientific';
+ *
+ * export const calculatorCapsule: CapsuleRegistry = {
+ *   name: 'calculator',
+ *   caps: [
+ *     { class: CalculatorCap, meta: calculatorMeta },
+ *     { class: ScientificCap, meta: scientificMeta },
+ *   ]
+ * };
+ * ```
+ */
+export interface CapsuleRegistry {
+  /**
+   * Unique capsule name. Must be unique across all capsules registered
+   * on the platform. This name is used for dependency resolution
+   * (other capsules can `require: ['calculator']`) and for the
+   * `capskit.use('calculator')` public API.
+   */
+  name: string;
+
+  /**
+   * Array of Cap definitions that compose this capsule.
+   * Each entry pairs a CapClass constructor with its CapMeta,
+   * forming the complete set of capabilities exposed by this capsule.
+   *
+   * The kernel processes caps in array order, so cap registration
+   * follows the declared sequence. Caps within the same registry
+   * can depend on each other (resolved via CapMeta.dependencies).
+   */
+  caps: CapDefinition[];
 }
 
 export interface CapsKitConfig {
