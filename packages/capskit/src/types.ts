@@ -534,6 +534,186 @@ export interface EventSubscription {
   action: string;
 }
 
+// ============================================================
+// Cap & Capsule Registry Types
+// ============================================================
+
+/**
+ * Interface for cap business logic classes.
+ * A Cap is a unit of business logic within a Capsule.
+ * Cap classes must be instantiable (support `new`) and their
+ * public methods serve as action handlers.
+ *
+ * Each action method receives an {@link ActionInput} and an {@link ActionContext},
+ * and must return a Promise resolving to the action's result.
+ *
+ * @example
+ * ```typescript
+ * class CalculatorCap implements CapClass {
+ *   async sum(input: ActionInput, ctx: ActionContext): Promise<{ result: number }> {
+ *     const { a, b } = input.body;
+ *     return { result: a + b };
+ *   }
+ *
+ *   async multiply(input: ActionInput, ctx: ActionContext): Promise<{ result: number }> {
+ *     const { a, b } = input.body;
+ *     return { result: a * b };
+ *   }
+ * }
+ * ```
+ */
+export interface CapClass {
+  /**
+   * Action handler methods.
+   * Each method name corresponds to an action name exposed by the cap.
+   * Methods must be async and follow the ActionHandler signature:
+   * (input: ActionInput, context: ActionContext) => Promise<any>
+   */
+  [action: string]: (input: ActionInput, context: ActionContext) => Promise<any>;
+}
+
+/**
+ * Metadata contract for a Cap (the cap.meta.ts file).
+ * Each Cap exports a CapMeta object describing its identity,
+ * HTTP routes, event contracts, and dependencies.
+ *
+ * The CapMeta is the Cap-level equivalent of a CapsuleManifest,
+ * providing the registry with the information needed to wire up
+ * routes, events, and dependency injection.
+ *
+ * @example
+ * ```typescript
+ * export const meta: CapMeta = {
+ *   name: 'calculator',
+ *   routes: [
+ *     { method: 'POST', path: '/sum', action: 'sum' },
+ *     { method: 'POST', path: '/multiply', action: 'multiply' }
+ *   ],
+ *   events: {
+ *     publishes: ['calculator.sum.completed'],
+ *     subscribes: [
+ *       { event: 'numbers.received', action: 'sum' }
+ *     ]
+ *   },
+ *   dependencies: ['math-utils']
+ * };
+ * ```
+ */
+export interface CapMeta {
+  /**
+   * Unique cap identifier within the capsule.
+   * Must be unique across all caps in the same capsule.
+   */
+  name: string;
+
+  /**
+   * HTTP route definitions for this cap.
+   * Each route maps an HTTP method and path to a cap action.
+   */
+  routes?: CapRoute[];
+
+  /**
+   * Event contract for this cap.
+   * Defines which events the cap publishes and subscribes to.
+   */
+  events?: {
+    /**
+     * Event names this cap publishes.
+     * Other caps or external systems can subscribe to these events.
+     */
+    publishes?: string[];
+
+    /**
+     * Event subscriptions that map incoming events to cap actions.
+     */
+    subscribes?: CapEventSubscription[];
+  };
+
+  /**
+   * Names of external dependencies required by this cap.
+   * These are resolved via the capsule's dependency injection container.
+   */
+  dependencies?: string[];
+}
+
+/**
+ * HTTP route definition for a cap.
+ * Binds an HTTP method and URL path to a specific cap action.
+ *
+ * @example
+ * ```typescript
+ * const route: CapRoute = {
+ *   method: 'POST',
+ *   path: '/users/:id',
+ *   action: 'getUser',
+ *   traits: ['auth', 'rate-limit']
+ * };
+ * ```
+ */
+export interface CapRoute {
+  /**
+   * HTTP method for this route.
+   * Supported methods align with the HTTP/1.1 specification.
+   */
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS';
+
+  /**
+   * URL path pattern for this route.
+   * May include path parameters using colon-prefixed segments
+   * (e.g., '/users/:id') or other route-pattern conventions
+   * supported by the HTTP adapter.
+   */
+  path: string;
+
+  /**
+   * Name of the cap action to invoke when this route is matched.
+   * Must correspond to a method name on the CapClass implementation.
+   */
+  action: string;
+
+  /**
+   * Optional trait names or configurations applied to this route.
+   * Traits are cross-cutting concerns such as authentication,
+   * rate-limiting, logging, or CORS that are applied as middleware.
+   *
+   * When specified as strings, each name references a registered
+   * trait handler in the HTTP adapter.
+   * When specified as objects, the key is the trait name and the
+   * value is its configuration.
+   */
+  traits?: string[] | Record<string, any>;
+}
+
+/**
+ * Event subscription mapping for a cap.
+ * Binds an event name to a cap action that handles it.
+ *
+ * When the specified event is emitted on the platform,
+ * the corresponding action is invoked automatically.
+ *
+ * @example
+ * ```typescript
+ * const subscription: CapEventSubscription = {
+ *   event: 'user.created',
+ *   action: 'sendWelcomeEmail'
+ * };
+ * ```
+ */
+export interface CapEventSubscription {
+  /**
+   * The event name to subscribe to.
+   * Can be a namespaced event (e.g., 'capsule.action.completed')
+   * or a simple event name.
+   */
+  event: string;
+
+  /**
+   * The name of the cap action that handles this event.
+   * Must correspond to a method name on the CapClass implementation.
+   */
+  action: string;
+}
+
 export interface CapsKitConfig {
   capsules?: CapsuleSource[];
   capsuleDirs?: string[]; // Deprecated: use 'capsules' array for explicit precedence
