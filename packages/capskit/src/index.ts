@@ -1,5 +1,6 @@
 export * from './kernel/platform';
 export { loadCapsules, loadCapCapsules } from './kernel/loader';
+export { loadCapsFromDirectory, loadCapFromDir, convertCapToManifest, convertCapsToManifests, validateCapMeta, validateCapClass, CapLoadError } from './kernel/cap-loader';
 export * from './types';
 export * from './kernel/errors';
 export * from './kernel/error-mapping';

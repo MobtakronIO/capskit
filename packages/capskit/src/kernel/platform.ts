@@ -2,6 +2,7 @@ import { ICapsKit, CapsKitConfig, CapsuleManifest, CapsuleSource, ActionIntercep
 import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { loadCapsules } from './loader';
+import { loadCapsFromDirectory, convertCapsToManifests } from './cap-loader';
 import { builtinCapsules } from '../capsules/builtin';
 import { NotFoundError, InternalError, ValidationError, DependencyError } from './errors';
 
@@ -228,6 +229,13 @@ export class CapsKit implements ICapsKit {
         for (const manifest of manifests) {
           const sourceDir = (manifest as any).__capsuleDir;
           await this.registerCapsule(manifest, sourceDir);
+        }
+      } else if (source.type === 'cap-directory') {
+        const absoluteDir = path.resolve(source.path);
+        const capDefs = await loadCapsFromDirectory(absoluteDir);
+        const manifests = convertCapsToManifests(capDefs);
+        for (const manifest of manifests) {
+          await this.registerCapsule(manifest, absoluteDir);
         }
       } else if (source.type === 'manifest') {
         await this.registerCapsule(source.manifest, undefined);
