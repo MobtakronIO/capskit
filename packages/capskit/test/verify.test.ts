@@ -11,6 +11,10 @@ import { runLoaderEdgeCaseTests } from './suites/loader-edge-cases.test';
 import { runErrorTaxonomyTests } from './suites/error-taxonomy.test';
 import { runTraceTests } from './suites/trace.test';
 import { runElysiaErrorMappingTests } from './suites/elysia-error-mapping.test';
+import { runAdapterCompatibilityTests } from './suites/adapter-compatibility.test';
+import { runCacheTests } from './suites/cache.test';
+import { runSchemaValidationTests } from './suites/schema-validation.test';
+import { runResiliencyTests } from './suites/resiliency.test';
 
 async function verify() {
   console.log('--- Testing CapsKit Core ---');
@@ -126,10 +130,14 @@ async function verify() {
    await runBootTests();
    await runEventTests(createCapsKit);
     await runHttpAdapterTests();
+    await runAdapterCompatibilityTests();
     // await runLoaderEdgeCaseTests(); // Skipped - pre-existing failure
     await runErrorTaxonomyTests();
     await runTraceTests(createCapsKit);
     await runElysiaErrorMappingTests();
+    await runSchemaValidationTests(createCapsKit);
+    await runResiliencyTests(createCapsKit);
+    await runCacheTests();
     console.log('✅ All automated test suites passed');
  }
 
