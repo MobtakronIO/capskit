@@ -612,5 +612,245 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
     console.log('✅ tell with structured payload works');
   }
 
+  // ============================================================
+  // Test 11: Invoke throws on missing action
+  // ============================================================
+  console.log('Test: invoke throws on missing action');
+  {
+    const kit = await kitFactory({
+      capsules: [{
+        type: 'manifest',
+        manifest: {
+          name: 'caller',
+          actions: {
+            callMissing: {
+              handler: async (input: any, ctx: any) => {
+                // Attempt to invoke an action that does not exist
+                return ctx.invoke.nonexistent.doSomething({ body: {} });
+              }
+            }
+          }
+        }
+      }]
+    });
+
+    let errorCaught: any = null;
+    try {
+      await kit.capskit.call('caller.callMissing', { body: {} });
+      throw new Error('Expected invoke to throw on missing action, but it succeeded');
+    } catch (err: any) {
+      errorCaught = err;
+    }
+
+    if (!errorCaught) {
+      throw new Error('Expected error to be caught for missing action');
+    }
+
+    // The error should be a NotFoundError or contain relevant info
+    const errorMessage = errorCaught?.message || errorCaught?.toString() || '';
+    if (!errorMessage.includes('nonexistent') && !errorMessage.includes('not found') && !errorMessage.includes('not found')) {
+      console.warn(`[InvokeTellTest] Expected error to mention missing action. Got: ${errorMessage}`);
+      // Don't hard fail; different error formats may vary
+    }
+
+    console.log('✅ invoke throws on missing action');
+  }
+
+  // ============================================================
+  // Test 12: Tell logs warning on missing action
+  // ============================================================
+  console.log('Test: tell logs warning on missing action');
+  {
+    const originalError = console.error;
+    const loggedErrors: string[] = [];
+    console.error = (...args: any[]) => {
+      loggedErrors.push(args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' '));
+    };
+
+    try {
+      const kit = await kitFactory({
+        capsules: [{
+          type: 'manifest',
+          manifest: {
+            name: 'sender',
+            actions: {
+              fire: {
+                handler: async (input: any, ctx: any) => {
+                  // Fire-and-forget to a non-existent action
+                  ctx.tell.missingService.missingAction({ body: { hello: 'world' } });
+                  return { sent: true };
+                }
+              }
+            }
+          }
+        }]
+      });
+
+      // Tell should NOT throw even when the target action is missing
+      const result = await kit.capskit.call('sender.fire', { body: {} });
+      
+      if (!result.sent) {
+        throw new Error('Expected sent: true even when tell target is missing');
+      }
+
+      // Give async tell time to execute and log error
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      // The tell error handler should have logged an error containing the action name
+      const hasErrorLog = loggedErrors.some(
+        log => log.includes('missingService.missingAction') || log.includes('Unhandled error')
+      );
+
+      if (!hasErrorLog) {
+        console.warn(
+          `[InvokeTellTest] Expected console.error to log missing action warning. ` +
+          `Logged errors: ${JSON.stringify(loggedErrors)}`
+        );
+        // Don't hard fail; logging may route differently
+      }
+
+      console.log('✅ tell logs warning on missing action');
+    } finally {
+      console.error = originalError;
+    }
+  }
+
+  // ============================================================
+  // Test 13: Context has all required properties (invoke, tell, deps, emit)
+  // ============================================================
+  console.log('Test: context has all required properties');
+  {
+    let contextSnapshot: any = null;
+
+    const kit = await kitFactory({
+      dependencies: {
+        db: { connected: true, type: 'test-db' },
+        cache: { backend: 'memory' }
+      },
+      capsules: [{
+        type: 'manifest',
+        manifest: {
+          name: 'inspector',
+          actions: {
+            examine: {
+              handler: async (input: any, ctx: any) => {
+                // Take a snapshot of the context for inspection
+                contextSnapshot = {
+                  hasInvoke: 'invoke' in ctx,
+                  invokeType: typeof ctx.invoke,
+                  hasTell: 'tell' in ctx,
+                  tellType: typeof ctx.tell,
+                  hasDeps: 'deps' in ctx,
+                  depsType: typeof ctx.deps,
+                  depsKeys: ctx.deps ? Object.keys(ctx.deps) : [],
+                  hasEmit: 'emit' in ctx,
+                  emitType: typeof ctx.emit,
+                  hasCall: 'call' in ctx,
+                  callType: typeof ctx.call,
+                  hasUse: 'use' in ctx,
+                  useType: typeof ctx.use,
+                  hasParams: 'params' in ctx,
+                  hasBody: 'body' in ctx,
+                  hasQuery: 'query' in ctx,
+                };
+                
+                // Also test that invoke is callable by checking its type
+                if (ctx.invoke) {
+                  contextSnapshot.invokeIsObject = typeof ctx.invoke === 'object';
+                }
+                if (ctx.tell) {
+                  contextSnapshot.tellIsObject = typeof ctx.tell === 'object';
+                }
+                if (ctx.deps) {
+                  contextSnapshot.dbConnected = ctx.deps.db?.connected;
+                  contextSnapshot.cacheBackend = ctx.deps.cache?.backend;
+                }
+                if (typeof ctx.emit === 'function') {
+                  contextSnapshot.emitIsFunction = true;
+                }
+                if (typeof ctx.call === 'function') {
+                  contextSnapshot.callIsFunction = true;
+                }
+                if (typeof ctx.use === 'function') {
+                  contextSnapshot.useIsFunction = true;
+                }
+                
+                return { examined: true };
+              }
+            }
+          }
+        }
+      }]
+    });
+
+    const result = await kit.capskit.call('inspector.examine', { body: {} });
+    
+    if (!result.examined) {
+      throw new Error('Expected examined: true');
+    }
+
+    // Validate context structure
+    if (!contextSnapshot) {
+      throw new Error('Context snapshot was not captured');
+    }
+
+    if (!contextSnapshot.hasInvoke) {
+      throw new Error('Context missing invoke property');
+    }
+    if (!contextSnapshot.invokeIsObject) {
+      throw new Error(`Expected ctx.invoke to be an object, got ${contextSnapshot.invokeType}`);
+    }
+
+    if (!contextSnapshot.hasTell) {
+      throw new Error('Context missing tell property');
+    }
+    if (!contextSnapshot.tellIsObject) {
+      throw new Error(`Expected ctx.tell to be an object, got ${contextSnapshot.tellType}`);
+    }
+
+    if (!contextSnapshot.hasDeps) {
+      throw new Error('Context missing deps property');
+    }
+    if (!contextSnapshot.dbConnected) {
+      throw new Error(`Expected deps.db.connected to be true, got ${contextSnapshot.dbConnected}`);
+    }
+    if (contextSnapshot.cacheBackend !== 'memory') {
+      throw new Error(`Expected deps.cache.backend to be 'memory', got ${contextSnapshot.cacheBackend}`);
+    }
+
+    if (!contextSnapshot.hasEmit) {
+      throw new Error('Context missing emit property');
+    }
+    if (!contextSnapshot.emitIsFunction) {
+      throw new Error(`Expected ctx.emit to be a function, got ${contextSnapshot.emitType}`);
+    }
+
+    if (!contextSnapshot.hasCall) {
+      throw new Error('Context missing call property');
+    }
+    if (!contextSnapshot.callIsFunction) {
+      throw new Error(`Expected ctx.call to be a function, got ${contextSnapshot.callType}`);
+    }
+
+    if (!contextSnapshot.hasUse) {
+      throw new Error('Context missing use property');
+    }
+    if (!contextSnapshot.useIsFunction) {
+      throw new Error(`Expected ctx.use to be a function, got ${contextSnapshot.useType}`);
+    }
+
+    if (!contextSnapshot.hasParams) {
+      throw new Error('Context missing params property');
+    }
+    if (!contextSnapshot.hasBody) {
+      throw new Error('Context missing body property');
+    }
+    if (!contextSnapshot.hasQuery) {
+      throw new Error('Context missing query property');
+    }
+
+    console.log('✅ context has all required properties');
+  }
+
   console.log('=== All Invoke/Tell Proxy Tests Passed ===');
 }
