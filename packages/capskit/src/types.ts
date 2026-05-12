@@ -523,6 +523,32 @@ export interface ActionContext {
   emit: (event: string, data: any) => void;
   call: (action: string, payload: any) => Promise<any>;
   use: <TCapsule = any>(capsuleName: string) => TCapsule;
+  /**
+   * Proxy-based RPC (request/response).
+   * 
+   * Access services and actions as chained properties.
+   * The final property call dispatches the action and returns a Promise.
+   * 
+   * @example
+   * ```typescript
+   * // Instead of: await ctx.call('users.create', { body: { name: 'Alice' } })
+   * // Use:        await ctx.invoke.users.create({ body: { name: 'Alice' } })
+   * ```
+   */
+  invoke: { [serviceName: string]: { [actionName: string]: (payload: any) => Promise<any> } };
+  /**
+   * Proxy-based fire-and-forget.
+   * 
+   * Same chained property access pattern as invoke, but dispatches
+   * without waiting for a response. Ideal for notifications, logging,
+   * and side-effects.
+   * 
+   * @example
+   * ```typescript
+   * ctx.tell.analytics.track({ body: { event: 'page.viewed' } });
+   * ```
+   */
+  tell: { [serviceName: string]: { [actionName: string]: (payload: any) => void } };
 }
 
 export interface ActionInput {

@@ -3,6 +3,7 @@ import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { loadCapsules } from './loader';
 import { loadCapsFromDirectory, convertCapsToManifests, loadCapsRegistriesFromDirectory, convertRegistriesToManifests, loadCapsRegistry, convertRegistryToManifest } from './cap-loader';
+import { createInvokeProxy, createTellProxy } from './invoke-proxy';
 import { builtinCapsules } from '../capsules/builtin';
 import { NotFoundError, InternalError, ValidationError, DependencyError } from './errors';
 
@@ -863,7 +864,9 @@ export class CapsKit implements ICapsKit {
           deps: this.dependencies,
           emit: this.emit.bind(this),
           call: this.call.bind(this),
-          use: this.use.bind(this)
+          use: this.use.bind(this),
+          invoke: createInvokeProxy(this.call.bind(this)),
+          tell: createTellProxy(this.call.bind(this))
         };
 
         let index = -1;

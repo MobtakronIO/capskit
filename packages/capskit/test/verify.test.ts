@@ -15,6 +15,7 @@ import { runAdapterCompatibilityTests } from './suites/adapter-compatibility.sui
 import { runCacheTests } from './suites/cache.suite';
 import { runSchemaValidationTests } from './suites/schema-validation.suite';
 import { runResiliencyTests } from './suites/resiliency.suite';
+import { runInvokeTellTests } from './suites/invoke-tell.suite';
 
 import { test } from 'vitest';
 
@@ -136,6 +137,7 @@ async function verify() {
     await runSchemaValidationTests(createCapsKit);
     await runResiliencyTests(createCapsKit);
     await runCacheTests();
+    await runInvokeTellTests(createCapsKit);
     console.log('✅ All automated test suites passed');
  }
 

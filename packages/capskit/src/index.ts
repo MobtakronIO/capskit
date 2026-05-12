@@ -12,5 +12,9 @@ export * from './capsules/websocket/src/types';
 // Cache module exports
 export * from './cache';
 
+// Invoke/Tell proxy handlers
+export { createInvokeProxy, createTellProxy } from './kernel/invoke-proxy';
+export type { InvokeProxy, TellProxy, KernelCallFn } from './kernel/invoke-proxy';
+
 // ESLint rules
 export { rule as noDirectCallRule } from './lint/no-direct-call';
