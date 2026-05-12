@@ -32,6 +32,40 @@ class CapLoadError extends Error {
   }
 }
 
+/**
+ * Error thrown when duplicate cap names are detected.
+ */
+export class DuplicateCapNameError extends CapLoadError {
+  public readonly duplicates: string[];
+
+  constructor(duplicates: string[], context: string) {
+    const names = duplicates.join(', ');
+    super(
+      `Duplicate cap name(s) detected in ${context}: ${names}. ` +
+        `Each cap must have a unique name within its capsule/context.`
+    );
+    this.name = 'DuplicateCapNameError';
+    this.duplicates = duplicates;
+  }
+}
+
+/**
+ * Error thrown when a dependency cycle is detected between caps.
+ */
+export class CapCycleError extends CapLoadError {
+  public readonly cycle: string[];
+
+  constructor(cycle: string[], context: string) {
+    const cycleStr = cycle.join(' → ');
+    super(
+      `Dependency cycle detected in ${context}: ${cycleStr}. ` +
+        `Caps cannot depend on each other circularly.`
+    );
+    this.name = 'CapCycleError';
+    this.cycle = cycle;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
@@ -257,6 +291,127 @@ export function validateCapClass(
   }
 
   return exportedValue as new (...args: any[]) => CapClass;
+}
+
+// ---------------------------------------------------------------------------
+// Duplicate name detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect duplicate cap names from an array of CapMeta objects.
+ * Returns an array of names that appear more than once, or empty array if all unique.
+ */
+export function detectDuplicateCapNames(metas: CapMeta[]): string[] {
+  const nameCounts = new Map<string, number>();
+  for (const meta of metas) {
+    const name = meta.name;
+    nameCounts.set(name, (nameCounts.get(name) || 0) + 1);
+  }
+
+  const duplicates: string[] = [];
+  for (const [name, count] of nameCounts) {
+    if (count > 1) {
+      duplicates.push(name);
+    }
+  }
+  return duplicates;
+}
+
+/**
+ * Detect duplicate capsule names across multiple CapsuleRegistries.
+ * Returns array of duplicate names, or empty if all unique.
+ */
+export function detectDuplicateRegistryNames(registries: CapsuleRegistry[]): string[] {
+  const nameCounts = new Map<string, number>();
+  for (const reg of registries) {
+    const name = reg.name;
+    nameCounts.set(name, (nameCounts.get(name) || 0) + 1);
+  }
+
+  const duplicates: string[] = [];
+  for (const [name, count] of nameCounts) {
+    if (count > 1) {
+      duplicates.push(name);
+    }
+  }
+  return duplicates;
+}
+
+// ---------------------------------------------------------------------------
+// Cycle detection for inter-cap dependencies
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect dependency cycles among caps within a CapsuleRegistry.
+ *
+ * Caps can declare dependencies on other caps within the same registry via
+ * `CapMeta.dependencies`. This function checks that the resulting dependency
+ * graph is acyclic.
+ *
+ * Returns an array representing the cycle path if found, or null if acyclic.
+ */
+export function detectCapCycle(caps: CapDefinition[]): string[] | null {
+  // Build a map of cap name -> set of cap names it depends on
+  const capNames = new Set(caps.map((c) => c.meta.name));
+  const adjacency = new Map<string, Set<string>>();
+
+  for (const cap of caps) {
+    const deps = cap.meta.dependencies || [];
+    const depSet = new Set<string>();
+    for (const dep of deps) {
+      // Only consider dependencies that are other caps within the same registry
+      if (capNames.has(dep)) {
+        depSet.add(dep);
+      }
+    }
+    adjacency.set(cap.meta.name, depSet);
+  }
+
+  // Use DFS to detect cycles
+  const WHITE = 0; // unvisited
+  const GRAY = 1;  // in progress (on current DFS path)
+  const BLACK = 2; // fully processed
+
+  const color = new Map<string, number>();
+  for (const name of capNames) {
+    color.set(name, WHITE);
+  }
+
+  // Track the current DFS path for cycle reporting
+  const path: string[] = [];
+
+  function dfs(node: string): string[] | null {
+    color.set(node, GRAY);
+    path.push(node);
+
+    const neighbors = adjacency.get(node) || new Set();
+    for (const neighbor of neighbors) {
+      const neighborColor = color.get(neighbor);
+      if (neighborColor === GRAY) {
+        // Found a cycle: extract the cycle from the path
+        const cycleStart = path.indexOf(neighbor);
+        const cycle = [...path.slice(cycleStart), neighbor];
+        return cycle;
+      }
+      if (neighborColor === WHITE) {
+        const result = dfs(neighbor);
+        if (result) return result;
+      }
+    }
+
+    path.pop();
+    color.set(node, BLACK);
+    return null;
+  }
+
+  for (const name of capNames) {
+    if (color.get(name) === WHITE) {
+      const cycle = dfs(name);
+      if (cycle) return cycle;
+    }
+  }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -504,6 +659,16 @@ export async function loadCapsFromDirectory(rootDir: string): Promise<CapDefinit
     );
   }
 
+  // ── Cross-cap validation: duplicate names ──────────────────
+  const metas = definitions.map((d) => d.meta);
+  const duplicates = detectDuplicateCapNames(metas);
+  if (duplicates.length > 0) {
+    throw new DuplicateCapNameError(
+      duplicates,
+      `directory \"${rootDir}\"`,
+    );
+  }
+
   return definitions;
 }
 
@@ -691,6 +856,25 @@ export function validateCapsuleRegistry(registry: any, filePath: string): Capsul
     // Inline-validate the cap's meta and class
     validateCapMeta(capDef.meta, `${filePath} → caps[${i}].meta`);
     validateCapClass(capDef.class, `${filePath} → caps[${i}].class`);
+  }
+
+  // ── Cross-cap validation: duplicate names ──────────────────
+  const metas: CapMeta[] = registry.caps.map((c: CapDefinition) => c.meta);
+  const duplicates = detectDuplicateCapNames(metas);
+  if (duplicates.length > 0) {
+    throw new DuplicateCapNameError(
+      duplicates,
+      `capsule "${registry.name}" (${filePath})`,
+    );
+  }
+
+  // ── Cross-cap validation: dependency cycles ────────────────
+  const cycle = detectCapCycle(registry.caps);
+  if (cycle) {
+    throw new CapCycleError(
+      cycle,
+      `capsule "${registry.name}" (${filePath})`,
+    );
   }
 
   return registry as CapsuleRegistry;
@@ -943,6 +1127,15 @@ export async function loadCapsRegistriesFromDirectory(
     const messages = errors.map((e) => `  - ${e.message}`).join('\n');
     throw new CapLoadError(
       `Failed to load ${errors.length} caps.ts registries:\n${messages}`,
+    );
+  }
+
+  // ── Cross-registry validation: duplicate names ─────────────
+  const dupRegNames = detectDuplicateRegistryNames(registries);
+  if (dupRegNames.length > 0) {
+    throw new DuplicateCapNameError(
+      dupRegNames,
+      `directory "${rootDir}" (capsule registries)`,
     );
   }
 

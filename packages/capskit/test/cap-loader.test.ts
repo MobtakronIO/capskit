@@ -26,6 +26,11 @@ import {
   convertRegistriesToManifests,
   loadCapsRegistriesFromDirectory,
   CapLoadError,
+  DuplicateCapNameError,
+  CapCycleError,
+  detectDuplicateCapNames,
+  detectDuplicateRegistryNames,
+  detectCapCycle,
 } from '../src/kernel/cap-loader';
 import type { CapMeta, CapDefinition, CapsuleRegistry } from '../src/types';
 
@@ -775,6 +780,250 @@ console.log('\n📦 loadCapFromDir (integration)');
     assert.equal(registries.length, 2, `Should load 2 registries, got ${registries.length}`);
     const names = registries.map(r => r.name).sort();
     assert.deepStrictEqual(names, ['skip-a', 'skip-b']);
+
+    fs.rmSync(testRoot, { recursive: true });
+  })();
+
+  // ── Duplicate Cap Names Detection ────────────────────────────
+
+  console.log('\n🔍 Duplicate Cap Names Detection');
+
+  test('detectDuplicateCapNames returns empty for unique names', () => {
+    const metas: CapMeta[] = [
+      { name: 'cap-a' },
+      { name: 'cap-b' },
+      { name: 'cap-c' },
+    ];
+    const result = detectDuplicateCapNames(metas);
+    assert.deepStrictEqual(result, []);
+  });
+
+  test('detectDuplicateCapNames finds duplicate names', () => {
+    const metas: CapMeta[] = [
+      { name: 'cap-a' },
+      { name: 'cap-b' },
+      { name: 'cap-a' },
+      { name: 'cap-c' },
+      { name: 'cap-b' },
+    ];
+    const result = detectDuplicateCapNames(metas);
+    assert.equal(result.length, 2);
+    assert.ok(result.includes('cap-a'));
+    assert.ok(result.includes('cap-b'));
+  });
+
+  test('validateCapsuleRegistry rejects duplicate cap names', () => {
+    class CapA { async fa(i: any, c: any) { return {}; } }
+    class CapB { async fb(i: any, c: any) { return {}; } }
+    const registry: CapsuleRegistry = {
+      name: 'test-dup',
+      caps: [
+        { class: CapA, meta: { name: 'duplicate' } },
+        { class: CapB, meta: { name: 'duplicate' } },
+      ],
+    };
+    assert.throws(
+      () => validateCapsuleRegistry(registry, '/path'),
+      DuplicateCapNameError
+    );
+  });
+
+  test('DuplicateCapNameError includes duplicate names array', () => {
+    class CapA { async fa(i: any, c: any) { return {}; } }
+    class CapB { async fb(i: any, c: any) { return {}; } }
+    const registry: CapsuleRegistry = {
+      name: 'test-dup',
+      caps: [
+        { class: CapA, meta: { name: 'dup-name' } },
+        { class: CapB, meta: { name: 'dup-name' } },
+      ],
+    };
+    try {
+      validateCapsuleRegistry(registry, '/path');
+      throw new Error('should have thrown');
+    } catch (err: any) {
+      assert.ok(err instanceof DuplicateCapNameError);
+      assert.deepStrictEqual(err.duplicates, ['dup-name']);
+      assert.ok(err.message.includes('dup-name'));
+    }
+  });
+
+  test('loadCapsFromDirectory detects duplicate cap names', async () => {
+    const testRoot = path.resolve(FIXTURES_DIR, 'dup-cap-test');
+    const cap1Dir = path.resolve(testRoot, 'cap1.cap');
+    const cap2Dir = path.resolve(testRoot, 'cap2.cap');
+
+    if (fs.existsSync(testRoot)) fs.rmSync(testRoot, { recursive: true });
+    fs.mkdirSync(testRoot, { recursive: true });
+    fs.mkdirSync(cap1Dir, { recursive: true });
+    fs.mkdirSync(cap2Dir, { recursive: true });
+
+    // Both caps have the same meta name
+    fs.writeFileSync(path.resolve(cap1Dir, 'cap.meta.ts'),
+      `export default { name: 'same-name' };`
+    );
+    fs.writeFileSync(path.resolve(cap1Dir, 'cap.ts'),
+      `export default class { async actionA(i: any, c: any) { return {}; } }`
+    );
+    fs.writeFileSync(path.resolve(cap2Dir, 'cap.meta.ts'),
+      `export default { name: 'same-name' };`
+    );
+    fs.writeFileSync(path.resolve(cap2Dir, 'cap.ts'),
+      `export default class { async actionB(i: any, c: any) { return {}; } }`
+    );
+
+    await assert.rejects(
+      () => loadCapsFromDirectory(testRoot),
+      DuplicateCapNameError
+    );
+
+    fs.rmSync(testRoot, { recursive: true });
+  });
+
+  // ── Dependency Cycle Detection ───────────────────────────────
+
+  console.log('\n🔗 Dependency Cycle Detection');
+
+  test('detectCapCycle returns null for acyclic deps', () => {
+    class CapA { async fa(i: any, c: any) { return {}; } }
+    class CapB { async fb(i: any, c: any) { return {}; } }
+    class CapC { async fc(i: any, c: any) { return {}; } }
+    const caps: CapDefinition[] = [
+      { class: CapA, meta: { name: 'a', dependencies: ['b'] } },
+      { class: CapB, meta: { name: 'b', dependencies: ['c'] } },
+      { class: CapC, meta: { name: 'c' } },
+    ];
+    const cycle = detectCapCycle(caps);
+    assert.equal(cycle, null);
+  });
+
+  test('detectCapCycle finds simple cycle (a → b → a)', () => {
+    class CapA { async fa(i: any, c: any) { return {}; } }
+    class CapB { async fb(i: any, c: any) { return {}; } }
+    const caps: CapDefinition[] = [
+      { class: CapA, meta: { name: 'a', dependencies: ['b'] } },
+      { class: CapB, meta: { name: 'b', dependencies: ['a'] } },
+    ];
+    const cycle = detectCapCycle(caps);
+    assert.ok(cycle, 'should detect cycle');
+    assert.ok(cycle!.includes('a'));
+    assert.ok(cycle!.includes('b'));
+  });
+
+  test('detectCapCycle finds three-node cycle (a → b → c → a)', () => {
+    class CapA { async fa(i: any, c: any) { return {}; } }
+    class CapB { async fb(i: any, c: any) { return {}; } }
+    class CapC { async fc(i: any, c: any) { return {}; } }
+    const caps: CapDefinition[] = [
+      { class: CapA, meta: { name: 'a', dependencies: ['b'] } },
+      { class: CapB, meta: { name: 'b', dependencies: ['c'] } },
+      { class: CapC, meta: { name: 'c', dependencies: ['a'] } },
+    ];
+    const cycle = detectCapCycle(caps);
+    assert.ok(cycle, 'should detect cycle');
+    assert.ok(cycle!.includes('a'));
+    assert.ok(cycle!.includes('b'));
+    assert.ok(cycle!.includes('c'));
+  });
+
+  test('detectCapCycle ignores external dependencies', () => {
+    class CapA { async fa(i: any, c: any) { return {}; } }
+    class CapB { async fb(i: any, c: any) { return {}; } }
+    const caps: CapDefinition[] = [
+      { class: CapA, meta: { name: 'a', dependencies: ['db', 'redis', 'b'] } },
+      { class: CapB, meta: { name: 'b', dependencies: ['queue'] } },
+    ];
+    const cycle = detectCapCycle(caps);
+    assert.equal(cycle, null); // db, redis, queue are external, no cycle
+  });
+
+  test('validateCapsuleRegistry rejects caps with dependency cycles', () => {
+    class CapA { async fa(i: any, c: any) { return {}; } }
+    class CapB { async fb(i: any, c: any) { return {}; } }
+    const registry: CapsuleRegistry = {
+      name: 'cyclic-capsule',
+      caps: [
+        { class: CapA, meta: { name: 'a', dependencies: ['b'] } },
+        { class: CapB, meta: { name: 'b', dependencies: ['a'] } },
+      ],
+    };
+    assert.throws(
+      () => validateCapsuleRegistry(registry, '/path'),
+      CapCycleError
+    );
+  });
+
+  test('CapCycleError includes cycle path', () => {
+    class CapA { async fa(i: any, c: any) { return {}; } }
+    class CapB { async fb(i: any, c: any) { return {}; } }
+    const registry: CapsuleRegistry = {
+      name: 'cyclic-capsule',
+      caps: [
+        { class: CapA, meta: { name: 'x', dependencies: ['y'] } },
+        { class: CapB, meta: { name: 'y', dependencies: ['x'] } },
+      ],
+    };
+    try {
+      validateCapsuleRegistry(registry, '/path');
+      throw new Error('should have thrown');
+    } catch (err: any) {
+      assert.ok(err instanceof CapCycleError);
+      assert.ok(err.cycle.includes('x'));
+      assert.ok(err.cycle.includes('y'));
+      assert.ok(err.message.includes('x'));
+      assert.ok(err.message.includes('y'));
+    }
+  });
+
+  // ── Duplicate Registry Names Detection ──────────────────────
+
+  console.log('\n📋 Duplicate Registry Names Detection');
+
+  test('detectDuplicateRegistryNames finds duplicates', () => {
+    class CapA { async fa(i: any, c: any) { return {}; } }
+    class CapB { async fb(i: any, c: any) { return {}; } }
+    const registries: CapsuleRegistry[] = [
+      { name: 'dup-registry', caps: [{ class: CapA, meta: { name: 'a' } }] },
+      { name: 'unique-registry', caps: [{ class: CapB, meta: { name: 'b' } }] },
+      { name: 'dup-registry', caps: [{ class: CapA, meta: { name: 'c' } }] },
+    ];
+    const result = detectDuplicateRegistryNames(registries);
+    assert.equal(result.length, 1);
+    assert.ok(result.includes('dup-registry'));
+  });
+
+  test('detectDuplicateRegistryNames returns empty for unique names', () => {
+    class CapA { async fa(i: any, c: any) { return {}; } }
+    class CapB { async fb(i: any, c: any) { return {}; } }
+    const registries: CapsuleRegistry[] = [
+      { name: 'reg-a', caps: [{ class: CapA, meta: { name: 'a' } }] },
+      { name: 'reg-b', caps: [{ class: CapB, meta: { name: 'b' } }] },
+    ];
+    const result = detectDuplicateRegistryNames(registries);
+    assert.deepStrictEqual(result, []);
+  });
+
+  await testAsync('loadCapsRegistriesFromDirectory detects duplicate registry names', async () => {
+    const testRoot = path.resolve(FIXTURES_DIR, 'dup-reg-test');
+    const dirA = path.resolve(testRoot, 'module-a');
+    const dirB = path.resolve(testRoot, 'module-b');
+
+    if (fs.existsSync(testRoot)) fs.rmSync(testRoot, { recursive: true });
+    fs.mkdirSync(testRoot, { recursive: true });
+    fs.mkdirSync(dirA, { recursive: true });
+    fs.mkdirSync(dirB, { recursive: true });
+
+    fs.writeFileSync(path.resolve(dirA, 'caps.ts'),
+      `export default { name: 'same-registry', caps: [{ class: class { async fa(i: any, c: any) { return {}; } }, meta: { name: 'a' } }] };`
+    );
+    fs.writeFileSync(path.resolve(dirB, 'caps.ts'),
+      `export default { name: 'same-registry', caps: [{ class: class { async fb(i: any, c: any) { return {}; } }, meta: { name: 'b' } }] };`
+    );
+
+    await assert.rejects(
+      () => loadCapsRegistriesFromDirectory(testRoot),
+      DuplicateCapNameError
+    );
 
     fs.rmSync(testRoot, { recursive: true });
   })();
