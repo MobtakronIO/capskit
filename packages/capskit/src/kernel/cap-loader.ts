@@ -215,7 +215,7 @@ export function validateCapMeta(meta: any, filePath: string): CapMeta {
     }
   }
 
-  return meta as CapMeta;
+  return meta;
 }
 
 /**
@@ -292,7 +292,11 @@ export function validateCapClass(
     // If constructor requires arguments, that's fine — but other errors are not
     if (err instanceof CapLoadError) throw err;
     // Constructor may throw if it requires args; we allow that since the kernel
-    // will provide dependencies at construction time.
+    // will provide dependencies at construction time, but log the error for debugging.
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(
+      `[CapLoader] Constructor validation skipped for "${filePath}" (constructor requires args): ${message}`
+    );
   }
 
   return exportedValue as new (...args: any[]) => CapClass;

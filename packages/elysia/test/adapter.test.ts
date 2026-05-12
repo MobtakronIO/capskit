@@ -3,7 +3,7 @@
  * Tests for HTTP-only, WS-only, and combined transport modes
  */
 
-import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
+import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 import { createElysiaAdapter } from '../src';
 import type { ICapsKit } from '../src';
 

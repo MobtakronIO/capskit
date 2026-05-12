@@ -77,10 +77,17 @@ export const FRAMEWORK_ERRORS = {
 } as const;
 
 /**
+ * Type for framework error constructor types.
+ * Uses 'any' for constructor args since subclasses have varying signatures.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type FrameworkErrorConstructor = new (...args: any[]) => FrameworkError;
+
+/**
  * Mapping from error codes to framework error classes.
  * This allows looking up the correct class given an error code string.
  */
-export const ERROR_CODE_TO_CLASS: Record<string, any> = {
+export const ERROR_CODE_TO_CLASS: Record<string, FrameworkErrorConstructor> = {
   'VALIDATION_ERROR': ValidationError,
   'NOT_FOUND_ERROR': NotFoundError,
   'TIMEOUT_ERROR': TimeoutError,
@@ -90,21 +97,14 @@ export const ERROR_CODE_TO_CLASS: Record<string, any> = {
   'TRAIT_ERROR': TraitError,
   'HANDLER_ERROR': HandlerError,
   'INTERNAL_ERROR': InternalError
-};
-
-/**
- * Type for framework error constructor types.
- */
-export type FrameworkErrorClass = {
-  new(message: string, details?: Record<string, any>): FrameworkError;
-};
+} as const;
 
 /**
  * Map an error code string to its corresponding framework error class.
  * Returns undefined if the code is not a recognized framework error code.
  */
-export function getErrorClassByCode(code: string): FrameworkErrorClass | undefined {
-  return ERROR_CODE_TO_CLASS[code] as FrameworkErrorClass ?? undefined;
+export function getErrorClassByCode(code: string): FrameworkErrorConstructor | undefined {
+  return ERROR_CODE_TO_CLASS[code] ?? undefined;
 }
 
 /**

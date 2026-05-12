@@ -30,7 +30,7 @@ export const buildRouter: ActionHandler = async (payload, context) => {
       // Try to load and validate adapter manifest for compatibility checking
       const manifest = await loadAdapterManifest(packageName, module);
       if (manifest) {
-        const capskitVersion = getCapsKitVersion();
+        const capskitVersion = await getCapsKitVersion();
         // Check if manifest declares HTTP capability
         if (manifest.capabilities.includes('http')) {
           const compatResult = checkVersionCompatibility(

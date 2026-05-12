@@ -155,8 +155,18 @@ export interface ErrorEnvelope {
 export function toErrorEnvelope(error: unknown): ErrorEnvelope {
   // Duck-typing check: FrameworkError instances have isFrameworkError = true
   // This works across module boundaries where instanceof may fail
-  if ((error as any)?.isFrameworkError === true && error instanceof Error) {
-    return (error as FrameworkError).toEnvelope();
+  if ((error as any)?.isFrameworkError === true) {
+    // If it has a toEnvelope method (proper FrameworkError), use it
+    if (typeof (error as any).toEnvelope === 'function') {
+      return (error as FrameworkError).toEnvelope();
+    }
+    // Otherwise, extract properties directly from duck-typed object
+    return {
+      code: (error as any).code || 'UNKNOWN_ERROR',
+      message: (error as any).message || 'Unknown framework error',
+      status: (error as any).status || 500,
+      ...(error instanceof Error && shouldExposeStack() && error.stack ? { stack: error.stack } : {})
+    };
   }
   
   if (error instanceof Error) {

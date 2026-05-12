@@ -12,8 +12,17 @@ import { CacheMiddleware, createCacheAdapter, parseCacheEnvDefault, CacheAdapter
 // Import kernel modules (extracted from platform.ts)
 import { KernelState, validateDependencies, resolveStringHandler } from './kernel-state';
 import { validateManifestShape, validateInput, validateOutput } from './validation';
-import { traceCall } from './tracing';
+import { traceCall, closeTraceSink } from './tracing';
 import { validateFallbackChain } from './resiliency';
+import { kernelLogger } from './logger';
+
+/**
+ * Safely extract default export from a dynamically imported module.
+ * Handles both ESM ({ default: ... }) and CJS (direct export) interop.
+ */
+function getDefaultExport<T = unknown>(module: Record<string, unknown>): T {
+  return ('default' in module ? module.default : module) as T;
+}
 
 /**
  * Pool configuration parsed from environment variables.
@@ -92,21 +101,22 @@ async function createDrizzleFromEnv(): Promise<unknown> {
     if (provider === 'postgres') {
       // Dynamic import for optional dependency
       const neonModule = await import('@neondatabase/serverless');
-      const neon = ('default' in neonModule ? neonModule.default : neonModule) as any;
+      const neon = getDefaultExport(neonModule) as (url: string, config?: { poolConfig?: PoolConfig }) => unknown;
       const drizzleModule = await import('drizzle-orm');
 
       // Pass pool configuration to neon if provided
       const sql = neon(dbUrl, hasPoolConfig ? { poolConfig } : undefined);
 
       // Create drizzle instance with Postgres
-      const drizzleInstance = (drizzleModule as any).drizzle(sql);
+      const drizzle = ((drizzleModule as unknown) as Record<string, (db: unknown) => unknown>).drizzle;
+      const drizzleInstance = drizzle(sql);
 
       return drizzleInstance;
     } else if (provider === 'sqlite') {
       // Note: SQLite via better-sqlite3 is synchronous and does not use connection pooling.
       // Pool settings (CAPSKIT_DB_POOL_*) are ignored for SQLite.
       if (hasPoolConfig) {
-        console.warn('[Drizzle] Pool settings (CAPSKIT_DB_POOL_*) are not applicable for SQLite (better-sqlite3 is synchronous).');
+        kernelLogger.warn('Pool settings (CAPSKIT_DB_POOL_*) are not applicable for SQLite (better-sqlite3 is synchronous).');
       }
 
       // Dynamic import for optional dependency
@@ -114,17 +124,16 @@ async function createDrizzleFromEnv(): Promise<unknown> {
       const drizzleModule2 = await import('drizzle-orm');
 
       // Safe access: better-sqlite3 may or may not have a default export depending on ESM/CJS interop
-      const BetterSQLite3 = ('default' in betterSqlite3Module 
-        ? betterSqlite3Module.default 
-        : betterSqlite3Module) as any;
+      const BetterSQLite3 = getDefaultExport(betterSqlite3Module) as new (path: string) => unknown;
       const db = new BetterSQLite3(dbUrl);
-      const drizzleInstance = (drizzleModule2 as any).drizzle(db);
+      const drizzle = ((drizzleModule2 as unknown) as Record<string, (db: unknown) => unknown>).drizzle;
+      const drizzleInstance = drizzle(db);
 
       return drizzleInstance;
     }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[Drizzle] Failed to initialize ${provider} database: ${message}`);
+    kernelLogger.warn(`Failed to initialize ${provider} database: ${message}`);
     return undefined;
   }
 
@@ -138,11 +147,7 @@ export class CapsKit implements ICapsKit {
   private fallbackCache = new Map<string, { result: any; timestamp: number; expiresAt: number | null }>();
   private eventRegistry = new Map<string, string[]>();
   private state: KernelState;
-  
-  
-  
-  
-  
+  private circuitBreakerTimers = new Map<string, ReturnType<typeof setTimeout>>();
   
   private config: CapsKitConfig;
   
@@ -159,7 +164,7 @@ export class CapsKit implements ICapsKit {
   get actions() { return this.state.actions; }
   get dependencies() { return this.state.dependencies; }
   get cacheAdapter(): CacheAdapter | null { return this.state.cacheAdapter; }
-  set cacheAdapter(adapter: CacheAdapter | null) { if (adapter) this.state.setCacheAdapter(adapter); else this.state.setCacheAdapter(null as any); }
+  set cacheAdapter(adapter: CacheAdapter | null) { this.state.setCacheAdapter(adapter); }
   get interceptors() { return this.state.interceptors; }
   constructor(config: CapsKitConfig) {
     this.config = config;
@@ -180,9 +185,9 @@ export class CapsKit implements ICapsKit {
       const drizzle = await createDrizzleFromEnv();
       if (drizzle) {
         this.dependencies.drizzle = drizzle;
-        console.log('[CapsKit] Drizzle ORM initialized');
+        kernelLogger.info('Drizzle ORM initialized');
       } else {
-        console.warn('[CapsKit] CAPSKIT_DB_URL is set but Drizzle failed to initialize. Install drizzle-orm and the appropriate driver.');
+        kernelLogger.warn('CAPSKIT_DB_URL is set but Drizzle failed to initialize. Install drizzle-orm and the appropriate driver.');
       }
     }
 
@@ -194,9 +199,9 @@ export class CapsKit implements ICapsKit {
         redisClient: this.dependencies.redis,
       });
       if (newAdapter) this.cacheAdapter = newAdapter;
-      console.log(`[CapsKit] Cache initialized: ${cacheStorageType}`);
+      kernelLogger.info(`Cache initialized: ${cacheStorageType}`);
     } catch (error: any) {
-      console.warn(`[CapsKit] Cache initialization failed: ${error.message}. Falling back to memory.`);
+      kernelLogger.warn(`Cache initialization failed: ${error.message}. Falling back to memory.`);
       const memAdapter = createCacheAdapter('memory');
       if (memAdapter) this.cacheAdapter = memAdapter;
     }
@@ -227,7 +232,7 @@ export class CapsKit implements ICapsKit {
         const absoluteDir = path.resolve(source.path);
         const manifests = await loadCapsules(absoluteDir);
         for (const manifest of manifests) {
-          const sourceDir = (manifest as any).__capsuleDir;
+          const sourceDir = manifest['__capsuleDir'] as string | undefined;
           await this.registerCapsule(manifest, sourceDir);
         }
       } else if (source.type === 'cap-directory') {
@@ -806,7 +811,7 @@ export class CapsKit implements ICapsKit {
             `  The \`call()\` API is internal and may change without notice.`,
             `  To disable this warning, set \`warnOnDirectCall: false\` in createCapsKit config.`
           ].join('\n');
-          console.warn(warning);
+          kernelLogger.warn(warning);
         }
 
         const actionDef = this.actions.get(actionName);
@@ -981,15 +986,25 @@ export class CapsKit implements ICapsKit {
       if (state.consecutiveFailures >= (config.failureThreshold ?? 3)) {
         state.status = 'open';
         state.nextResetTime = Date.now() + (config.resetTimeoutMs ?? 30000);
+        
+        // Clear any existing timer for this action
+        const existingTimer = this.circuitBreakerTimers.get(actionName);
+        if (existingTimer) {
+          clearTimeout(existingTimer);
+        }
+        
         // Schedule transition to half-open after resetTimeoutMs
-        setTimeout(() => {
+        const timerHandle = setTimeout(() => {
           const currentState = this.circuitBreakerStates.get(actionName);
           if (currentState && currentState.status === 'open') {
             currentState.status = 'half-open';
             currentState.consecutiveSuccesses = 0;
             this.circuitBreakerStates.set(actionName, currentState);
           }
+          this.circuitBreakerTimers.delete(actionName);
         }, config.resetTimeoutMs ?? 30000);
+        
+        this.circuitBreakerTimers.set(actionName, timerHandle);
       }
       
       this.circuitBreakerStates.set(actionName, state);
@@ -1066,7 +1081,7 @@ export class CapsKit implements ICapsKit {
 
   emit(event: string, data: any): void {
     // Basic event emission (can be expanded with adapters later)
-    console.log(`[Event Bus] Emitted: ${event}`);
+    kernelLogger.debug(`Event emitted: ${event}`);
     
     // Asynchronously dispatch to all registered subscribers
     const subscribers = this.eventRegistry.get(event);
@@ -1075,7 +1090,7 @@ export class CapsKit implements ICapsKit {
         // Fire and forget, but catch errors to avoid unhandled promises
         // Use internal call to avoid triggering warnings for internal event dispatch
         this.call(actionName, data, { fromUse: true }).catch(err => {
-          console.error(`[Event Bus] Subscriber action ${actionName} failed handling event ${event}:`, err);
+          kernelLogger.error(`Subscriber action ${actionName} failed handling event ${event}:`, err);
         });
       }
     }
@@ -1089,6 +1104,25 @@ export class CapsKit implements ICapsKit {
   // Helper for internal registry access (used by system capsule later)
   getManifests() {
     return Array.from(this.manifests.values());
+  }
+
+  /**
+   * Gracefully shutdown the CapsKit instance.
+   * Clears all pending timers, circuit breaker state, and delegates to KernelState shutdown.
+   */
+  shutdown(): void {
+    // Clear all pending circuit breaker timers
+    for (const timer of this.circuitBreakerTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.circuitBreakerTimers.clear();
+    this.circuitBreakerStates.clear();
+    this.fallbackCache.clear();
+    this.eventRegistry.clear();
+    this.actionCallStack.clear();
+    this.state.events.close();
+    closeTraceSink();
+    this.state.shutdown();
   }
 }
 

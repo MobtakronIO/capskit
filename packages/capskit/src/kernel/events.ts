@@ -29,11 +29,14 @@ export class EventRegistry {
   emit(event: string, ...args: any[]): void {
     const listeners = this.listeners.get(event);
     if (listeners) {
-      for (const listener of listeners) {
+      // Snapshot the Set before iterating to prevent issues if listeners are added/removed during iteration
+      for (const listener of [...listeners]) {
         try {
           listener(...args);
-        } catch {
-          // Swallow listener errors to prevent one listener from breaking others
+        } catch (err) {
+          // Log listener errors to prevent silent failures while keeping other listeners running
+          const message = err instanceof Error ? err.message : String(err);
+          console.error(`[EventRegistry] Listener error for event "${event}": ${message}`);
         }
       }
     }
@@ -51,5 +54,21 @@ export class EventRegistry {
    */
   clear(): void {
     this.listeners.clear();
+  }
+
+  /**
+   * Shutdown the event registry, clearing all listeners.
+   * Alias for clear() for consistency with other kernel modules.
+   */
+  shutdown(): void {
+    this.clear();
+  }
+
+  /**
+   * Close the event registry, releasing any resources.
+   * Alias for shutdown() for consistency with other kernel modules.
+   */
+  close(): void {
+    this.shutdown();
   }
 }

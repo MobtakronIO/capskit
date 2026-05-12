@@ -3,7 +3,7 @@
  * Provides async-safe trace emission with stdout/file sinks.
  */
 
-import { TraceRecord } from '../types';
+import { TraceRecord, redactPayload } from '../types';
 import * as fs from 'fs';
 import * as crypto from 'crypto';
 import { AsyncLocalStorage } from 'async_hooks';
@@ -33,10 +33,18 @@ export function generateUUID(): string {
 export type TraceSink = (record: TraceRecord) => void;
 
 /**
+ * A closable trace sink that extends TraceSink with a close() method.
+ */
+export interface ClosableTraceSink extends TraceSink {
+  close(): void;
+}
+
+/**
  * Non-blocking file sink using a write queue.
  * This prevents blocking the action execution path.
+ * Returns a ClosableTraceSink with a close() method to properly release the file descriptor.
  */
-export function createAsyncFileSink(filePath: string): TraceSink {
+export function createAsyncFileSink(filePath: string): ClosableTraceSink {
   let fd: number | null = null;
   let writeQueue: string[] = [];
   let isProcessing = false;
@@ -54,6 +62,30 @@ export function createAsyncFileSink(filePath: string): TraceSink {
         // File open failed - will try to open on next write
       }
     }
+  };
+
+  const close = (): void => {
+    if (isClosed) return;
+    isClosed = true;
+    
+    // Flush remaining queue items synchronously before closing
+    if (fd !== null) {
+      try {
+        for (const line of writeQueue) {
+          try {
+            fs.writeSync(fd, line);
+          } catch {
+            // Best effort flush - skip errors on individual lines
+          }
+        }
+        fs.closeSync(fd);
+      } catch {
+        // Best effort close - fd may already be closed or invalid
+      }
+      fd = null;
+    }
+    writeQueue = [];
+    isProcessing = false;
   };
 
   const processQueue = () => {
@@ -81,7 +113,12 @@ export function createAsyncFileSink(filePath: string): TraceSink {
               setTimeout(writeWithRetry, 10);
             } else {
               // Drop the trace record after max retries
-              // Don't crash - just silently drop
+              // Log to stderr as last resort
+              try {
+                process.stderr.write(`[CapsKit Trace] Failed to write trace after ${MAX_RETRY_ATTEMPTS} retries\n`);
+              } catch {
+                // Absolute last resort - cannot do anything
+              }
               isProcessing = false;
             }
           }
@@ -108,7 +145,7 @@ export function createAsyncFileSink(filePath: string): TraceSink {
     processNext();
   };
 
-  return (record: TraceRecord) => {
+  const sink = (record: TraceRecord): void => {
     if (isClosed) return;
 
     // Enqueue the line
@@ -123,29 +160,76 @@ export function createAsyncFileSink(filePath: string): TraceSink {
     // Trigger async processing
     processQueue();
   };
+
+  // Attach close method to the sink function
+  (sink as ClosableTraceSink).close = close;
+  return sink as ClosableTraceSink;
 }
 
 /**
+ * Cached trace sink to avoid opening multiple file descriptors.
+ */
+let cachedSink: ClosableTraceSink | null = null;
+let cachedSinkConfig: string | null = null;
+
+/**
  * Get the current trace sink based on environment configuration.
+ * Caches the sink to avoid opening multiple file descriptors.
  */
 export function getTraceSink(): TraceSink | null {
   if (!isTraceEnabled()) {
     return null;
   }
 
-  const traceFile = process.env.CAPSKIT_TRACE_FILE;
-  if (traceFile) {
-    return createAsyncFileSink(traceFile);
+  const traceFile = process.env.CAPSKIT_TRACE_FILE || null;
+
+  // Reuse cached sink if config hasn't changed
+  if (cachedSink && cachedSinkConfig === traceFile) {
+    return cachedSink;
   }
 
-  // Default to stdout
-  return (record: TraceRecord) => {
+  // Close previous sink if it exists
+  if (cachedSink) {
     try {
-      process.stdout.write(JSON.stringify(record) + '\n');
+      cachedSink.close();
     } catch {
-      // Silently fail - tracing should not crash the action
+      // Best effort close
     }
-  };
+  }
+
+  if (traceFile) {
+    cachedSink = createAsyncFileSink(traceFile);
+  } else {
+    // Default to stdout - wrap in a closable sink (no-op close)
+    const stdoutSink = (record: TraceRecord) => {
+      try {
+        process.stdout.write(JSON.stringify(record) + '\n');
+      } catch {
+        // Silently fail - tracing should not crash the action
+      }
+    };
+    (stdoutSink as ClosableTraceSink).close = () => {};
+    cachedSink = stdoutSink as ClosableTraceSink;
+  }
+
+  cachedSinkConfig = traceFile;
+  return cachedSink;
+}
+
+/**
+ * Close the cached trace sink and release resources (e.g., file descriptors).
+ * Should be called during application shutdown.
+ */
+export function closeTraceSink(): void {
+  if (cachedSink) {
+    try {
+      cachedSink.close();
+    } catch {
+      // Best effort close
+    }
+    cachedSink = null;
+    cachedSinkConfig = null;
+  }
 }
 
 /**
@@ -199,8 +283,7 @@ export async function traceCall<T>(
     const timestampEnd = new Date().toISOString();
     const durationMs = new Date(timestampEnd).getTime() - new Date(timestampStart).getTime();
 
-    // Import redactPayload locally to avoid circular dependency issues
-    const { redactPayload } = require('../types');
+    // redactPayload is imported at the top of this file
 
     // Build trace record
     const record: TraceRecord = {

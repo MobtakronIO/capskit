@@ -15,6 +15,7 @@
 
 import { CapsuleManifest, BootLifecycle, BootContext, DependencyGraph } from '../types';
 import { FrameworkError } from './errors';
+import { kernelLogger } from './logger';
 
 // ============================================================
 // Error Classes
@@ -383,15 +384,15 @@ export class BootSequencer {
     // Build the dependency graph
     const graph = buildDependencyGraph(manifests);
 
-    // Set external dependencies from platform before validation
-    this.options.externalDependencies = platform.getDependencies?.() ?? {};
+    // Set external dependencies from platform before validation (clone to avoid mutating platform's state)
+    this.options.externalDependencies = { ...platform.getDependencies?.() };
 
     // Validate external dependencies
     if (this.options.validateExternalDependencies) {
       this.validateExternalDependencies(manifests);
     }
 
-    console.log(`[BootSequencer] Booting ${manifests.length} capsules in order: ${graph.bootOrder.join(' → ')}`);
+    kernelLogger.info(`Booting ${manifests.length} capsules in order: ${graph.bootOrder.join(' → ')}`);
 
     // Boot capsules in topological order
     const readyPromises: Map<string, Promise<void>> = new Map();
@@ -438,7 +439,7 @@ export class BootSequencer {
     const isBlocking = bootConfig?.blocking ?? true;
 
     this.options.onCapsuleBooting(manifest);
-    console.log(`[BootSequencer] Booting capsule: ${name} (blocking: ${isBlocking})`);
+    kernelLogger.info(`Booting capsule: ${name} (blocking: ${isBlocking})`);
 
     // Create boot context
     const context: BootContext = {
@@ -456,10 +457,10 @@ export class BootSequencer {
         const depIsBlocking = depManifest?.boot?.blocking ?? true;
         
         if (depIsBlocking) {
-          console.log(`[BootSequencer] Waiting for blocking dependency "${dep}" before booting "${name}"`);
+          kernelLogger.info(`Waiting for blocking dependency "${dep}" before booting "${name}"`);
           await readyPromises.get(dep);
         } else {
-          console.log(`[BootSequencer] Skipping non-blocking dependency "${dep}" for "${name}"`);
+          kernelLogger.debug(`Skipping non-blocking dependency "${dep}" for "${name}"`);
         }
       }
     }
@@ -474,13 +475,13 @@ export class BootSequencer {
     } else {
       // For non-blocking capsules, still track their readiness for debugging
       // but don't block dependents
-      console.log(`[BootSequencer] Capsule "${name}" is non-blocking - dependents will not wait`);
+      kernelLogger.debug(`Capsule "${name}" is non-blocking - dependents will not wait`);
     }
 
     try {
       await readyPromise;
       this.options.onCapsuleReady(manifest);
-      console.log(`[BootSequencer] Capsule ready: ${name}`);
+      kernelLogger.info(`Capsule ready: ${name}`);
     } catch (error) {
       this.options.onBootFailed(
         error instanceof Error ? error : new Error(String(error)),
@@ -507,13 +508,13 @@ export class BootSequencer {
 
     // If no init or ready configuration, capsule is immediately ready
     if (!bootConfig?.init && !readyEvent) {
-      console.log(`[BootSequencer] Capsule "${name}" has no init or ready event - immediate ready`);
+      kernelLogger.debug(`Capsule "${name}" has no init or ready event - immediate ready`);
       return;
     }
 
     // Handle ready event if specified
     if (readyEvent && platform) {
-      console.log(`[BootSequencer] Capsule "${name}" waiting for ready event: "${readyEvent}"`);
+      kernelLogger.info(`Capsule "${name}" waiting for ready event: "${readyEvent}"`);
       
       return new Promise((resolve, reject) => {
         // Only set timeout if timeout is not Infinity
@@ -525,7 +526,7 @@ export class BootSequencer {
         }
 
         const handler = (data: any) => {
-          console.log(`[BootSequencer] Capsule "${name}" ready event received:`, data);
+          kernelLogger.debug(`Capsule "${name}" ready event received:`, data);
           if (timer) clearTimeout(timer);
           platform.off?.(readyEvent, handler);
           resolve();
@@ -536,14 +537,14 @@ export class BootSequencer {
 
         // Also call init() if provided - it may emit the ready event internally
         if (bootConfig?.init) {
-          console.log(`[BootSequencer] Calling init() for capsule "${name}"`);
+          kernelLogger.debug(`Calling init() for capsule "${name}"`);
           const initPromise = bootConfig.init(context);
           
           if (initPromise instanceof Promise) {
             initPromise
               .then(() => {
                 // Init completed but we still need to wait for ready event if specified
-                console.log(`[BootSequencer] Capsule "${name}" init() completed, waiting for ready event`);
+                kernelLogger.debug(`Capsule "${name}" init() completed, waiting for ready event`);
               })
               .catch((err) => {
                 clearTimeout(timer);
@@ -557,11 +558,11 @@ export class BootSequencer {
 
     // Handle init() Promise (no ready event)
     if (bootConfig?.init) {
-      console.log(`[BootSequencer] Calling init() for capsule "${name}"`);
+      kernelLogger.debug(`Calling init() for capsule "${name}"`);
       const initPromise = bootConfig.init(context);
       
       if (!(initPromise instanceof Promise)) {
-        console.log(`[BootSequencer] Capsule "${name}" init() returned synchronously - immediate ready`);
+        kernelLogger.debug(`Capsule "${name}" init() returned synchronously - immediate ready`);
         return;
       }
 
@@ -683,8 +684,10 @@ export function describeBootOrder(manifests: CapsuleManifest[]): string {
   lines.push('');
   lines.push('Dependency Details:');
 
+  // Build a map for O(1) lookups instead of O(n²) find() inside loop
+  const manifestMap = new Map(manifests.map(m => [m.name, m]));
   for (const name of graph.bootOrder) {
-    const manifest = manifests.find(m => m.name === name)!;
+    const manifest = manifestMap.get(name)!;
     const deps = manifest.requires ?? [];
     const interCapsuleDeps = deps.filter(d => graph.dependencies.get(name)?.has(d));
     

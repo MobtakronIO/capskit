@@ -4,16 +4,7 @@
  */
 
 import { CapsuleManifest, ActionSchema, OutputValidationOptions, ActionDefinition } from '../types';
-
-/**
- * Error thrown on validation failure.
- */
-class ValidationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'ValidationError';
-  }
-}
+import { ValidationError } from './errors';
 
 /**
  * Validate the shape of a capsule manifest.

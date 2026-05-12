@@ -1,5 +1,47 @@
-import semver from 'semver';
 import type { AdapterPluginManifest } from '../types';
+
+/**
+ * Lightweight semver comparison utility.
+ * Parses version strings and compares major.minor.patch.
+ * Returns: -1 if a < b, 0 if a === b, 1 if a > b
+ */
+function compareSemver(a: string, b: string): number {
+  const parse = (v: string): [number, number, number] => {
+    const parts = v.replace(/^[^0-9]*/, '').split('.').map(Number);
+    return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0];
+  };
+  
+  const [aMajor, aMinor, aPatch] = parse(a);
+  const [bMajor, bMinor, bPatch] = parse(b);
+  
+  if (aMajor !== bMajor) return aMajor < bMajor ? -1 : 1;
+  if (aMinor !== bMinor) return aMinor < bMinor ? -1 : 1;
+  return aPatch < bPatch ? -1 : aPatch > bPatch ? 1 : 0;
+}
+
+/**
+ * Check if a version satisfies a range string (e.g., ">=1.0.0 <2.0.0").
+ * Supports simple >= and < comparisons.
+ */
+function satisfiesSemver(version: string, range: string): boolean {
+  const parts = range.trim().split(/\s+/);
+  
+  for (const part of parts) {
+    const match = part.match(/^([><=]+)(.+)$/);
+    if (!match) continue;
+    
+    const [, operator, target] = match;
+    const cmp = compareSemver(version, target);
+    
+    if (operator === '>=' && cmp < 0) return false;
+    if (operator === '>' && cmp <= 0) return false;
+    if (operator === '<=' && cmp > 0) return false;
+    if (operator === '<' && cmp >= 0) return false;
+    if (operator === '=' && cmp !== 0) return false;
+  }
+  
+  return true;
+}
 
 /**
  * Validate an adapter manifest object.
@@ -77,9 +119,9 @@ export function checkVersionCompatibility(
     rangeStr = `>=${range.min}`;
   }
   
-  if (!semver.satisfies(capskitVersion, rangeStr)) {
+  if (!satisfiesSemver(capskitVersion, rangeStr)) {
     // Determine the specific reason
-    const minResult = semver.compare(capskitVersion, range.min);
+    const minResult = compareSemver(capskitVersion, range.min);
     if (minResult < 0) {
       // capskitVersion < range.min - adapter requires newer capskit
       return {

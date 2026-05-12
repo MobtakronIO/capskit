@@ -54,7 +54,7 @@ export class KernelState {
   addInterceptor(interceptor: ActionInterceptor): void { this._interceptors.push(interceptor); }
   setDependency(key: string, value: any): void { this._dependencies[key] = value; }
   hasDependency(key: string): boolean { return key in this._dependencies; }
-  setCacheAdapter(adapter: ReturnType<typeof import('../cache').createCacheAdapter>): void { this._cacheAdapter = adapter; }
+  setCacheAdapter(adapter: ReturnType<typeof import('../cache').createCacheAdapter> | null): void { this._cacheAdapter = adapter; }
 
   shutdown(): void {
     this.resiliency.shutdown();
