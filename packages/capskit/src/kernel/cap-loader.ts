@@ -19,6 +19,11 @@ import {
   CapsuleManifest,
   CapsuleRegistry,
   ActionDefinition,
+  ActionContext,
+  CapContext,
+  CapInvokePayload,
+  CapTellPayload,
+  ActionInput,
 } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -673,6 +678,78 @@ export async function loadCapsFromDirectory(rootDir: string): Promise<CapDefinit
 }
 
 // ---------------------------------------------------------------------------
+// CapContext Adapter — Bridge between CapClass methods and kernel ActionContext
+// ---------------------------------------------------------------------------
+
+/**
+ * Creates a CapContext from a kernel ActionContext.
+ *
+ * CapClass methods expect a CapContext (with invoke/tell), but the kernel
+ * provides an ActionContext (with call). This adapter bridges the two:
+ * - `invoke` → maps to `context.call` (request/response)
+ * - `tell` → maps to `context.call` but fire-and-forget (no await)
+ * - `emit`, `use`, `deps`, `body`, `params`, `query` pass through directly
+ *
+ * @param platformContext - The ActionContext provided by the kernel
+ * @returns A CapContext suitable for passing to CapClass methods
+ */
+export function createCapContext(platformContext: ActionContext): CapContext {
+  return {
+    // Transport-agnostic input (pass through)
+    body: platformContext.body,
+    params: platformContext.params,
+    query: platformContext.query ?? {},
+
+    // Dependency injection (pass through)
+    deps: platformContext.deps,
+
+    // invoke → call (request/response)
+    invoke: (action: string, payload: CapInvokePayload) => {
+      // The kernel's call() expects either structured {body,params,query} or plain payload.
+      // We pass the CapInvokePayload directly — call() normalizes it internally.
+      return platformContext.call(action, payload);
+    },
+
+    // tell → call but fire-and-forget (no response expected)
+    tell: (action: string, payload: CapTellPayload) => {
+      // Fire and forget: we intentionally do not await or return the promise.
+      // Errors are caught and logged to avoid unhandled rejections.
+      platformContext.call(action, payload).catch((err: any) => {
+        console.error(
+          `[CapContext] tell("${action}") failed:`,
+          err instanceof Error ? err.message : String(err),
+        );
+      });
+    },
+
+    // Event emission (pass through)
+    emit: platformContext.emit,
+
+    // Typed capsule proxy (pass through)
+    use: platformContext.use,
+  };
+}
+
+/**
+ * Wraps a CapClass method so it receives a CapContext instead of ActionContext.
+ *
+ * The kernel calls action handlers with `(input: ActionInput, context: ActionContext)`.
+ * CapClass methods expect `(input: ActionInput, context: CapContext)`.
+ * This wrapper adapts the context using {@link createCapContext}.
+ *
+ * @param method - The bound CapClass method to wrap
+ * @returns An ActionHandler compatible with the kernel
+ */
+export function wrapCapHandler(
+  method: (input: ActionInput, ctx: CapContext) => Promise<any>,
+): (input: ActionInput, ctx: ActionContext) => Promise<any> {
+  return (input: ActionInput, ctx: ActionContext): Promise<any> => {
+    const capContext = createCapContext(ctx);
+    return method(input, capContext);
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Convert CapDefinition to CapsuleManifest (for kernel integration)
 // ---------------------------------------------------------------------------
 
@@ -707,7 +784,7 @@ export function convertCapToManifest(
 
   for (const methodName of methodNames) {
     actions[methodName] = {
-      handler: (instance as any)[methodName].bind(instance),
+      handler: wrapCapHandler((instance as any)[methodName].bind(instance)),
       description: `Cap "${capName}" action: ${methodName}`,
     };
   }
@@ -978,7 +1055,7 @@ export function convertRegistryToManifest(registry: CapsuleRegistry): CapsuleMan
         );
       }
       allActions[methodName] = {
-        handler: (instance as any)[methodName].bind(instance),
+        handler: wrapCapHandler((instance as any)[methodName].bind(instance)),
         description: `Cap "${meta.name}" action: ${methodName}`,
       };
     }
