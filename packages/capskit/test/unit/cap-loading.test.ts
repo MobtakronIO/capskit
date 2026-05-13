@@ -36,6 +36,7 @@ import {
   detectDuplicateCapNames,
   detectDuplicateRegistryNames,
   detectCapCycle,
+  detectCapsuleFormat,
   // Errors
   CapLoadError,
   DuplicateCapNameError,
@@ -48,6 +49,7 @@ import type {
   CapsuleManifest,
   CapEventSubscription,
   CapRoute,
+  CapsuleFormatDetection,
 } from '../../src/types';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1116,5 +1118,362 @@ describe('Integration: Fixture Loading', () => {
   test('throws CapLoadError for broken.cap fixture', async () => {
     const brokenDir = path.resolve(FIXTURES_DIR, 'broken.cap');
     await expect(loadCapFromDir(brokenDir)).rejects.toThrow(CapLoadError);
+  });
+});
+
+// ===================================================================
+// Capsule Format Detection Tests (detectCapsuleFormat)
+// ===================================================================
+
+describe('detectCapsuleFormat', () => {
+  // Helper: create a temp directory with specific files
+  function createTempDir(
+    dirName: string,
+    files: Record<string, string>,
+    subdirs: string[] = [],
+  ): { dirPath: string; cleanup: () => void } {
+    const testRoot = path.resolve(FIXTURES_DIR, `tmp-fmt-${dirName}`);
+    // Clean up if exists
+    if (fs.existsSync(testRoot)) fs.rmSync(testRoot, { recursive: true });
+    fs.mkdirSync(testRoot, { recursive: true });
+
+    for (const [fileName, content] of Object.entries(files)) {
+      fs.writeFileSync(path.resolve(testRoot, fileName), content);
+    }
+
+    for (const subdir of subdirs) {
+      fs.mkdirSync(path.resolve(testRoot, subdir), { recursive: true });
+    }
+
+    return {
+      dirPath: testRoot,
+      cleanup: () => {
+        if (fs.existsSync(testRoot)) fs.rmSync(testRoot, { recursive: true });
+      },
+    };
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // Non-existent or invalid directory
+  // ──────────────────────────────────────────────────────────────
+
+  test('returns "unknown" for non-existent directory', () => {
+    const result = detectCapsuleFormat('/nonexistent/path/12345');
+    expect(result.kind).toBe('unknown');
+    expect(result.hasCapsTs).toBe(false);
+    expect(result.hasCapDirs).toBe(false);
+    expect(result.hasManifest).toBe(false);
+  });
+
+  test('returns "unknown" for empty directory', () => {
+    const { dirPath, cleanup } = createTempDir('empty', {});
+    try {
+      const result = detectCapsuleFormat(dirPath);
+      expect(result.kind).toBe('unknown');
+      expect(result.hasCapsTs).toBe(false);
+      expect(result.hasCapDirs).toBe(false);
+      expect(result.hasManifest).toBe(false);
+    } finally {
+      cleanup();
+    }
+  });
+
+  // ──────────────────────────────────────────────────────────────
+  // New-style: caps.ts registry
+  // ──────────────────────────────────────────────────────────────
+
+  test('detects "caps-registry" when caps.ts exists', () => {
+    const { dirPath, cleanup } = createTempDir('caps-ts-registry', {
+      'caps.ts': 'export default { name: "test", caps: [] };',
+    });
+    try {
+      const result = detectCapsuleFormat(dirPath);
+      expect(result.kind).toBe('caps-registry');
+      expect(result.hasCapsTs).toBe(true);
+      expect(result.hasCapDirs).toBe(false);
+      expect(result.hasManifest).toBe(false);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('detects "caps-registry" when caps.js exists', () => {
+    const { dirPath, cleanup } = createTempDir('caps-js-registry', {
+      'caps.js': 'module.exports = { name: "test", caps: [] };',
+    });
+    try {
+      const result = detectCapsuleFormat(dirPath);
+      expect(result.kind).toBe('caps-registry');
+      expect(result.hasCapsTs).toBe(true);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('detects "caps-registry" when caps.mjs exists', () => {
+    const { dirPath, cleanup } = createTempDir('caps-mjs-registry', {
+      'caps.mjs': 'export default { name: "test", caps: [] };',
+    });
+    try {
+      const result = detectCapsuleFormat(dirPath);
+      expect(result.kind).toBe('caps-registry');
+      expect(result.hasCapsTs).toBe(true);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('detects "caps-registry" with .cap subdirectories coexisting', () => {
+    const { dirPath, cleanup } = createTempDir(
+      'caps-ts-with-cap-dirs',
+      { 'caps.ts': 'export default { name: "test", caps: [] };' },
+      ['mycap.cap', 'other.cap'],
+    );
+    try {
+      const result = detectCapsuleFormat(dirPath);
+      // caps.ts takes priority
+      expect(result.kind).toBe('caps-registry');
+      expect(result.hasCapsTs).toBe(true);
+      expect(result.hasCapDirs).toBe(true);
+      expect(result.hasManifest).toBe(false);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('detects "caps-registry" with both caps.ts and manifest.ts coexisting', () => {
+    const { dirPath, cleanup } = createTempDir('caps-ts-with-manifest', {
+      'caps.ts': 'export default { name: "test", caps: [] };',
+      'manifest.ts': 'export default { name: "test", actions: {} };',
+    });
+    try {
+      const result = detectCapsuleFormat(dirPath);
+      // caps.ts takes priority over manifest.ts
+      expect(result.kind).toBe('caps-registry');
+      expect(result.hasCapsTs).toBe(true);
+      expect(result.hasCapDirs).toBe(false);
+      expect(result.hasManifest).toBe(true);
+    } finally {
+      cleanup();
+    }
+  });
+
+  // ──────────────────────────────────────────────────────────────
+  // New-style: .cap directories
+  // ──────────────────────────────────────────────────────────────
+
+  test('detects "cap-directories" when .cap subdirs exist (no caps.ts)', () => {
+    const { dirPath, cleanup } = createTempDir(
+      'cap-dirs-only',
+      {},
+      ['calculator.cap'],
+    );
+    try {
+      const result = detectCapsuleFormat(dirPath);
+      expect(result.kind).toBe('cap-directories');
+      expect(result.hasCapsTs).toBe(false);
+      expect(result.hasCapDirs).toBe(true);
+      expect(result.hasManifest).toBe(false);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('detects "cap-directories" with multiple .cap subdirs', () => {
+    const { dirPath, cleanup } = createTempDir(
+      'cap-dirs-multi',
+      {},
+      ['users.cap', 'orders.cap', 'products.cap'],
+    );
+    try {
+      const result = detectCapsuleFormat(dirPath);
+      expect(result.kind).toBe('cap-directories');
+      expect(result.hasCapsTs).toBe(false);
+      expect(result.hasCapDirs).toBe(true);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('detects "cap-directories" when .cap dirs coexist with manifest.ts', () => {
+    const { dirPath, cleanup } = createTempDir(
+      'cap-dirs-with-manifest',
+      { 'manifest.ts': 'export default { name: "legacy", actions: {} };' },
+      ['service.cap'],
+    );
+    try {
+      const result = detectCapsuleFormat(dirPath);
+      // .cap dirs take priority over manifest.ts
+      expect(result.kind).toBe('cap-directories');
+      expect(result.hasCapsTs).toBe(false);
+      expect(result.hasCapDirs).toBe(true);
+      expect(result.hasManifest).toBe(true);
+    } finally {
+      cleanup();
+    }
+  });
+
+  // ──────────────────────────────────────────────────────────────
+  // Old-style: legacy manifest.ts
+  // ──────────────────────────────────────────────────────────────
+
+  test('detects "legacy-manifest" when manifest.ts exists', () => {
+    const { dirPath, cleanup } = createTempDir('manifest-only', {
+      'manifest.ts': 'export default { name: "legacy", actions: {} };',
+    });
+    try {
+      const result = detectCapsuleFormat(dirPath);
+      expect(result.kind).toBe('legacy-manifest');
+      expect(result.hasCapsTs).toBe(false);
+      expect(result.hasCapDirs).toBe(false);
+      expect(result.hasManifest).toBe(true);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('detects "legacy-manifest" when manifest.js exists', () => {
+    const { dirPath, cleanup } = createTempDir('manifest-js', {
+      'manifest.js': 'module.exports = { name: "legacy", actions: {} };',
+    });
+    try {
+      const result = detectCapsuleFormat(dirPath);
+      expect(result.kind).toBe('legacy-manifest');
+      expect(result.hasManifest).toBe(true);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('detects "legacy-manifest" with manifest.mjs', () => {
+    const { dirPath, cleanup } = createTempDir('manifest-mjs', {
+      'manifest.mjs': 'export default { name: "legacy", actions: {} };',
+    });
+    try {
+      const result = detectCapsuleFormat(dirPath);
+      expect(result.kind).toBe('legacy-manifest');
+      expect(result.hasManifest).toBe(true);
+    } finally {
+      cleanup();
+    }
+  });
+
+  // ──────────────────────────────────────────────────────────────
+  // Directory that is not a directory (e.g., file path)
+  // ──────────────────────────────────────────────────────────────
+
+  test('returns "unknown" when path is a file, not a directory', () => {
+    const { dirPath, cleanup } = createTempDir('file-test', {
+      'somefile.txt': 'hello',
+    });
+    try {
+      const filePath = path.resolve(dirPath, 'somefile.txt');
+      const result = detectCapsuleFormat(filePath);
+      expect(result.kind).toBe('unknown');
+      expect(result.hasCapsTs).toBe(false);
+      expect(result.hasCapDirs).toBe(false);
+      expect(result.hasManifest).toBe(false);
+    } finally {
+      cleanup();
+    }
+  });
+
+  // ──────────────────────────────────────────────────────────────
+  // Type narrowing via discriminated union
+  // ──────────────────────────────────────────────────────────────
+
+  test('discriminated union narrows correctly for caps-registry', () => {
+    const { dirPath, cleanup } = createTempDir('narrow-registry', {
+      'caps.ts': 'export default { name: "test", caps: [] };',
+    });
+    try {
+      const result: CapsuleFormatDetection = detectCapsuleFormat(dirPath);
+      if (result.kind === 'caps-registry') {
+        // TypeScript should narrow hasCapsTs to `true`
+        expect(result.hasCapsTs).toBe(true);
+        // dirPath should be a string
+        expect(typeof result.dirPath).toBe('string');
+      } else {
+        // Should not reach here
+        expect.unreachable('Expected caps-registry');
+      }
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('discriminated union narrows correctly for legacy-manifest', () => {
+    const { dirPath, cleanup } = createTempDir('narrow-legacy', {
+      'manifest.ts': 'export default { name: "legacy", actions: {} };',
+    });
+    try {
+      const result: CapsuleFormatDetection = detectCapsuleFormat(dirPath);
+      if (result.kind === 'legacy-manifest') {
+        expect(result.hasManifest).toBe(true);
+        expect(result.hasCapsTs).toBe(false);
+        expect(result.hasCapDirs).toBe(false);
+      } else {
+        expect.unreachable('Expected legacy-manifest');
+      }
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('discriminated union narrows correctly for unknown', () => {
+    const { dirPath, cleanup } = createTempDir('narrow-unknown', {});
+    try {
+      const result: CapsuleFormatDetection = detectCapsuleFormat(dirPath);
+      if (result.kind === 'unknown') {
+        expect(result.hasCapsTs).toBe(false);
+        expect(result.hasCapDirs).toBe(false);
+        expect(result.hasManifest).toBe(false);
+      } else {
+        expect.unreachable('Expected unknown');
+      }
+    } finally {
+      cleanup();
+    }
+  });
+
+  // ──────────────────────────────────────────────────────────────
+  // Priority order: caps.ts > .cap dirs > manifest.ts
+  // ──────────────────────────────────────────────────────────────
+
+  test('caps.ts takes priority over .cap dirs and manifest.ts when all three exist', () => {
+    const { dirPath, cleanup } = createTempDir(
+      'all-three',
+      {
+        'caps.ts': 'export default { name: "new", caps: [] };',
+        'manifest.ts': 'export default { name: "old", actions: {} };',
+      },
+      ['extra.cap'],
+    );
+    try {
+      const result = detectCapsuleFormat(dirPath);
+      expect(result.kind).toBe('caps-registry');
+      expect(result.hasCapsTs).toBe(true);
+      expect(result.hasCapDirs).toBe(true);
+      expect(result.hasManifest).toBe(true);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('.cap dirs take priority over manifest.ts when no caps.ts', () => {
+    const { dirPath, cleanup } = createTempDir(
+      'cap-dirs-over-manifest',
+      { 'manifest.ts': 'export default { name: "old", actions: {} };' },
+      ['modern.cap'],
+    );
+    try {
+      const result = detectCapsuleFormat(dirPath);
+      expect(result.kind).toBe('cap-directories');
+      expect(result.hasCapsTs).toBe(false);
+      expect(result.hasCapDirs).toBe(true);
+      expect(result.hasManifest).toBe(true);
+    } finally {
+      cleanup();
+    }
   });
 });

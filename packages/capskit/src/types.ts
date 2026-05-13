@@ -1294,6 +1294,65 @@ export type CapsuleSource =
   | { type: 'package'; name: string };
 
 /**
+ * Discriminated union representing the detected capsule format in a directory.
+ * 
+ * Used by the kernel boot pipeline to decide which loader strategy to use:
+ * - `caps-registry`: Load via {@link loadCapsRegistry} (caps.ts exporting CapsuleRegistry)
+ * - `cap-directories`: Load via {@link loadCapsFromDirectory} (scan for .cap subdirectories)
+ * - `legacy-manifest`: Load via {@link loadCapsules} (manifest.ts exporting CapsuleManifest)
+ * - `unknown`: No recognized capsule format found
+ * 
+ * @example
+ * ```typescript
+ * const format = detectCapsuleFormat('./src/my-capsule');
+ * if (format.kind === 'caps-registry') {
+ *   const registry = await loadCapsRegistry(format.dirPath);
+ *   // ...
+ * } else if (format.kind === 'legacy-manifest') {
+ *   const manifests = await loadCapsules(format.dirPath);
+ *   // ...
+ * }
+ * ```
+ */
+export type CapsuleFormatDetection =
+  | {
+      /** New-style capsule using a caps.ts registry file */
+      kind: 'caps-registry';
+      /** Absolute path to the capsule directory */
+      dirPath: string;
+      /** Whether caps.ts (or .js/.mjs/.cjs) was found */
+      hasCapsTs: true;
+      /** Whether .cap subdirectories were also found (may coexist) */
+      hasCapDirs: boolean;
+      /** Whether a legacy manifest.ts was also found (may coexist) */
+      hasManifest: boolean;
+    }
+  | {
+      /** New-style capsule using .cap subdirectories (no caps.ts registry) */
+      kind: 'cap-directories';
+      dirPath: string;
+      hasCapsTs: false;
+      hasCapDirs: true;
+      hasManifest: boolean;
+    }
+  | {
+      /** Old-style capsule using a manifest.ts file */
+      kind: 'legacy-manifest';
+      dirPath: string;
+      hasCapsTs: false;
+      hasCapDirs: false;
+      hasManifest: true;
+    }
+  | {
+      /** No recognized capsule format found in this directory */
+      kind: 'unknown';
+      dirPath: string;
+      hasCapsTs: false;
+      hasCapDirs: false;
+      hasManifest: false;
+    };
+
+/**
  * Internal/Advanced API - use only when you need dynamic action resolution
  * or are building kernel-level functionality.
  * 

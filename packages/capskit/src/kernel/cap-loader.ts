@@ -18,6 +18,7 @@ import {
   CapEventSubscription,
   CapsuleManifest,
   CapsuleRegistry,
+  CapsuleFormatDetection,
   ActionDefinition,
   ActionContext,
   CapContext,
@@ -482,6 +483,150 @@ function findCapFile(dirPath: string, baseName: string): string | null {
   }
 
   return null;
+}
+
+/**
+ * Find a manifest file (manifest.ts / manifest.js) in a directory.
+ */
+function findManifestFile(dirPath: string): string | null {
+  const extensions = ['.ts', '.js', '.mjs', '.cjs'];
+
+  for (const ext of extensions) {
+    const candidate = path.resolve(dirPath, `manifest${ext}`);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Check if a directory contains any .cap subdirectories.
+ * A .cap subdirectory is a directory whose name ends with ".cap".
+ */
+function hasCapSubdirectories(dirPath: string): boolean {
+  if (!fs.existsSync(dirPath)) {
+    return false;
+  }
+
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.isDirectory() && entry.name.endsWith('.cap')) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// Capsule Format Detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect the capsule format of a directory.
+ *
+ * Examines the given directory to determine which capsule format it uses:
+ * - **caps-registry** (new-style): Contains a `caps.ts` (or `.js`/`.mjs`/`.cjs`)
+ *   file that exports a {@link CapsuleRegistry}. May also have `.cap`
+ *   subdirectories or a legacy `manifest.ts`.
+ * - **cap-directories** (new-style): Contains `.cap` subdirectories (each with
+ *   `cap.ts` + `cap.meta.ts`) but no top-level `caps.ts` registry.
+ * - **legacy-manifest** (old-style): Contains a `manifest.ts` (or `.js`) file
+ *   that exports a {@link CapsuleManifest}, but no `caps.ts` or `.cap` dirs.
+ * - **unknown**: No recognized capsule format found.
+ *
+ * The detection is filesystem-only (no dynamic imports). It checks for the
+ * presence of specific files and directories without loading them.
+ *
+ * Priority order for `kind` when multiple format markers coexist:
+ * 1. `caps-registry` — if `caps.ts` is present, it takes precedence
+ * 2. `cap-directories` — if `.cap` subdirectories are present (no `caps.ts`)
+ * 3. `legacy-manifest` — if `manifest.ts` is present (no `caps.ts` or `.cap`)
+ * 4. `unknown` — none of the above
+ *
+ * @param dirPath - Absolute or relative path to the capsule directory
+ * @returns A {@link CapsuleFormatDetection} discriminated union
+ *
+ * @example
+ * ```typescript
+ * const format = detectCapsuleFormat('./src/capsules/calculator');
+ * switch (format.kind) {
+ *   case 'caps-registry':
+ *     // Load via loadCapsRegistry(format.dirPath)
+ *     break;
+ *   case 'cap-directories':
+ *     // Load via loadCapsFromDirectory(format.dirPath)
+ *     break;
+ *   case 'legacy-manifest':
+ *     // Load via loadCapsules(format.dirPath)
+ *     break;
+ *   case 'unknown':
+ *     // Skip or warn
+ *     break;
+ * }
+ * ```
+ */
+export function detectCapsuleFormat(dirPath: string): CapsuleFormatDetection {
+  const resolvedDir = path.resolve(dirPath);
+
+  if (!fs.existsSync(resolvedDir) || !fs.statSync(resolvedDir).isDirectory()) {
+    return {
+      kind: 'unknown',
+      dirPath: resolvedDir,
+      hasCapsTs: false,
+      hasCapDirs: false,
+      hasManifest: false,
+    };
+  }
+
+  const capsFile = findCapFile(resolvedDir, 'caps');
+  const hasCapsTs = capsFile !== null;
+
+  const hasCapDirs = hasCapSubdirectories(resolvedDir);
+
+  const manifestFile = findManifestFile(resolvedDir);
+  const hasManifest = manifestFile !== null;
+
+  // Priority: caps.ts > .cap dirs > manifest.ts
+  if (hasCapsTs) {
+    return {
+      kind: 'caps-registry',
+      dirPath: resolvedDir,
+      hasCapsTs: true,
+      hasCapDirs,
+      hasManifest,
+    };
+  }
+
+  if (hasCapDirs) {
+    return {
+      kind: 'cap-directories',
+      dirPath: resolvedDir,
+      hasCapsTs: false,
+      hasCapDirs: true,
+      hasManifest,
+    };
+  }
+
+  if (hasManifest) {
+    return {
+      kind: 'legacy-manifest',
+      dirPath: resolvedDir,
+      hasCapsTs: false,
+      hasCapDirs: false,
+      hasManifest: true,
+    };
+  }
+
+  return {
+    kind: 'unknown',
+    dirPath: resolvedDir,
+    hasCapsTs: false,
+    hasCapDirs: false,
+    hasManifest: false,
+  };
 }
 
 // ---------------------------------------------------------------------------
