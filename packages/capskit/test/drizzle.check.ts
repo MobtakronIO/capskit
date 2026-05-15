@@ -61,7 +61,7 @@ describe('Drizzle Capsule', () => {
 
     test('throws error when sql is missing', async () => {
       await expect(capskit.call('drizzle.query', { body: {} }))
-        .rejects.toThrow("requires field 'sql' in payload");
+        .rejects.toThrow("Field 'sql' is required");
     });
 
     test('throws error when drizzle not available', async () => {
@@ -84,7 +84,7 @@ describe('Drizzle Capsule', () => {
 
     test('throws error when sql is missing', async () => {
       await expect(capskit.call('drizzle.execute', { body: {} }))
-        .rejects.toThrow("requires field 'sql' in payload");
+        .rejects.toThrow("Field 'sql' is required");
     });
   });
 
@@ -111,7 +111,7 @@ describe('Drizzle Capsule', () => {
 
     test('throws error when operations is missing', async () => {
       await expect(capskit.call('drizzle.transaction', { body: {} }))
-        .rejects.toThrow("requires field 'operations' in payload");
+        .rejects.toThrow("Field 'operations' is required");
     });
   });
 
