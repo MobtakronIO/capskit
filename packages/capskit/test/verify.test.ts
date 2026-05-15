@@ -16,6 +16,7 @@ import { runCacheTests } from './suites/cache.suite';
 import { runSchemaValidationTests } from './suites/schema-validation.suite';
 import { runResiliencyTests } from './suites/resiliency.suite';
 import { runInvokeTellTests } from './suites/invoke-tell.suite';
+import { runDualFormatBootTests } from './suites/dual-format-boot.suite';
 
 import { test } from 'vitest';
 
@@ -137,8 +138,9 @@ async function verify() {
     await runSchemaValidationTests(createCapsKit);
     await runResiliencyTests(createCapsKit);
     await runCacheTests();
-    await runInvokeTellTests(createCapsKit);
-    console.log('✅ All automated test suites passed');
+   await runInvokeTellTests(createCapsKit);
+   await runDualFormatBootTests(createCapsKit);
+   console.log('✅ All automated test suites passed');
  }
 
 test('verify CapsKit core', async () => {

@@ -950,3 +950,285 @@ describe('Registry Manifest Merge Specifics', () => {
     expect(() => convertRegistryToManifest(registry)).toThrow(CapLoadError);
   });
 });
+
+// ===========================================================================
+// 9. CapActionMeta MERGING (Per-Method Metadata)
+// ===========================================================================
+
+describe('CapActionMeta Merging', () => {
+  test('action description from meta.actions overrides default', () => {
+    class TestCap { async doWork(input: any, ctx: any) { return {}; } }
+    const def: CapDefinition = {
+      class: TestCap,
+      meta: {
+        name: 'test',
+        actions: {
+          doWork: { description: 'Custom description for doWork' },
+        },
+      },
+    };
+    const manifest = convertCapToManifest(def);
+    expect(manifest.actions.doWork.description).toBe('Custom description for doWork');
+  });
+
+  test('default description used when no CapActionMeta entry', () => {
+    class TestCap { async action(input: any, ctx: any) { return {}; } }
+    const def: CapDefinition = { class: TestCap, meta: { name: 'test' } };
+    const manifest = convertCapToManifest(def);
+    expect(manifest.actions.action.description).toBe('Cap "test" action: action');
+  });
+
+  test('inputSchema from meta.actions is propagated', () => {
+    class TestCap { async sum(input: any, ctx: any) { return {}; } }
+    const schema = { type: 'object' as const, properties: { a: { type: 'number' as const } }, required: ['a'] };
+    const def: CapDefinition = {
+      class: TestCap,
+      meta: {
+        name: 'math',
+        actions: { sum: { inputSchema: schema } },
+      },
+    };
+    const manifest = convertCapToManifest(def);
+    expect(manifest.actions.sum.inputSchema).toEqual(schema);
+  });
+
+  test('deprecated schema field is mapped to inputSchema', () => {
+    class TestCap { async sum(input: any, ctx: any) { return {}; } }
+    const schema = { type: 'object' as const, properties: { a: { type: 'number' as const } } };
+    const def: CapDefinition = {
+      class: TestCap,
+      meta: {
+        name: 'math',
+        actions: { sum: { schema } },
+      },
+    };
+    const manifest = convertCapToManifest(def);
+    expect(manifest.actions.sum.inputSchema).toEqual(schema);
+  });
+
+  test('outputSchema from meta.actions is propagated', () => {
+    class TestCap { async get(input: any, ctx: any) { return {}; } }
+    const outputSchema = {
+      strict: true,
+      schema: { type: 'object' as const, properties: { id: { type: 'string' as const } } },
+    };
+    const def: CapDefinition = {
+      class: TestCap,
+      meta: {
+        name: 'test',
+        actions: { get: { outputSchema } },
+      },
+    };
+    const manifest = convertCapToManifest(def);
+    expect(manifest.actions.get.outputSchema).toEqual(outputSchema);
+  });
+
+  test('cache from meta.actions is propagated', () => {
+    class TestCap { async data(input: any, ctx: any) { return {}; } }
+    const cache = { ttl: 60000, storage: 'memory' as const };
+    const def: CapDefinition = {
+      class: TestCap,
+      meta: {
+        name: 'test',
+        actions: { data: { cache } },
+      },
+    };
+    const manifest = convertCapToManifest(def);
+    expect(manifest.actions.data.cache).toEqual(cache);
+  });
+
+  test('resiliency from meta.actions is propagated', () => {
+    class TestCap { async fragile(input: any, ctx: any) { return {}; } }
+    const resiliency = { fallback: { type: 'retry' as const, maxRetries: 3 } };
+    const def: CapDefinition = {
+      class: TestCap,
+      meta: {
+        name: 'test',
+        actions: { fragile: { resiliency } },
+      },
+    };
+    const manifest = convertCapToManifest(def);
+    expect(manifest.actions.fragile.resiliency).toEqual(resiliency);
+  });
+
+  test('multiple action metas are merged independently', () => {
+    class TestCap {
+      async create(input: any, ctx: any) { return {}; }
+      async delete(input: any, ctx: any) { return {}; }
+    }
+    const def: CapDefinition = {
+      class: TestCap,
+      meta: {
+        name: 'crud',
+        actions: {
+          create: { description: 'Creates a resource' },
+          delete: { description: 'Deletes a resource' },
+        },
+      },
+    };
+    const manifest = convertCapToManifest(def);
+    expect(manifest.actions.create.description).toBe('Creates a resource');
+    expect(manifest.actions.delete.description).toBe('Deletes a resource');
+  });
+
+  test('registry manifest merges action meta across caps', () => {
+    class CapA { async shared(input: any, ctx: any) { return {}; } async onlyA(input: any, ctx: any) { return {}; } }
+    class CapB { async shared(input: any, ctx: any) { return {}; } }
+    const registry: CapsuleRegistry = {
+      name: 'merged',
+      caps: [
+        {
+          class: CapA,
+          meta: {
+            name: 'a',
+            actions: {
+              shared: { description: 'from cap A' },
+              onlyA: { description: 'exclusive to A' },
+            },
+          },
+        },
+        {
+          class: CapB,
+          meta: {
+            name: 'b',
+            actions: {
+              shared: { description: 'from cap B (last wins)' },
+            },
+          },
+        },
+      ],
+    };
+    const manifest = convertRegistryToManifest(registry);
+    expect(manifest.actions.shared.description).toBe('from cap B (last wins)');
+    expect(manifest.actions.onlyA.description).toBe('exclusive to A');
+  });
+
+  test('no actions meta object is fine — defaults used', () => {
+    class TestCap { async work(input: any, ctx: any) { return {}; } }
+    const def: CapDefinition = { class: TestCap, meta: { name: 'test' } };
+    const manifest = convertCapToManifest(def);
+    expect(manifest.actions.work.inputSchema).toBeUndefined();
+    expect(manifest.actions.work.outputSchema).toBeUndefined();
+    expect(manifest.actions.work.cache).toBeUndefined();
+    expect(manifest.actions.work.resiliency).toBeUndefined();
+  });
+});
+
+// ===========================================================================
+// 10. CONSTRUCTOR DI (Dependency Injection into CapClass)
+// ===========================================================================
+
+describe('Constructor DI', () => {
+  test('convertCapToManifest passes deps to constructor when provided', () => {
+    let receivedDeps: any = null;
+    class DiCap {
+      constructor(deps?: Record<string, any>) {
+        receivedDeps = deps;
+      }
+      async action(input: any, ctx: any) { return {}; }
+    }
+    const def: CapDefinition = { class: DiCap, meta: { name: 'di-test' } };
+    const deps = { db: { query: () => {} }, redis: { get: () => {} } };
+    convertCapToManifest(def, undefined, deps);
+    expect(receivedDeps).toBe(deps);
+  });
+
+  test('convertCapToManifest works with no deps (backward compat)', () => {
+    class SimpleCap { async action(input: any, ctx: any) { return { ok: true }; } }
+    const def: CapDefinition = { class: SimpleCap, meta: { name: 'simple' } };
+    // Should not throw — no constructor args
+    const manifest = convertCapToManifest(def);
+    expect(manifest.name).toBe('simple');
+  });
+
+  test('convertRegistryToManifest passes deps to each cap constructor', () => {
+    const received: string[] = [];
+    class CapA {
+      constructor(deps?: any) { received.push('a:' + (deps?.key ?? 'none')); }
+      async a(input: any, ctx: any) { return {}; }
+    }
+    class CapB {
+      constructor(deps?: any) { received.push('b:' + (deps?.key ?? 'none')); }
+      async b(input: any, ctx: any) { return {}; }
+    }
+    const registry: CapsuleRegistry = {
+      name: 'di-registry',
+      caps: [
+        { class: CapA, meta: { name: 'a' } },
+        { class: CapB, meta: { name: 'b' } },
+      ],
+    };
+    convertRegistryToManifest(registry, { key: 'my-value' });
+    expect(received).toContain('a:my-value');
+    expect(received).toContain('b:my-value');
+  });
+
+  test('constructor DI with convertCapsToManifests (still works, no deps)', () => {
+    class CapA { async a(input: any, ctx: any) { return {}; } }
+    class CapB { async b(input: any, ctx: any) { return {}; } }
+    const defs: CapDefinition[] = [
+      { class: CapA, meta: { name: 'a' } },
+      { class: CapB, meta: { name: 'b' } },
+    ];
+    const manifests = convertCapsToManifests(defs);
+    expect(manifests).toHaveLength(2);
+    expect(manifests[0].name).toBe('a');
+    expect(manifests[1].name).toBe('b');
+  });
+});
+
+// ===========================================================================
+// 11. BOOT LIFECYCLE ON CapMeta
+// ===========================================================================
+
+describe('Boot Lifecycle on CapMeta', () => {
+  test('convertCapToManifest includes boot when meta.boot is defined', () => {
+    class BootCap { async action(input: any, ctx: any) { return {}; } }
+    const boot: any = { init: async () => {}, timeout: 5000 };
+    const def: CapDefinition = {
+      class: BootCap,
+      meta: { name: 'boot-test', boot },
+    };
+    const manifest = convertCapToManifest(def);
+    expect(manifest.boot).toBeDefined();
+    expect(manifest.boot?.init).toBe(boot.init);
+    expect(manifest.boot?.timeout).toBe(5000);
+  });
+
+  test('convertCapToManifest omits boot when not defined', () => {
+    class SimpleCap { async action(input: any, ctx: any) { return {}; } }
+    const def: CapDefinition = { class: SimpleCap, meta: { name: 'no-boot' } };
+    const manifest = convertCapToManifest(def);
+    expect(manifest.boot).toBeUndefined();
+  });
+
+  test('convertRegistryToManifest picks first cap boot', () => {
+    class CapA { async a(input: any, ctx: any) { return {}; } }
+    class CapB { async b(input: any, ctx: any) { return {}; } }
+    const bootA: any = { init: async () => { /* from A */ } };
+    const bootB: any = { init: async () => { /* from B */ } };
+    const registry: CapsuleRegistry = {
+      name: 'boot-first',
+      caps: [
+        { class: CapA, meta: { name: 'a', boot: bootA } },
+        { class: CapB, meta: { name: 'b', boot: bootB } },
+      ],
+    };
+    const manifest = convertRegistryToManifest(registry);
+    expect(manifest.boot?.init).toBe(bootA.init);
+  });
+
+  test('convertRegistryToManifest omits boot when no caps have it', () => {
+    class CapA { async a(input: any, ctx: any) { return {}; } }
+    class CapB { async b(input: any, ctx: any) { return {}; } }
+    const registry: CapsuleRegistry = {
+      name: 'no-boot-registry',
+      caps: [
+        { class: CapA, meta: { name: 'a' } },
+        { class: CapB, meta: { name: 'b' } },
+      ],
+    };
+    const manifest = convertRegistryToManifest(registry);
+    expect(manifest.boot).toBeUndefined();
+  });
+});

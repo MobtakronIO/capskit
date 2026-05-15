@@ -1,3 +1,4 @@
+export { default as drizzleCaps } from './caps';
 export * from './manifest';
 export * from './src/actions/query';
 export * from './src/actions/execute';

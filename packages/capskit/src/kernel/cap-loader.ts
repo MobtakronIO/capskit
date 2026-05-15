@@ -919,9 +919,10 @@ export function wrapCapHandler(
 export function convertCapToManifest(
   capDef: CapDefinition,
   capsuleName?: string,
+  deps?: Record<string, any>,
 ): CapsuleManifest {
   const { class: CapClassCtor, meta } = capDef;
-  const instance = new CapClassCtor();
+  const instance = deps !== undefined ? new CapClassCtor(deps) : new CapClassCtor();
   const capName = capsuleName || meta.name;
 
   // Build actions from class methods
@@ -931,11 +932,42 @@ export function convertCapToManifest(
     (n) => n !== 'constructor' && typeof (instance as any)[n] === 'function',
   );
 
+  // Per-method metadata from CapActionMeta (if defined)
+  const actionMetaMap = meta.actions || {};
+
   for (const methodName of methodNames) {
-    actions[methodName] = {
+    const capActionMeta = actionMetaMap[methodName];
+
+    const actionDef: ActionDefinition = {
       handler: wrapCapHandler((instance as any)[methodName].bind(instance)),
-      description: `Cap "${capName}" action: ${methodName}`,
+      description: capActionMeta?.description ?? `Cap "${capName}" action: ${methodName}`,
     };
+
+    // Propagate inputSchema (and deprecated schema field)
+    if (capActionMeta?.inputSchema) {
+      actionDef.inputSchema = capActionMeta.inputSchema;
+    } else if ((capActionMeta as any)?.schema) {
+      // Deprecated `schema` field maps to inputSchema
+      actionDef.inputSchema = (capActionMeta as any).schema;
+      actionDef.schema = (capActionMeta as any).schema;
+    }
+
+    // Propagate outputSchema
+    if (capActionMeta?.outputSchema) {
+      actionDef.outputSchema = capActionMeta.outputSchema;
+    }
+
+    // Propagate cache config
+    if (capActionMeta?.cache) {
+      actionDef.cache = capActionMeta.cache;
+    }
+
+    // Propagate resiliency config
+    if (capActionMeta?.resiliency) {
+      actionDef.resiliency = capActionMeta.resiliency;
+    }
+
+    actions[methodName] = actionDef;
   }
 
   if (Object.keys(actions).length === 0) {
@@ -972,6 +1004,11 @@ export function convertCapToManifest(
   // Map routes (adapter-specific, stored as extra manifest keys)
   if (meta.routes && meta.routes.length > 0) {
     (manifest as any).routes = meta.routes;
+  }
+
+  // Map boot lifecycle
+  if (meta.boot) {
+    manifest.boot = meta.boot;
   }
 
   return manifest;
@@ -1177,7 +1214,10 @@ export async function loadCapsRegistry(dirPath: string): Promise<CapsuleRegistry
  * // manifest.actions.sum, manifest.actions.multiply, ...
  * ```
  */
-export function convertRegistryToManifest(registry: CapsuleRegistry): CapsuleManifest {
+export function convertRegistryToManifest(
+  registry: CapsuleRegistry,
+  deps?: Record<string, any>,
+): CapsuleManifest {
   const { name, caps } = registry;
 
   const allActions: Record<string, ActionDefinition> = {};
@@ -1185,17 +1225,23 @@ export function convertRegistryToManifest(registry: CapsuleRegistry): CapsuleMan
   const allPublishes: Set<string> = new Set();
   const allSubscribes: CapEventSubscription[] = [];
   const allDependencies: Set<string> = new Set();
+  let firstBoot: CapsuleManifest['boot'] = undefined;
 
   for (const capDef of caps) {
     const { class: CapClassCtor, meta } = capDef;
-    const instance = new CapClassCtor();
+    const instance = deps !== undefined ? new CapClassCtor(deps) : new CapClassCtor();
     const proto = Object.getPrototypeOf(instance);
     const methodNames = Object.getOwnPropertyNames(proto).filter(
       (n) => n !== 'constructor' && typeof (instance as any)[n] === 'function',
     );
 
+    // Per-method metadata from CapActionMeta (if defined)
+    const actionMetaMap = meta.actions || {};
+
     // Register actions for this cap
     for (const methodName of methodNames) {
+      const capActionMeta = actionMetaMap[methodName];
+
       if (allActions[methodName]) {
         // Duplicate action name across caps — last wins (as documented)
         console.warn(
@@ -1203,10 +1249,37 @@ export function convertRegistryToManifest(registry: CapsuleRegistry): CapsuleMan
           `capsule "${name}". The last definition will be used.`,
         );
       }
-      allActions[methodName] = {
+
+      const actionDef: ActionDefinition = {
         handler: wrapCapHandler((instance as any)[methodName].bind(instance)),
-        description: `Cap "${meta.name}" action: ${methodName}`,
+        description: capActionMeta?.description ?? `Cap "${meta.name}" action: ${methodName}`,
       };
+
+      // Propagate inputSchema (and deprecated schema field)
+      if (capActionMeta?.inputSchema) {
+        actionDef.inputSchema = capActionMeta.inputSchema;
+      } else if ((capActionMeta as any)?.schema) {
+        // Deprecated `schema` field maps to inputSchema
+        actionDef.inputSchema = (capActionMeta as any).schema;
+        actionDef.schema = (capActionMeta as any).schema;
+      }
+
+      // Propagate outputSchema
+      if (capActionMeta?.outputSchema) {
+        actionDef.outputSchema = capActionMeta.outputSchema;
+      }
+
+      // Propagate cache config
+      if (capActionMeta?.cache) {
+        actionDef.cache = capActionMeta.cache;
+      }
+
+      // Propagate resiliency config
+      if (capActionMeta?.resiliency) {
+        actionDef.resiliency = capActionMeta.resiliency;
+      }
+
+      allActions[methodName] = actionDef;
     }
 
     // Merge routes
@@ -1231,6 +1304,11 @@ export function convertRegistryToManifest(registry: CapsuleRegistry): CapsuleMan
       for (const dep of meta.dependencies) {
         allDependencies.add(dep);
       }
+    }
+
+    // Capture first cap's boot lifecycle (first wins)
+    if (firstBoot === undefined && meta.boot) {
+      firstBoot = meta.boot;
     }
   }
 
@@ -1267,6 +1345,11 @@ export function convertRegistryToManifest(registry: CapsuleRegistry): CapsuleMan
   // Attach routes
   if (allRoutes.length > 0) {
     (manifest as any).routes = allRoutes;
+  }
+
+  // Attach boot lifecycle (first cap's boot wins)
+  if (firstBoot) {
+    manifest.boot = firstBoot;
   }
 
   return manifest;

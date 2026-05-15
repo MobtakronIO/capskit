@@ -1,8 +1,9 @@
-import { ICapsKit, CapsKitConfig, CapsuleManifest, CapsuleSource, ActionInterceptor, ActionContext, ActionHandler, ResiliencyConfig, CircuitBreakerState } from '../types';
+import { ICapsKit, CapsKitConfig, CapsuleManifest, CapsuleSource, ActionInterceptor, ActionContext, ActionHandler, ResiliencyConfig, CircuitBreakerState, CapsuleFormatDetection } from '../types';
+import * as fs from 'fs';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { loadCapsules } from './loader';
-import { loadCapsFromDirectory, convertCapsToManifests, loadCapsRegistriesFromDirectory, convertRegistriesToManifests, loadCapsRegistry, convertRegistryToManifest } from './cap-loader';
+import { loadCapsFromDirectory, convertCapsToManifests, loadCapsRegistriesFromDirectory, convertRegistriesToManifests, loadCapsRegistry, convertRegistryToManifest, detectCapsuleFormat } from './cap-loader';
 import { createInvokeProxy, createTellProxy } from './invoke-proxy';
 import { builtinCapsules } from '../capsules/builtin';
 import { NotFoundError, InternalError, ValidationError, DependencyError } from './errors';
@@ -231,29 +232,45 @@ export class CapsKit implements ICapsKit {
     for (const source of sources) {
       if (source.type === 'directory') {
         const absoluteDir = path.resolve(source.path);
-        const manifests = await loadCapsules(absoluteDir);
-        for (const manifest of manifests) {
-          const sourceDir = manifest['__capsuleDir'] as string | undefined;
-          await this.registerCapsule(manifest, sourceDir);
-        }
-      } else if (source.type === 'cap-directory') {
-        const absoluteDir = path.resolve(source.path);
 
-        // Strategy: try caps.ts registry first, fall back to .cap directory scanning
-        const registry = await loadCapsRegistry(absoluteDir);
+        // First, check if the directory itself has a recognizable format
+        const rootFormat = detectCapsuleFormat(absoluteDir);
 
-        if (registry) {
-          // caps.ts found — convert the single registry to a manifest
-          const manifest = convertRegistryToManifest(registry);
-          await this.registerCapsule(manifest, absoluteDir);
+        if (rootFormat.kind !== 'unknown') {
+          // The directory itself is a capsule — load it directly
+          await this.loadCapsuleFromFormat(rootFormat, absoluteDir);
         } else {
-          // No caps.ts — scan for .cap subdirectories (legacy cap-per-directory mode)
-          const capDefs = await loadCapsFromDirectory(absoluteDir);
-          const manifests = convertCapsToManifests(capDefs);
-          for (const manifest of manifests) {
-            await this.registerCapsule(manifest, absoluteDir);
+          // Scan subdirectories and detect format for each
+          if (fs.existsSync(absoluteDir)) {
+            const entries = fs.readdirSync(absoluteDir, { withFileTypes: true });
+            for (const entry of entries) {
+              if (!entry.isDirectory()) continue;
+              const subDir = path.resolve(absoluteDir, entry.name);
+              const subFormat = detectCapsuleFormat(subDir);
+
+              if (subFormat.kind === 'unknown') {
+                // Silently skip directories with no recognized format
+                continue;
+              }
+
+              await this.loadCapsuleFromFormat(subFormat, subDir);
+            }
           }
         }
+      } else if (source.type === 'cap-directory') {
+        // Directly load .cap subdirectories — no format detection needed
+        const absoluteDir = path.resolve(source.path);
+        await this.loadCapsuleFromFormat(
+          { kind: 'cap-directories', dirPath: absoluteDir, hasCapsTs: false, hasCapDirs: true, hasManifest: false },
+          absoluteDir
+        );
+      } else if (source.type === 'caps-registry') {
+        // Directly load caps.ts registry — no format detection needed
+        const absoluteDir = path.resolve(source.path);
+        await this.loadCapsuleFromFormat(
+          { kind: 'caps-registry', dirPath: absoluteDir, hasCapsTs: true, hasCapDirs: false, hasManifest: false },
+          absoluteDir
+        );
       } else if (source.type === 'manifest') {
         await this.registerCapsule(source.manifest, undefined);
       } else if (source.type === 'package') {
@@ -289,6 +306,60 @@ export class CapsKit implements ICapsKit {
     }
 
     return null;
+  }
+
+  /**
+   * Load a capsule from a detected format and register it.
+   * Routes to the appropriate loader based on the CapsuleFormatDetection kind.
+   *
+   * This is the central dispatch for the dual loading path:
+   * - caps-registry → loadCapsRegistry + convertRegistryToManifest
+   * - cap-directories → loadCapsFromDirectory + convertCapsToManifests
+   * - legacy-manifest → loadCapsules (scan for manifest.ts in subdirectories)
+   *
+   * @param format - The detected capsule format (from detectCapsuleFormat)
+   * @param dirPath - Absolute path to the capsule directory
+   */
+  private async loadCapsuleFromFormat(format: CapsuleFormatDetection, dirPath: string): Promise<void> {
+    switch (format.kind) {
+      case 'caps-registry': {
+        const registry = await loadCapsRegistry(dirPath);
+        if (registry) {
+          const manifest = convertRegistryToManifest(registry);
+          await this.registerCapsule(manifest, dirPath);
+          kernelLogger.debug(`[boot] Registered capsule "${registry.name}" via caps.ts registry`);
+        }
+        break;
+      }
+
+      case 'cap-directories': {
+        const capDefs = await loadCapsFromDirectory(dirPath);
+        const manifests = convertCapsToManifests(capDefs);
+        for (const manifest of manifests) {
+          await this.registerCapsule(manifest, dirPath);
+          kernelLogger.debug(`[boot] Registered capsule "${manifest.name}" via .cap directory`);
+        }
+        break;
+      }
+
+      case 'legacy-manifest': {
+        const manifests = await loadCapsules(dirPath);
+        for (const manifest of manifests) {
+          const sourceDir = manifest['__capsuleDir'] as string | undefined;
+          await this.registerCapsule(manifest, sourceDir || dirPath);
+          kernelLogger.debug(`[boot] Registered capsule "${manifest.name}" via legacy manifest`);
+        }
+        break;
+      }
+
+      case 'unknown': {
+        kernelLogger.warn(
+          `[boot] No recognized capsule format in "${dirPath}". ` +
+          `Expected one of: caps.ts (registry), .cap subdirectories, or manifest.ts.`
+        );
+        break;
+      }
+    }
   }
 
   private async registerCapsule(manifest: CapsuleManifest, sourceDir?: string): Promise<void> {
