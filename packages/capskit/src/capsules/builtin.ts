@@ -1,10 +1,10 @@
 import { CapsuleManifest } from '../types';
 import { convertRegistryToManifest } from '../kernel/cap-loader';
 import systemCaps from './system/caps';
-import { service as httpService } from './http/manifest';
+import httpCaps from './http/caps';
+import websocketCaps from './websocket/caps';
 import { service as calculatorService } from './capskit-calculator/manifest';
-import { service as websocketService } from './websocket/manifest';
-import { service as drizzleService } from './drizzle/manifest';
+import drizzleCaps from './drizzle/caps';
 
 /**
  * Built-in capsules registered at kernel startup.
@@ -16,8 +16,8 @@ import { service as drizzleService } from './drizzle/manifest';
  */
 export const builtinCapsules: CapsuleManifest[] = [
   convertRegistryToManifest(systemCaps),
-  httpService,
+  convertRegistryToManifest(httpCaps),
   calculatorService,
-  websocketService,
-  drizzleService,
+  convertRegistryToManifest(websocketCaps),
+  convertRegistryToManifest(drizzleCaps),
 ];
