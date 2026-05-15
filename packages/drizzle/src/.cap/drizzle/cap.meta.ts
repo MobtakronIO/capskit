@@ -1,4 +1,4 @@
-import { CapMeta } from '../../../../types';
+import { CapMeta } from '@mobtakronio/capskit';
 
 /**
  * Metadata for the drizzle cap.

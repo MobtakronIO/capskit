@@ -20,7 +20,6 @@ import { validateManifestShape, validateManifestDependencies, validatePayload, v
 import { traceCall, closeTraceSink } from './tracing';
 import { validateFallbackChain } from './resiliency';
 import { kernelLogger } from './logger';
-import { createDrizzleFromEnv } from './db-bootstrap';
 
 export class CapsKit implements ICapsKit {
   private capsuleSources = new Map<string, string>();
@@ -57,18 +56,7 @@ export class CapsKit implements ICapsKit {
   // ==========================================================================
 
   async start(): Promise<any> {
-    // 1. Initialize Drizzle from env vars if CAPSKIT_DB_URL is set
-    if (process.env.CAPSKIT_DB_URL) {
-      const drizzle = await createDrizzleFromEnv();
-      if (drizzle) {
-        this.dependencies.drizzle = drizzle;
-        kernelLogger.info('Drizzle ORM initialized');
-      } else {
-        kernelLogger.warn('CAPSKIT_DB_URL is set but Drizzle failed to initialize. Install drizzle-orm and the appropriate driver.');
-      }
-    }
-
-    // 2. Accept injected cache adapter from config (cache is an injectable dependency)
+    // 1. Accept injected cache adapter from config (cache is an injectable dependency)
     // The kernel does NOT auto-initialize cache. Users provide a CacheAdapter
     // via config.cacheAdapter or set capsKit.cacheAdapter before calling start().
     if (this.config.cacheAdapter) {
@@ -76,14 +64,14 @@ export class CapsKit implements ICapsKit {
       kernelLogger.info('Cache adapter injected via config');
     }
 
-    // 3. Register built-in capsules
+    // 2. Register built-in capsules
     for (const manifest of builtinCapsules) {
       if (!this.manifests.has(manifest.name)) {
         await this.registerCapsule(manifest, undefined);
       }
     }
 
-    // 4. Process custom capsule sources with explicit precedence
+    // 3. Process custom capsule sources with explicit precedence
     const sources: CapsuleSource[] = [];
 
     if (this.config.capsules) {
@@ -98,13 +86,13 @@ export class CapsKit implements ICapsKit {
       await this.processSource(source);
     }
 
-    // 5. Initialize cache middleware with registered actions
+    // 4. Initialize cache middleware with registered actions
     if (this.cacheAdapter) {
       const cacheMiddleware = new CacheMiddleware(this.cacheAdapter, this.actions);
       this.interceptors.unshift(cacheMiddleware.createInterceptor());
     }
 
-    // 6. Execute boot action if specified
+    // 5. Execute boot action if specified
     if (this.config.boot) {
       return await this.call(this.config.boot.action, this.config.boot.payload || {}, { fromUse: true });
     }

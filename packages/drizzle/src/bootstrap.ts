@@ -1,13 +1,12 @@
 /**
- * Database Bootstrap for CapsKit.
+ * Database Bootstrap for CapsKit Drizzle Capsule.
  *
  * Constructs a Drizzle ORM instance from CAPSKIT_DB_* environment variables.
  * Supports Postgres (via @neondatabase/serverless) and SQLite (via better-sqlite3).
  *
- * Extracted from platform.ts to reduce the god class size.
+ * Moved here from the kernel — drizzle is a user capsule, not a kernel concern.
+ * The kernel has zero knowledge of how Drizzle is constructed.
  */
-
-import { kernelLogger } from './logger';
 
 /**
  * Pool configuration for Postgres (neon).
@@ -115,9 +114,10 @@ export async function createDrizzleFromEnv(): Promise<unknown> {
       return drizzle(sql);
     } else if (provider === 'sqlite') {
       if (hasPoolConfig) {
-        kernelLogger.warn(
-          'Pool settings (CAPSKIT_DB_POOL_*) are not applicable for SQLite (better-sqlite3 is synchronous).',
-        );
+        const message =
+          'Pool settings (CAPSKIT_DB_POOL_*) are not applicable for SQLite (better-sqlite3 is synchronous).';
+        // Use console.warn since this lives outside the kernel (no kernelLogger)
+        console.warn(`[capskit-drizzle] ${message}`);
       }
 
       const betterSqlite3Module = await import('better-sqlite3');
@@ -134,8 +134,8 @@ export async function createDrizzleFromEnv(): Promise<unknown> {
     }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    kernelLogger.warn(
-      `Failed to initialize ${provider} database: ${message}`,
+    console.warn(
+      `[capskit-drizzle] Failed to initialize ${provider} database: ${message}`,
     );
     return undefined;
   }

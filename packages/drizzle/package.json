@@ -1,0 +1,52 @@
+{
+  "name": "@mobtakronio/capskit-drizzle",
+  "version": "0.1.0",
+  "description": "Drizzle ORM capsule for CapsKit — injectable database access with Postgres and SQLite support",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "clean": "rm -rf dist",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "capskit",
+    "drizzle",
+    "orm",
+    "database",
+    "capsule"
+  ],
+  "peerDependencies": {
+    "@mobtakronio/capskit": "^0.5.0"
+  },
+  "peerDependenciesMeta": {
+    "@mobtakronio/capskit": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@mobtakronio/capskit": "*",
+    "@types/better-sqlite3": "^7.6.13",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
+  }
+}

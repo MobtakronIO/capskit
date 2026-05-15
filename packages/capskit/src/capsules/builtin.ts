@@ -5,7 +5,6 @@ import systemCaps from './system/caps';
 import httpCaps from './http/caps';
 import websocketCaps from './websocket/caps';
 import calculatorCaps from './capskit-calculator/caps';
-import drizzleCaps from './drizzle/caps';
 
 /**
  * Built-in capsules registered at kernel startup.
@@ -15,6 +14,10 @@ import drizzleCaps from './drizzle/caps';
  * to a CapsuleManifest for the kernel's boot pipeline.
  *
  * Order: kernel first (boot, cache, inspect), then user-facing capsules.
+ *
+ * NOTE: drizzle is NOT a builtin. It's a standalone user capsule
+ * (@mobtakronio/capskit-drizzle) that users opt into via config.capsules
+ * or config.dependencies.
  */
 export const builtinCapsules: CapsuleManifest[] = [
   convertRegistryToManifest(kernelCaps),
@@ -22,5 +25,4 @@ export const builtinCapsules: CapsuleManifest[] = [
   convertRegistryToManifest(httpCaps),
   convertRegistryToManifest(calculatorCaps),
   convertRegistryToManifest(websocketCaps),
-  convertRegistryToManifest(drizzleCaps),
 ];

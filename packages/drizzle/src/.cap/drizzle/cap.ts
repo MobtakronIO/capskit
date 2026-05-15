@@ -1,4 +1,4 @@
-import { ActionInput, CapContext } from '../../../../types';
+import { ActionInput, CapContext } from '@mobtakronio/capskit';
 
 /**
  * Cap: drizzle — Drizzle ORM database operations.
