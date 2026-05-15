@@ -2,6 +2,8 @@
 
 This guide helps you migrate from direct `capskit.call()` usage to the recommended `capskit.use('capsule').action()` pattern.
 
+> **Note**: This guide covers the `call()` → `use()` API migration. For migrating from the legacy `manifest.ts` format to the **Cap model** (`caps.ts` + `.cap/` directories), see the [Cap model migration guide](../capsules.md#migration-guide-manifest--cap-model). In the Cap model, `ctx.call()` becomes `ctx.invoke()` for RPC and `ctx.tell()` for fire-and-forget.
+
 ## Why Migrate?
 
 | Aspect | `capskit.call('x.y', payload)` | `capsule.action(payload)` |

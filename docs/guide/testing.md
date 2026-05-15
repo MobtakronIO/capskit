@@ -2,6 +2,8 @@
 
 Testing CapsKit applications is straightforward because actions are pure functions. This guide covers unit testing actions, integration testing capsules, and mocking dependencies.
 
+> **Note**: Testing works identically whether you use the Cap model or legacy manifest format. Action handlers are always pure functions — the loading format doesn't change how you test.
+
 ## Unit Testing Actions
 
 Actions are simple `async` functions. Test them in isolation:

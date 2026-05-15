@@ -2,6 +2,8 @@
 
 CapsKit provides a structured error model for predictable error handling across adapters. This guide covers the built-in error types, custom errors, and error mapping strategies.
 
+> **Note**: Error handling works identically in both the **Cap model** (`caps.ts` + `.cap/` directories) and the legacy `manifest.ts` format. Errors thrown in CapClass methods are processed through the same kernel pipeline regardless of how the capsule was loaded. See [Capsules](./capsules.md) for Cap model details.
+
 ## Error Hierarchy
 
 ```

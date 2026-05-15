@@ -2,6 +2,8 @@
 
 Hooks allow you to run logic before and after an action handler executes. They're perfect for cross-cutting concerns like validation, logging, authentication, and result transformation.
 
+> **Note**: The examples below use the legacy `CapsuleManifest` format. In the recommended **Cap model**, hooks are configured per-action in `cap.meta.ts`. See [Capsules](./capsules.md) for full Cap model documentation.
+
 ## Overview
 
 CapsKit supports two types of hooks:

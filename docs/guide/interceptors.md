@@ -2,6 +2,8 @@
 
 Interceptors are global middleware that wrap every action call in the system. They're perfect for cross-cutting concerns like logging, metrics, authentication, and error handling.
 
+> **Note**: Interceptors work identically in both the Cap model and legacy manifest format. They are kernel-level middleware and are register-independent.
+
 ## Overview
 
 Unlike hooks (which are action-specific), interceptors run for **every** action call. They form a chain around the action execution:

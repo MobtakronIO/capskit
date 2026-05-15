@@ -2,6 +2,8 @@
 
 CapsKit supports third-party adapter plugins that provide HTTP and WebSocket transport capabilities. Adapters must follow a defined contract to ensure compatibility with the CapsKit kernel.
 
+> **Note**: This document covers the adapter plugin contract. Adapters work with both the **Cap model** (`caps.ts` + `.cap/` directories) and the legacy `manifest.ts` format — they introspect the kernel's manifest registry regardless of the source format. See [Capsules](../guide/capsules.md) for Cap model details.
+
 ## Manifest Contract
 
 Adapters can export an `AdapterPluginManifest` to declare their compatibility and capabilities. This manifest enables CapsKit to:

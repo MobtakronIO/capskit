@@ -2,6 +2,8 @@
 
 The built-in event bus allows capsules to communicate asynchronously through a publish-subscribe pattern. Capsules can publish events that other capsules subscribe to, enabling loose coupling and reactive architectures.
 
+> **Note**: The examples below use the legacy `CapsuleManifest` format. In the recommended **Cap model**, event subscriptions are declared in each Cap's `cap.meta.ts`. See [Capsules](./capsules.md) for Cap model details.
+
 ## Overview
 
 The event bus works by:

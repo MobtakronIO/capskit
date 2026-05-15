@@ -2,6 +2,8 @@
 
 Capsule Clients provide a type-safe, ergonomic way to call actions from other capsules. Instead of using raw string-based `call()` methods, you get native-feeling objects with IDE autocompletion.
 
+> **Note**: Examples use the legacy `CapsuleManifest` format. In the Cap model, `context.use()` works identically — the only difference is how capsules are loaded. See [Capsules](./capsules.md) for full Cap model details.
+
 ## The Problem
 
 Without capsule clients, calling actions across capsules is verbose and untyped:

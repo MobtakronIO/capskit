@@ -39,10 +39,22 @@ No `Request`. No `Response`. The transport adapter (HTTP, WS) is responsible for
 
 Traditional frameworks: You write middleware, routes, controllers, services, manually connect them. Every new capability requires touching multiple files and understanding the complex wiring.
 
-CapsKit: You declare actions in a manifest. The kernel reads the manifest and generates the wiring automatically.
+CapsKit: You declare caps with metadata in `cap.meta.ts` and compose them into a CapsuleRegistry via `caps.ts`. The kernel reads the registry and generates the wiring automatically.
 
 ```ts
-// Declarative
+// Declarative: cap.meta.ts
+export const meta: CapMeta = {
+  name: 'user',
+  actions: {
+    create: { description: 'Create a new user' },
+    delete: { description: 'Delete a user' }
+  },
+  routes: [{ method: 'POST', path: '/users', action: 'create' }]
+}
+```
+
+The legacy `manifest.ts` pattern is also supported for backward compatibility:
+```ts
 export const service = {
   name: 'user',
   actions: { create: {...}, delete: {...} },
@@ -89,9 +101,9 @@ This achieves **framework agnosticism**. You can drop your capsule into any Caps
 CapsKit uses:
 - **TypeScript** for compile-time type checking
 - **JSON Schema** for runtime validation
-- **Manifest types** for structure enforcement
+- **CapMeta and CapsuleManifest types** for structure enforcement
 
-The manifest itself is typed:
+Both `CapMeta` (for the Cap model) and `CapsuleManifest` (legacy) are fully typed:
 ```ts
 interface CapsuleManifest {
   name: string;
@@ -166,20 +178,22 @@ Benefits:
 - Clear contracts (what does this capsule need?)
 - No circular dependency surprises
 
-## Manifest as Single Source of Truth
+## Cap Registry as Single Source of Truth
 
-**Principle**: The manifest declares everything the kernel needs to know.
+**Principle**: The CapsuleRegistry (`caps.ts`) and Cap metadata (`cap.meta.ts`) declare everything the kernel needs to know.
 
 - What actions exist
 - What events are published/subscribed
 - What routes are exposed
 - What dependencies are required
 
+The legacy `manifest.ts` pattern serves the same role for backward compatibility.
+
 This enables:
 - **Automatic documentation generation**
 - **Validation at boot time**
 - **Introspection** (`capskit.describe('capsule-name')`)
-- **IDE support** (manifest is typed)
+- **IDE support** (CapMeta and CapsuleManifest are typed)
 
 ## Minimalism
 

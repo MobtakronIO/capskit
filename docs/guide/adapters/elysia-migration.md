@@ -2,6 +2,8 @@
 
 This guide helps you migrate from legacy Elysia adapter patterns to the unified `@capskit/adapter-elysia` package.
 
+> **Note**: This guide covers adapter-level migration. For migrating capsules from the legacy `manifest.ts` format to the **Cap model** (`caps.ts` + `.cap/` directories), see the [Cap model migration guide](../capsules.md#migration-guide-manifest--cap-model). The adapter itself is format-agnostic and works with both capsule styles.
+
 ## Overview
 
 The unified adapter provides:

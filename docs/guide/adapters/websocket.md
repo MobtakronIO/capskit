@@ -2,6 +2,8 @@
 
 The WebSocket adapter exposes capsule actions as WebSocket events using the Elysia WebSocket plugin. This guide covers socket setup, message routing, and real-time patterns.
 
+> **Note**: Examples use the legacy `CapsuleManifest` format for socket event declarations. In the Cap model, socket events are declared in each Cap's `cap.meta.ts`. See [Capsules](./capsules.md) for details.
+
 ## Setup
 
 ```ts

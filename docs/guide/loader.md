@@ -4,11 +4,49 @@ The CapsKit kernel discovers and loads capsules from various sources. This guide
 
 ## Capsule Sources
 
-Capsules can be loaded from three types of sources:
+Capsules can be loaded from four types of sources. The **caps-registry** type (using `caps.ts` with the CapsuleRegistry format) is the recommended approach for new projects. The legacy `manifest` and `directory` types are fully supported for backward compatibility.
 
-### 1. Directory
+### 1. Caps Registry (Recommended)
 
-Load all capsules from a folder:
+Use a `CapsuleRegistry` defined in a `caps.ts` file — the modern Cap model:
+
+```ts
+// caps.ts
+import { CalculatorCap } from './.cap/calculator/cap'
+import { GreeterCap } from './.cap/greeter/cap'
+import { CapsuleRegistry } from '@mobtakronio/capskit'
+
+export const registry: CapsuleRegistry = {
+  name: 'my-capsule',
+  registry: {
+    'calculator': CalculatorCap,
+    'greeter': GreeterCap
+  }
+}
+```
+
+Then boot with the `caps-registry` source type:
+
+```ts
+const capskit = await createCapsKit({
+  capsules: [
+    { type: 'caps-registry', registry: myRegistry }
+  ]
+})
+```
+
+The kernel converts the registry to manifests, discovers each Cap's metadata from `cap.meta.ts`, and wires everything together. This is the recommended approach because:
+
+- **Cleaner separation**: Each cap lives in its own `.cap/<name>/` directory with `cap.ts` and `cap.meta.ts`
+- **Class-based handlers**: Actions are organized as methods on a class
+- **Explicit composition**: The registry makes the capsule structure visible at a glance
+- **Richer metadata**: `CapMeta` supports routes, events, dependencies, and action descriptions
+
+See [Capsules](./capsules.md) for full details on the Cap model.
+
+### 2. Directory
+
+Load all capsules from a folder (legacy `manifest.ts` pattern):
 
 ```ts
 const capskit = await createCapsKit({
@@ -33,7 +71,7 @@ src/capsules/
     └── actions/
 ```
 
-### 2. Manifest Inline
+### 3. Manifest Inline
 
 Define a capsule directly in the config:
 
@@ -66,7 +104,7 @@ const capskit = await createCapsKit({
 
 Useful for quick prototypes or tiny capsules.
 
-### 3. NPM Package
+### 4. NPM Package
 
 Import a capsule from an npm package:
 
@@ -231,6 +269,7 @@ events: {
 1. **Built-in capsules** are registered first (hardcoded list for packaging safety)
 2. **Custom sources** are processed in declared order
 3. For each source:
+   - **Caps Registry**: Accept a `CapsuleRegistry` → call `convertRegistryToManifest()` to produce legacy-compatible manifests → instantiate Cap classes → register each cap's actions
    - **Directory**: Scan subfolders → import `manifest.ts` → extract `service`/`manifest`/`default` → store `__capsuleDir` for handler resolution
    - **Manifest**: Use provided object directly
    - **Package**: Import package → extract `service`/`default` → register
@@ -285,11 +324,15 @@ This is equivalent to:
 
 ### Skipping Files
 
-The loader only looks for:
+For **directory** sources, the loader looks for:
 - `manifest.ts` (TypeScript)
 - `manifest.js` (JavaScript)
 
-Other files in the capsule folder are ignored unless imported by actions.
+For **caps-registry** sources, the loader processes Caps defined in `.cap/<name>/` directories:
+- `.cap/<name>/cap.ts` — Cap class (default export)
+- `.cap/<name>/cap.meta.ts` — Cap metadata (named export)
+
+Other files in the capsule folder are ignored unless imported by actions or explicitly referenced in the registry's `caps.ts`.
 
 ### Dynamic Loading
 

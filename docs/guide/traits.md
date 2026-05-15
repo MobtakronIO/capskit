@@ -2,6 +2,8 @@
 
 Traits allow you to declare transport-specific metadata on your capsule routes. They're processed by adapters (like HTTP) to add cross-cutting concerns like authentication, rate limiting, and authorization.
 
+> **Note**: Examples use the legacy `CapsuleManifest` format. In the recommended **Cap model**, routes and traits are declared in each Cap's `cap.meta.ts`. See [Capsules](./capsules.md) for the Cap model.
+
 ## Overview
 
 Traits are declared in your capsule manifest's `routes` configuration. They're not processed by CapsKit directly—instead, adapters receive them and apply the appropriate behavior.

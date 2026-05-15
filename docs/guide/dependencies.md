@@ -2,6 +2,8 @@
 
 Dependencies are external services injected into actions via `context.deps`. This guide covers dependency declaration, injection, testing, and best practices.
 
+> **Note**: Examples use `createCapsKit` directly. In the Cap model, dependencies are declared the same way — only the capsule loading method differs (`caps-registry` vs legacy `manifest`). See [Capsules](./capsules.md) and [Loader](./loader.md).
+
 ## Declaring Dependencies
 
 Dependencies are declared at boot time when creating the CapsKit instance:

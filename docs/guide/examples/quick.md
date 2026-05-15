@@ -1,11 +1,53 @@
 # Quick Examples
 
-Common patterns and snippets for everyday CapsKit usage.
+Common patterns and snippets for everyday CapsKit usage. Examples cover both the modern **Cap model** (`caps.ts` + `.cap/` directories) and the legacy **manifest** format.
 
-## Basic Capsule
+## Basic Cap (Recommended)
 
 ```ts
-// src/capsules/hello/manifest.ts
+// .cap/greeter/cap.ts
+export default class GreeterCap {
+  async greet(payload: { name?: string }) {
+    const { name } = payload || {}
+    return { message: `Hello, ${name || 'World'}!` }
+  }
+}
+
+// .cap/greeter/cap.meta.ts
+import { CapMeta } from '@mobtakronio/capskit'
+
+export const meta: CapMeta = {
+  name: 'greeter',
+  description: 'A greeting cap',
+  actions: {
+    greet: { description: 'Return a greeting message' }
+  }
+}
+
+// caps.ts
+import { GreeterCap } from './.cap/greeter/cap'
+import { CapsuleRegistry } from '@mobtakronio/capskit'
+
+export const registry: CapsuleRegistry = {
+  name: 'hello',
+  registry: { 'greeter': GreeterCap }
+}
+
+// Boot
+const capskit = await createCapsKit({
+  capsules: [{ type: 'caps-registry', registry }]
+})
+
+// Use
+const greeter = capskit.use('hello').greeter
+const result = await greeter.greet({ name: 'World' })
+// → { message: 'Hello, World!' }
+```
+
+## Basic Capsule (Legacy)
+
+```ts
+// src/capsules/hello/manifest.ts (legacy — see Cap model above for new projects)
 import { CapsuleManifest } from '@mobtakronio/capskit';
 
 export const service: CapsuleManifest = {

@@ -2,6 +2,8 @@
 
 When your architecture scales, managing raw string events like `capskit.call('billing.chargeUser', payload)` can become cumbersome and untyped.
 
+> **Note**: Capsule Clients work identically in both the **Cap model** (`caps.ts` + `.cap/` directories) and the legacy `manifest.ts` format. In the Cap model, client types can be exported from `cap.meta.ts` alongside the Cap's metadata. See [Capsules](../capsules.md) for full Cap model details.
+
 To drastically improve developer experience, CapsKit provides the **Capsule Client Proxy**. 
 
 This feature allows you to instantly generate a local, native-feeling object that transparently points back to the Kernel's capability engine.

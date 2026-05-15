@@ -8,17 +8,47 @@ Traditional architectures tightly couple your business constraints to the transp
 
 ## The CapsKit Solution
 
-CapsKit completely separates "what the system can do" from "how the system is told to do it." It ditches the controller entirely in favor of a declarative **Capsule Manifest**.
+CapsKit completely separates "what the system can do" from "how the system is told to do it." It ditches the controller entirely in favor of **Caps**—pure, transport-agnostic classes whose public methods are your business logic.
 
-A **Capsule** is a plug-and-play collection of business capabilities (pure actions). An action takes a simple payload, uses injected dependencies, and returns a raw result. It is blissfully ignorant of HTTP, WebSockets, or background workers.
+### Caps & Capsules — the Composition Model
 
-The **Platform Kernel** (CapsKit core) loads these capsules, analyzes their `manifest.ts` metadata, and orchestrates the entire application universe:
-1. **Dynamic Adapters**: It enables adapters to automatically generate transport layers (like binding an Elysia HTTP router) based purely on the defined metadata.
-2. **Event Routing**: It acts as a loosely-coupled Event Bus, dynamically wiring Publishers directly to asynchronous Subscribers.
-3. **Execution Pipeline**: It wraps every capability inside a universal Onion-ring execution pipeline (Interceptors) ensuring platform constraints like tracing, transactions, or latency logging apply globally.
+CapsKit organizes business logic into a two-level hierarchy:
+
+- **Cap**: The atomic unit. A single class (`cap.ts`) containing action methods, paired with a declarative metadata contract (`cap.meta.ts`) that declares routes, events, dependencies, and per-action configuration. A Cap is blissfully ignorant of HTTP, WebSockets, or background workers.
+
+- **Capsule**: The composition unit. Groups one or more Caps under a single deployable name via a `CapsuleRegistry` (`caps.ts`). This is what you register with the kernel—a cohesive collection of related capabilities.
+
+```
+my-capsule/
+├── caps.ts                 # CapsuleRegistry — composes caps into a capsule
+├── .cap/
+│   ├── calculator/
+│   │   ├── cap.ts          # CapClass — business logic (class with action methods)
+│   │   └── cap.meta.ts     # CapMeta — routes, events, dependencies, boot
+│   └── audit/
+│       ├── cap.ts
+│       └── cap.meta.ts
+└── manifest.ts (optional)  # Legacy manifest — co-exists during migration
+```
+
+Each `.cap/` directory contains exactly two files:
+
+| File | Purpose |
+| :--- | :--- |
+| `cap.ts` | A class whose public methods are action handlers—takes a payload, uses injected dependencies, returns a raw result |
+| `cap.meta.ts` | Declarative metadata describing the cap's identity, HTTP routes, published/subscribed events, dependencies, and boot lifecycle |
+
+The **Platform Kernel** (CapsKit core) loads capsules (either as CapsuleRegistries, directory scans, or npm packages), converts them into internal representations, and orchestrates the entire application universe:
+
+1. **Dynamic Adapters**: Transport adapters automatically generate HTTP routers, WebSocket handlers, and other transport bindings based purely on each Cap's declarative route and event metadata—no manual wiring needed.
+
+2. **Event Routing**: The kernel acts as a loosely-coupled Event Bus, dynamically wiring Publishers directly to asynchronous Subscribers based on `cap.meta.ts` event declarations.
+
+3. **Execution Pipeline**: Every capability invocation flows through a universal Onion-ring execution pipeline (Interceptors), ensuring platform constraints like tracing, transactions, or latency logging apply globally—whether the action was triggered via HTTP, WebSocket, event, or internal call.
 
 ### Key Design Principles
 
-- **Zero Boundary Logic**: Capsules do not expose network ports or import web frameworks.
-- **Traits as Metadata**: Transport configurations (like Authorization or Rate Limiting) are defined as pure metadata `traits` inside `manifest.ts`. The transport adapters translate these into real middleware seamlessly.
-- **Universal Uniformity**: Whether an action is called by a public API user, a fellow Capsule, or an automatic CRON job, the execution path and middleware lifecycle remain exactly the same inside the `platform.call()` Kernel execution engine.
+- **Zero Boundary Logic**: Caps do not expose network ports or import web frameworks. They are pure TypeScript classes.
+- **Traits as Metadata**: Transport configurations (like Authorization or Rate Limiting) are defined as pure metadata `traits` inside `cap.meta.ts`. The transport adapters translate these into real middleware seamlessly.
+- **Universal Uniformity**: Whether an action is called by a public API user, a fellow Cap, or an automatic CRON job, the execution path and middleware lifecycle remain exactly the same inside the kernel's execution engine.
+- **Backward Compatible**: CapsKit continues to support legacy `manifest.ts`-based capsules. You can migrate gradually—Caps and legacy manifests co-exist within the same capsule directory.

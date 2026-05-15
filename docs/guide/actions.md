@@ -2,6 +2,8 @@
 
 Actions are the executable units of CapsKit. Each action implements a single, well-defined capability. This guide covers action implementation, the `ActionContext`, return values, and error handling.
 
+> **Note**: The examples below use the legacy `manifest.ts` format for simplicity. In the recommended **Cap model**, actions are methods on a Cap class and metadata is declared in `cap.meta.ts`. See [Capsules](./capsules.md) for the full Cap model documentation.
+
 ## Action Structure
 
 An action is an `async` function with this signature:

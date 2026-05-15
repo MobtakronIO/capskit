@@ -82,7 +82,7 @@ layout: home
   <div class="why-card">
     <div class="why-icon">🧩</div>
     <h3>Declarative by Design</h3>
-    <p>Define capabilities, dependencies, and transport metadata in a single `manifest.ts`. No more scattering routing logic across controllers, middleware, and config files.</p>
+    <p>Define capabilities as Caps with `cap.ts` + `cap.meta.ts`, compose them via `caps.ts`, and let the kernel auto-discover everything. No more scattering routing logic across controllers, middleware, and config files.</p>
   </div>
   <div class="why-card">
     <div class="why-icon">🔒</div>
@@ -178,8 +178,8 @@ layout: home
         <p>Capabilities are written once and invoked consistently through adapters, events, or internal calls.</p>
       </div>
       <div class="comparison-item">
-        <strong>Manifest drives the system</strong>
-        <p>Contracts, routes, traits, hooks, and dependencies are declared in one capsule-centered shape.</p>
+        <strong>Caps drive the system</strong>
+        <p>Contracts, routes, traits, hooks, and dependencies are declared on each Cap and composed into a CapsuleRegistry via <code>caps.ts</code>.</p>
       </div>
       <div class="comparison-item">
         <strong>Kernel handles composition</strong>

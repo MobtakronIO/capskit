@@ -2,6 +2,8 @@
 
 The HTTP adapter exposes capsule actions as HTTP endpoints using the Elysia framework (or Express). This guide covers route generation, traits, middleware, and customization.
 
+> **Note**: Examples use the legacy `CapsuleManifest` format for routes. In the Cap model, routes are declared in each Cap's `cap.meta.ts` and the adapter processes them identically. See [Capsules](./capsules.md) for details.
+
 ## Setup
 
 ```ts
