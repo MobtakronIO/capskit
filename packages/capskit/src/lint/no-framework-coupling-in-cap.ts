@@ -3,7 +3,7 @@
  *
  * Detects framework-specific imports inside `cap.ts` files within `.cap/`
  * directories.  Caps should contain pure business logic — framework coupling
- * belongs in adapters (e.g., `@mobtakronio/capskit-http-elysia`).
+ * belongs in adapters (e.g., `@mobtakronio/elysia`).
  *
  * This rule scans the import declarations of `cap.ts` (or `cap.js`) files
  * and flags any import from a known web-framework package or a capsKit
@@ -76,8 +76,6 @@ const BANNED_FRAMEWORK_PACKAGES = new Set([
  * These should be used only in bootstrapping code, not inside cap.ts.
  */
 const BANNED_CAPSKIT_ADAPTER_PACKAGES = new Set([
-  '@mobtakronio/capskit-http-elysia',
-  '@mobtakronio/capskit-websocket-elysia',
   '@mobtakronio/elysia',
 ]);
 

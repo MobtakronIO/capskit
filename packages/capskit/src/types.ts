@@ -283,6 +283,25 @@ export type ActionPreHook = (input: ActionInput, context: ActionContext) => Prom
 export type ActionPostHook = (input: ActionInput, result: any, context: ActionContext) => Promise<any> | any;
 
 /**
+ * Cache adapter contract for multi-backend caching.
+ *
+ * This is the kernel-side interface. Implementations live in
+ * the @mobtakronio/capskit-cache package (memory, sqlite, redis).
+ *
+ * Cache is an injectable dependency — the kernel does NOT initialize
+ * a cache adapter on its own. Users provide one via CapsKitConfig.cacheAdapter.
+ */
+export interface CacheAdapter {
+  get(key: string): Promise<any | null>;
+  set(key: string, value: any, ttl: number): Promise<void>;
+  delete(key: string): Promise<void>;
+  clear(): Promise<void>;
+  health(): Promise<{ backend: string; connected: boolean }>;
+}
+
+export type CacheStorageType = 'memory' | 'sqlite' | 'redis';
+
+/**
  * Cache configuration for action-level caching.
  * When specified on an action, results are cached based on the action name and input payload.
  */
@@ -1338,6 +1357,15 @@ export interface CapsKitConfig {
     action: string;
     payload?: any;
   };
+  /**
+   * Inject a cache adapter for action-level caching.
+   *
+   * Cache is NOT auto-initialized by the kernel. The user is responsible for
+   * creating a CacheAdapter (via @mobtakronio/capskit-cache or a custom implementation)
+   * and passing it here. If provided, a CacheMiddleware interceptor is registered
+   * during start() to enable write-through caching for actions that declare cache config.
+   */
+  cacheAdapter?: CacheAdapter;
   /**
    * When enabled, emits console warnings when `capskit.call()` is used directly.
    * Useful for catching accidental usage of the internal API in application code.

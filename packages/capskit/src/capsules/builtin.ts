@@ -1,23 +1,26 @@
 import { CapsuleManifest } from '../types';
 import { convertRegistryToManifest } from '../kernel/cap-loader';
+import kernelCaps from '../caps';
 import systemCaps from './system/caps';
 import httpCaps from './http/caps';
 import websocketCaps from './websocket/caps';
-import { service as calculatorService } from './capskit-calculator/manifest';
+import calculatorCaps from './capskit-calculator/caps';
 import drizzleCaps from './drizzle/caps';
 
 /**
  * Built-in capsules registered at kernel startup.
  *
- * The system capsule is now defined via caps.ts (CapsuleRegistry)
- * and converted to a CapsuleManifest here for backward compatibility
- * with the kernel's boot pipeline.  The remaining capsules still use
- * the legacy manifest.ts format.
+ * All capsules follow the .cap pattern (caps.ts registry + .cap/ subdirectories)
+ * including the kernel itself (../caps.ts). Each CapsuleRegistry is converted
+ * to a CapsuleManifest for the kernel's boot pipeline.
+ *
+ * Order: kernel first (boot, cache, inspect), then user-facing capsules.
  */
 export const builtinCapsules: CapsuleManifest[] = [
+  convertRegistryToManifest(kernelCaps),
   convertRegistryToManifest(systemCaps),
   convertRegistryToManifest(httpCaps),
-  calculatorService,
+  convertRegistryToManifest(calculatorCaps),
   convertRegistryToManifest(websocketCaps),
   convertRegistryToManifest(drizzleCaps),
 ];

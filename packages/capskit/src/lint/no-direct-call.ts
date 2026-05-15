@@ -24,6 +24,7 @@ const CALL_METHOD_NAME = 'call';
 export const rule: Rule.RuleModule = {
   meta: {
     type: 'problem',
+    hasSuggestions: true,
     docs: {
       description: 'Disallow direct `capskit.call()` usage in application code',
       recommended: 'warn',

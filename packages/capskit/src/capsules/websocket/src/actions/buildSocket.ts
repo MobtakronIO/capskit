@@ -16,12 +16,12 @@ export const buildSocket: ActionHandler = async (payload, context) => {
   if (typeof adapter === 'function') {
     adapterFn = adapter as WebSocketAdapter;
   } else if (typeof adapter === 'string') {
-    const packageName = adapter === 'elysia' ? '@mobtakronio/capskit-websocket-elysia' : adapter;
+    const packageName = adapter === 'elysia' ? '@mobtakronio/elysia' : adapter;
     try {
       // Dynamic import of the adapter package
       const module = await import(packageName);
-      // Try common export names: default, createSocket, or the module itself if it's a function
-      adapterFn = module.default || module.createSocket || (typeof module === 'function' ? module : undefined);
+      // Prefer createSocket (specific WebSocket adapter) over default (unified adapter)
+      adapterFn = module.createSocket || module.default || (typeof module === 'function' ? module : undefined);
       
       if (!adapterFn) {
         throw new Error(`Package "${packageName}" does not export a valid WebSocket adapter (expected default export or "createSocket").`);

@@ -6,7 +6,8 @@
 import {
   CapsuleManifest,
   ActionDefinition,
-  ActionInterceptor
+  ActionInterceptor,
+  CacheAdapter,
 } from '../types';
 import { EventRegistry } from './events';
 import { ResiliencyManager } from './resiliency';
@@ -24,7 +25,7 @@ export class KernelState {
   private _capsuleSources = new Map<string, string>();
   private _interceptors: ActionInterceptor[] = [];
   private _dependencies: Record<string, any> = {};
-  private _cacheAdapter: ReturnType<typeof import('../cache').createCacheAdapter> | null = null;
+  private _cacheAdapter: CacheAdapter | null = null;
 
   readonly events: EventRegistry;
   readonly resiliency: ResiliencyManager;
@@ -54,7 +55,7 @@ export class KernelState {
   addInterceptor(interceptor: ActionInterceptor): void { this._interceptors.push(interceptor); }
   setDependency(key: string, value: any): void { this._dependencies[key] = value; }
   hasDependency(key: string): boolean { return key in this._dependencies; }
-  setCacheAdapter(adapter: ReturnType<typeof import('../cache').createCacheAdapter> | null): void { this._cacheAdapter = adapter; }
+  setCacheAdapter(adapter: CacheAdapter | null): void { this._cacheAdapter = adapter; }
 
   shutdown(): void {
     this.resiliency.shutdown();

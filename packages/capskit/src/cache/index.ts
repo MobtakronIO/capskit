@@ -1,15 +1,15 @@
 /**
- * Cache module for CapsKit action-level caching.
- * 
- * Provides multi-backend caching with support for:
- * - Memory: In-process Map-based cache (default)
- * - SQLite: Persistent cache using better-sqlite3
- * - Redis: Distributed cache using ioredis
+ * Cache module — kernel-side cache bridge.
+ *
+ * The kernel owns the CacheAdapter contract (defined in types.ts)
+ * and connects adapters to the interceptor chain via CacheMiddleware.
+ *
+ * All adapter implementations live in @mobtakronio/capskit-cache.
+ * Cache is an injectable dependency — pass cacheAdapter via config.dependencies.
  */
 
-// Re-export all cache types and functions
-export type { CacheAdapter, CacheStorageType } from './adapters';
-export { MemoryCacheAdapter, createMemoryCache } from './memory';
-export { SqliteCacheAdapter, createSqliteCache } from './sqlite';
-export { RedisCacheAdapter, createRedisCache } from './redis';
-export { CacheMiddleware, createCacheAdapter, parseCacheEnvDefault } from './middleware';
+// Re-export contract from types
+export type { CacheAdapter, CacheStorageType } from '../types';
+
+// Kernel-side middleware bridge
+export { CacheMiddleware } from './middleware';

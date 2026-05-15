@@ -8,3 +8,4 @@ node_modules/
 docs/.vitepress/dist
 docs/.vitepress/cache
 dist/
+"packages/capskit/docs/.vitepress/cache/"  

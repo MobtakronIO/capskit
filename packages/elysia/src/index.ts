@@ -45,6 +45,28 @@ function getWebSocketOptions(options: CreateElysiaAdapterOptions): WebSocketOpti
   return undefined;
 }
 
+/**
+ * Create a unified Elysia adapter combining HTTP and/or WebSocket transports.
+ *
+ * @param capskit - The CapsKit kernel instance
+ * @param options - Adapter options controlling which transports to enable
+ * @returns Object with `app` (Elysia instance), `sockets`, and `shutdown` function
+ *
+ * @example
+ * ```ts
+ * // Combined HTTP + WebSocket
+ * const { app, sockets, shutdown } = await createElysiaAdapter(capskit, {
+ *   http: true,
+ *   websocket: true,
+ * });
+ *
+ * // HTTP only
+ * const { app } = await createElysiaAdapter(capskit, { http: true });
+ *
+ * // WebSocket only
+ * const { sockets } = await createElysiaAdapter(capskit, { websocket: true });
+ * ```
+ */
 export async function createElysiaAdapter(capskit: ICapsKit, options: CreateElysiaAdapterOptions = {}): Promise<UnifiedElysiaAdapter> {
   const httpOptions = getHttpOptions(options);
   const wsOptions = getWebSocketOptions(options);

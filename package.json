@@ -11,11 +11,7 @@
     "docs:dev": "npm run docs:dev -w @mobtakronio/capskit"
   },
   "devDependencies": {
-    "@types/semver": "^7.7.1",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3"
-  },
-  "dependencies": {
-    "semver": "^7.7.4"
   }
 }

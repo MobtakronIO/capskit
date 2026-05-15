@@ -26,10 +26,11 @@ export default class BuildSocketCap {
     if (typeof adapter === 'function') {
       adapterFn = adapter as WebSocketAdapter;
     } else if (typeof adapter === 'string') {
-      const packageName = adapter === 'elysia' ? '@mobtakronio/capskit-websocket-elysia' : adapter;
+      const packageName = adapter === 'elysia' ? '@mobtakronio/elysia' : adapter;
       try {
         const module = await import(packageName);
-        adapterFn = module.default || module.createSocket || (typeof module === 'function' ? module : undefined);
+        // Prefer createSocket (specific WebSocket adapter) over default (unified adapter)
+        adapterFn = module.createSocket || module.default || (typeof module === 'function' ? module : undefined);
 
         if (!adapterFn) {
           throw new Error(

@@ -1,7 +1,7 @@
 {
-  "name": "@mobtakronio/elysia",
-  "version": "0.2.0",
-  "description": "Elysia adapter for CapsKit — HTTP and WebSocket transport in one package",
+  "name": "@mobtakronio/capskit-cache",
+  "version": "0.1.0",
+  "description": "Pluggable cache adapters for CapsKit — memory, Redis, SQLite backends with middleware",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -12,21 +12,6 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
-    },
-    "./http": {
-      "types": "./dist/http/index.d.ts",
-      "import": "./dist/http/index.js",
-      "require": "./dist/http/index.cjs"
-    },
-    "./websocket": {
-      "types": "./dist/websocket/index.d.ts",
-      "import": "./dist/websocket/index.js",
-      "require": "./dist/websocket/index.cjs"
-    },
-    "./shared": {
-      "types": "./dist/shared/index.d.ts",
-      "import": "./dist/shared/index.js",
-      "require": "./dist/shared/index.cjs"
     }
   },
   "publishConfig": {
@@ -45,15 +30,14 @@
   },
   "keywords": [
     "capskit",
-    "elysia",
-    "http",
-    "websocket",
-    "adapter",
-    "router"
+    "cache",
+    "redis",
+    "sqlite",
+    "memory",
+    "adapter"
   ],
   "peerDependencies": {
-    "@mobtakronio/capskit": "^0.5.0",
-    "elysia": "^1.4.27"
+    "@mobtakronio/capskit": "^0.5.0"
   },
   "peerDependenciesMeta": {
     "@mobtakronio/capskit": {
@@ -62,7 +46,7 @@
   },
   "devDependencies": {
     "@mobtakronio/capskit": "*",
-    "elysia": "^1.4.27",
+    "@types/better-sqlite3": "^7.6.13",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3"
   }

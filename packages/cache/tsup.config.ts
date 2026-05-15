@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['index.ts'],
+  entry: ['src/index.ts'],
   format: ['cjs', 'esm'],
   dts: true,
   splitting: false,
@@ -10,5 +10,5 @@ export default defineConfig({
   minify: true,
   outDir: 'dist',
   target: 'node20',
-  external: ['elysia', '@mobtakronio/capskit']
+  external: ['@mobtakronio/capskit']
 });

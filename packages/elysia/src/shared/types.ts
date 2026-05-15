@@ -80,4 +80,4 @@ export type TraitHandler = (traitValue: unknown, context: unknown) => void | Pro
 export type CreateRouterFn = (capskit: ICapsKit, options?: HttpOptions) => Promise<any> | any;
 export type CreateSocketFn = (capskit: ICapsKit, options?: WebSocketOptions) => Promise<any> | any;
 
-export { ICapsKit, CapsuleManifest };
+export { ICapsKit };

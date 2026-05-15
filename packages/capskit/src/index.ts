@@ -1,3 +1,12 @@
+// ── Kernel CapsuleRegistry (the kernel itself follows the .cap pattern) ──
+export { default as kernelCaps } from './caps';
+export { default as BootCap } from './.cap/boot/cap';
+export { meta as bootCapMeta } from './.cap/boot/cap.meta';
+export { default as CacheCap } from './.cap/cache/cap';
+export { meta as cacheCapMeta } from './.cap/cache/cap.meta';
+export { default as InspectCap } from './.cap/inspect/cap';
+export { meta as inspectCapMeta } from './.cap/inspect/cap.meta';
+
 export * from './kernel/platform';
 export { loadCapsules, loadCapCapsules } from './kernel/loader';
 export { loadCapsFromDirectory, loadCapFromDir, convertCapToManifest, convertCapsToManifests, validateCapMeta, validateCapClass, validateCapsuleRegistry, loadCapsRegistry, convertRegistryToManifest, convertRegistriesToManifests, loadCapsRegistriesFromDirectory, detectCapsuleFormat, CapLoadError } from './kernel/cap-loader';

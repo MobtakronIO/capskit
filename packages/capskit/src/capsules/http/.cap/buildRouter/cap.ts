@@ -26,10 +26,11 @@ export default class BuildRouterCap {
     if (typeof adapter === 'function') {
       adapterFn = adapter as HttpAdapter;
     } else if (typeof adapter === 'string') {
-      const packageName = adapter === 'elysia' ? '@mobtakronio/capskit-http-elysia' : adapter;
+      const packageName = adapter === 'elysia' ? '@mobtakronio/elysia' : adapter;
       try {
         const module = await import(packageName);
-        adapterFn = module.default || module.createRouter || (typeof module === 'function' ? module : undefined);
+        // Prefer createRouter (specific HTTP adapter) over default (unified adapter)
+        adapterFn = module.createRouter || module.default || (typeof module === 'function' ? module : undefined);
 
         if (!adapterFn) {
           throw new Error(
