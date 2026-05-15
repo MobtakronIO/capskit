@@ -13,11 +13,27 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
-    "./lint": {
+    "./lint/no-direct-call": {
       "types": "./dist/lint/no-direct-call.d.ts",
       "import": "./dist/lint/no-direct-call.js",
       "require": "./dist/lint/no-direct-call.cjs"
-    }
+    },
+    "./lint/no-cap-meta-missing": {
+      "types": "./dist/lint/no-cap-meta-missing.d.ts",
+      "import": "./dist/lint/no-cap-meta-missing.js",
+      "require": "./dist/lint/no-cap-meta-missing.cjs"
+    },
+    "./lint/no-cap-logic-missing": {
+      "types": "./dist/lint/no-cap-logic-missing.d.ts",
+      "import": "./dist/lint/no-cap-logic-missing.js",
+      "require": "./dist/lint/no-cap-logic-missing.cjs"
+    },
+    "./lint/caps-registry-required": {
+      "types": "./dist/lint/caps-registry-required.d.ts",
+      "import": "./dist/lint/caps-registry-required.js",
+      "require": "./dist/lint/caps-registry-required.cjs"
+    },
+    "./lint": "./dist/lint/index.js"
   },
   "publishConfig": {
     "access": "public"

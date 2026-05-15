@@ -18,6 +18,9 @@
  */
 
 import noDirectCallRule from './dist/lint/no-direct-call.js';
+import noCapMetaMissingRule from './dist/lint/no-cap-meta-missing.js';
+import noCapLogicMissingRule from './dist/lint/no-cap-logic-missing.js';
+import capsRegistryRequiredRule from './dist/lint/caps-registry-required.js';
 
 export default [
   {
@@ -26,11 +29,17 @@ export default [
       '@capskit': {
         rules: {
           'no-direct-call': noDirectCallRule,
+          'no-cap-meta-missing': noCapMetaMissingRule,
+          'no-cap-logic-missing': noCapLogicMissingRule,
+          'caps-registry-required': capsRegistryRequiredRule,
         },
       },
     },
     rules: {
       '@capskit/no-direct-call': 'warn',
+      '@capskit/no-cap-meta-missing': 'error',
+      '@capskit/no-cap-logic-missing': 'error',
+      '@capskit/caps-registry-required': 'error',
     },
   },
 ];

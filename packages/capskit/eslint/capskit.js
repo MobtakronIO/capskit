@@ -27,7 +27,13 @@
  */
 
 const noDirectCall = require('../lint/no-direct-call').rule;
+const noCapMetaMissing = require('../lint/no-cap-meta-missing').rule;
+const noCapLogicMissing = require('../lint/no-cap-logic-missing').rule;
+const capsRegistryRequired = require('../lint/caps-registry-required').rule;
 
 module.exports = {
   '@capskit/no-direct-call': noDirectCall,
+  '@capskit/no-cap-meta-missing': noCapMetaMissing,
+  '@capskit/no-cap-logic-missing': noCapLogicMissing,
+  '@capskit/caps-registry-required': capsRegistryRequired,
 };

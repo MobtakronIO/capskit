@@ -18,3 +18,6 @@ export type { InvokeProxy, TellProxy, KernelCallFn } from './kernel/invoke-proxy
 
 // ESLint rules
 export { rule as noDirectCallRule } from './lint/no-direct-call';
+export { rule as noCapMetaMissingRule } from './lint/no-cap-meta-missing';
+export { rule as noCapLogicMissingRule } from './lint/no-cap-logic-missing';
+export { rule as capsRegistryRequiredRule } from './lint/caps-registry-required';
