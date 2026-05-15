@@ -1029,7 +1029,45 @@ export interface CapClass {
    * Methods must be async and follow the CapHandler signature:
    * (input: ActionInput, context: CapContext) => Promise<any>
    */
-  [action: string]: (input: ActionInput, context: ActionContext) => Promise<any>;
+  [action: string]: any;
+}
+
+/**
+ * Per-action metadata for a Cap method.
+ * Mirrors the non-handler fields of {@link ActionDefinition},
+ * allowing cap authors to declare per-method validation, caching,
+ * resiliency, and documentation.
+ *
+ * @example
+ * ```typescript
+ * export const meta: CapMeta = {
+ *   name: 'calculator',
+ *   actions: {
+ *     sum: {
+ *       description: 'Adds two numbers together',
+ *       inputSchema: {
+ *         type: 'object',
+ *         properties: { a: { type: 'number' }, b: { type: 'number' } },
+ *         required: ['a', 'b']
+ *       }
+ *     }
+ *   }
+ * };
+ * ```
+ */
+export interface CapActionMeta {
+  /** Human-readable description of what the action does */
+  description?: string;
+  /** Input validation schema (JSON Schema draft-07) */
+  inputSchema?: ActionSchema;
+  /** Output validation with optional strict mode */
+  outputSchema?: OutputValidationOptions;
+  /** @deprecated Use inputSchema instead */
+  schema?: ActionSchema;
+  /** Cache configuration for this action */
+  cache?: CacheConfig;
+  /** Resiliency configuration (fallback, circuit breaker) */
+  resiliency?: ResiliencyConfig;
 }
 
 /**
@@ -1039,7 +1077,7 @@ export interface CapClass {
  *
  * The CapMeta is the Cap-level equivalent of a CapsuleManifest,
  * providing the registry with the information needed to wire up
- * routes, events, and dependency injection.
+ * routes, events, dependency injection, and per-action behavior.
  *
  * @example
  * ```typescript
@@ -1055,7 +1093,16 @@ export interface CapClass {
  *       { event: 'numbers.received', action: 'sum' }
  *     ]
  *   },
- *   dependencies: ['math-utils']
+ *   dependencies: ['math-utils'],
+ *   actions: {
+ *     sum: {
+ *       description: 'Adds two numbers',
+ *       inputSchema: { type: 'object', properties: { a: { type: 'number' }, b: { type: 'number' } }, required: ['a', 'b'] }
+ *     }
+ *   },
+ *   boot: {
+ *     init: async ({ deps }) => { await deps.database.connect(); }
+ *   }
  * };
  * ```
  */
@@ -1065,6 +1112,13 @@ export interface CapMeta {
    * Must be unique across all caps in the same capsule.
    */
   name: string;
+
+  /**
+   * Per-action metadata keyed by method/action name.
+   * Each entry mirrors {@link ActionDefinition} (minus `handler`)
+   * and is merged into the corresponding action during conversion.
+   */
+  actions?: Record<string, CapActionMeta>;
 
   /**
    * HTTP route definitions for this cap.
@@ -1094,6 +1148,15 @@ export interface CapMeta {
    * These are resolved via the capsule's dependency injection container.
    */
   dependencies?: string[];
+
+  /**
+   * Boot lifecycle configuration for this cap.
+   * Controls initialization during the capsule boot sequence.
+   * When a CapsuleRegistry contains multiple caps, each cap's boot
+   * config is merged: init functions run serially in cap order,
+   * and the ready event name is scoped to the cap.
+   */
+  boot?: BootLifecycle;
 }
 
 /**
@@ -1290,6 +1353,7 @@ export interface CapsKitConfig {
 export type CapsuleSource = 
   | { type: 'directory'; path: string }
   | { type: 'cap-directory'; path: string }
+  | { type: 'caps-registry'; path: string }
   | { type: 'manifest'; manifest: CapsuleManifest }
   | { type: 'package'; name: string };
 

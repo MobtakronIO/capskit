@@ -5,8 +5,7 @@ export const meta: CapMeta = {
   version: '1.0.0',
   actions: {
     ping: {
-      description: 'Ping the capsule',
-      returns: 'string',
+      description: 'Ping the capsule - returns a string response',
     },
   },
 };
