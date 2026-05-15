@@ -33,6 +33,16 @@
       "import": "./dist/lint/caps-registry-required.js",
       "require": "./dist/lint/caps-registry-required.cjs"
     },
+    "./lint/no-manifest-in-cap": {
+      "types": "./dist/lint/no-manifest-in-cap.d.ts",
+      "import": "./dist/lint/no-manifest-in-cap.js",
+      "require": "./dist/lint/no-manifest-in-cap.cjs"
+    },
+    "./lint/no-framework-coupling-in-cap": {
+      "types": "./dist/lint/no-framework-coupling-in-cap.d.ts",
+      "import": "./dist/lint/no-framework-coupling-in-cap.js",
+      "require": "./dist/lint/no-framework-coupling-in-cap.cjs"
+    },
     "./lint": "./dist/lint/index.js"
   },
   "publishConfig": {

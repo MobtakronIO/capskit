@@ -21,3 +21,5 @@ export { rule as noDirectCallRule } from './lint/no-direct-call';
 export { rule as noCapMetaMissingRule } from './lint/no-cap-meta-missing';
 export { rule as noCapLogicMissingRule } from './lint/no-cap-logic-missing';
 export { rule as capsRegistryRequiredRule } from './lint/caps-registry-required';
+export { rule as noManifestInCapRule } from './lint/no-manifest-in-cap';
+export { rule as noFrameworkCouplingInCapRule } from './lint/no-framework-coupling-in-cap';

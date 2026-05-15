@@ -8,6 +8,8 @@ export default defineConfig({
     'src/lint/no-cap-meta-missing.ts',
     'src/lint/no-cap-logic-missing.ts',
     'src/lint/caps-registry-required.ts',
+    'src/lint/no-manifest-in-cap.ts',
+    'src/lint/no-framework-coupling-in-cap.ts',
   ],
   format: ['cjs', 'esm'],
   dts: true,
