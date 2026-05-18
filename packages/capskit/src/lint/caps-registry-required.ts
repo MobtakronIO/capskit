@@ -42,7 +42,7 @@ const rule: Rule.RuleModule = {
     },
   },
   create(context) {
-    const filename = context.filename || context.getFilename();
+    const filename = context.filename;
 
     // Skip files inside .cap directories (other rules handle those)
     const capDir = findCapDirectory(filename);

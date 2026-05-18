@@ -35,7 +35,7 @@ const rule: Rule.RuleModule = {
     const options = (context.options?.[0] || {}) as RuleOptions;
     const allowList = options.allowList ?? DEFAULT_ALLOW_LIST;
     const allowInContext = options.allowInContext ?? DEFAULT_ALLOW_IN_CONTEXT;
-    const sourceCode = context.sourceCode ?? context.getSourceCode();
+    const sourceCode = context.sourceCode;
 
     return {
       CallExpression(node: any) {

@@ -51,7 +51,7 @@ const rule: Rule.RuleModule = {
     ],
   },
   create(context) {
-    const filename = context.filename || context.getFilename();
+    const filename = context.filename;
     if (!isCapFile(filename)) return {};
 
     const options = (context.options?.[0] || {}) as RuleOptions;

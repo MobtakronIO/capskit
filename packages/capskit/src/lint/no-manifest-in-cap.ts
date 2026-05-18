@@ -28,7 +28,7 @@ const rule: Rule.RuleModule = {
     ],
   },
   create(context) {
-    const filename = context.filename || context.getFilename();
+    const filename = context.filename;
     const base = path.basename(filename);
     if (!/^manifest\.(ts|js|mjs)$/.test(base)) return {};
 
