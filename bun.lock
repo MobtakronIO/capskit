@@ -29,7 +29,7 @@
       "name": "@mobtakronio/capskit",
       "version": "0.5.0",
       "devDependencies": {
-        "@mobtakronio/elysia": "^0.2.0",
+        "@mobtakronio/capskit-elysia": "^0.2.0",
         "@types/better-sqlite3": "^7.6.13",
         "@types/node": "^25.4.0",
         "@typescript-eslint/eslint-plugin": "^8.57.2",
@@ -45,7 +45,7 @@
       },
     },
     "packages/elysia": {
-      "name": "@mobtakronio/elysia",
+      "name": "@mobtakronio/capskit-elysia",
       "version": "0.2.0",
       "devDependencies": {
         "@mobtakronio/capskit": "*",
@@ -235,7 +235,7 @@
 
     "@mobtakronio/capskit-cache": ["@mobtakronio/capskit-cache@workspace:packages/cache"],
 
-    "@mobtakronio/elysia": ["@mobtakronio/elysia@workspace:packages/elysia"],
+    "@mobtakronio/capskit-elysia": ["@mobtakronio/capskit-elysia@workspace:packages/elysia"],
 
     "@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.1.4", "", { "dependencies": { "@tybys/wasm-util": "^0.10.1" }, "peerDependencies": { "@emnapi/core": "^1.7.1", "@emnapi/runtime": "^1.7.1" } }, "sha512-3NQNNgA1YSlJb/kMH1ildASP9HW7/7kYnRI2szWJaofaS1hWmbGI4H+d3+22aGzXXN9IJ+n+GiFVcGipJP18ow=="],
 

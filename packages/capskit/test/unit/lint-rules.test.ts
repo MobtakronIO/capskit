@@ -101,7 +101,7 @@ mkfile('no-framework/clean.cap/cap.ts', `import { Something } from '../utils';
 export default class CleanCap {}`);
 mkfile('no-framework/framework.cap/cap.ts', `import { Elysia } from 'elysia';
 export default class BadCap {}`);
-mkfile('no-framework/adapter.cap/cap.ts', `import { ElysiaAdapter } from '@mobtakronio/elysia';
+mkfile('no-framework/adapter.cap/cap.ts', `import { ElysiaAdapter } from '@mobtakronio/capskit-elysia';
 export default class BadCap {}`);
 mkfile('no-framework/express.cap/cap.ts', `export default class BadCap {}`);
 mkfile('no-framework/not-cap-dir/some.ts', `import { Elysia } from 'elysia';
@@ -529,12 +529,12 @@ new RuleTester(testerConfig).run(
       },
       // 2. CapsKit adapter import in cap.ts
       {
-        code: `import { ElysiaAdapter } from '@mobtakronio/elysia';\nexport default class BadCap {}`,
+        code: `import { ElysiaAdapter } from '@mobtakronio/capskit-elysia';\nexport default class BadCap {}`,
         filename: '/capskit/adapter.cap/cap.ts',
         errors: [
           {
             messageId: 'adapterImport',
-            data: { importSource: '@mobtakronio/elysia', file: '/capskit/adapter.cap/cap.ts' },
+            data: { importSource: '@mobtakronio/capskit-elysia', file: '/capskit/adapter.cap/cap.ts' },
           },
         ],
       },

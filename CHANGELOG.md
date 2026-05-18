@@ -138,7 +138,7 @@
 #### Monorepo Extraction
 - Extracted HTTP/WebSocket adapters into standalone packages
 - Created unified adapter package consolidating HTTP + WebSocket
-- Moved Elysia integration to @mobtakronio/elysia
+- Moved Elysia integration to @mobtakronio/capskit-elysia
 
 ### 🐛 Bug Fixes
 - Fixed stray closing braces in platform.ts and kernel-state.ts

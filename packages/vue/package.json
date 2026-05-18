@@ -12,6 +12,9 @@
       "require": { "types": "./dist/index.d.cts", "default": "./dist/index.js" }
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "files": ["dist"],
   "scripts": {
     "build": "tsup",
