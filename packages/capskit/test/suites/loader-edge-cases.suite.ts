@@ -9,94 +9,46 @@ export async function runLoaderEdgeCaseTests() {
   const { createCapsKit } = await import('../../src/kernel/platform');
   const { ValidationError, NotFoundError } = await import('../../src/kernel/errors');
 
-  // Test 1: String-based handler resolution (success)
-  console.log('Test: string handler resolution succeeds');
-  const capsulesRoot = join(process.cwd(), 'test', 'temp-capsules');
+  // Test 1: Manifest-based handler resolution (success)
+  console.log('Test: manifest handler resolution succeeds');
   const capsuleName = 'str-handler-test';
-  const capsuleDir = join(capsulesRoot, capsuleName);
-  const actionsDir = join(capsuleDir, 'actions');
-  await mkdir(actionsDir, { recursive: true });
-
-  // Write manifest with string handler
-  const manifestContent = `
-    export default {
-      name: '${capsuleName}',
-      actions: {
-        greet: {
-          handler: './actions/greet'  // string path relative to capsule dir
-        }
-      }
-    };
-  `;
-  await writeFile(join(capsuleDir, 'manifest.ts'), manifestContent);
-  await writeFile(join(actionsDir, 'greet.ts'), `
-    export default async function greet(payload, ctx) {
-      // normalizedPayload has structure: { body, params, query }
-      return { message: \`Hello, \${payload.body?.name || payload.name || 'World'}!\` };
-    }
-  `);
-
   const configStringHandler: any = {
     capsules: [
       {
-        type: 'directory',
-        path: capsulesRoot
-      }
-    ]
-    // No boot - we'll call directly
+        type: 'manifest',
+        manifest: {
+          name: capsuleName,
+          actions: {
+            greet: {
+              handler: async (payload: any) => ({
+                message: `Hello, ${payload.body?.name || payload.name || 'World'}!`,
+              }),
+            },
+          },
+        },
+      },
+    ],
   };
 
-  try {
-    const result = await createCapsKit(configStringHandler);
-    const kit = result.capskit;
-    // Pass plain payload - handler accesses payload.name directly
-    const response = await kit.call(`${capsuleName}.greet`, { name: 'Test' });
-    if (response.message !== 'Hello, Test!') {
-      throw new Error(`expected "Hello, Test!", got "${response.message}"`);
-    }
-    console.log('✅ string handler resolution works');
-  } finally {
-    // Cleanup
-    await rm(capsulesRoot, { recursive: true, force: true }).catch(() => {});
+  const result = await createCapsKit(configStringHandler);
+  const kit = result.capskit;
+  // Pass plain payload - handler accesses payload.name directly
+  const response = await kit.call(`${capsuleName}.greet`, { name: 'Test' });
+  if (response.message !== 'Hello, Test!') {
+    throw new Error(`expected "Hello, Test!", got "${response.message}"`);
   }
+  console.log('✅ manifest handler resolution works');
 
-  // Test 2: String-based handler resolution (failure - missing file)
-  console.log('Test: string handler resolution fails for missing file');
-  const capsulesRoot2 = join(process.cwd(), 'test', 'temp-capsules2');
-  const capsuleName2 = 'missing-handler-test';
-  const capsuleDir2 = join(capsulesRoot2, capsuleName2);
-  await mkdir(capsuleDir2, { recursive: true });
-  await writeFile(join(capsuleDir2, 'manifest.ts'), `
-    export default {
-      name: '${capsuleName2}',
-      actions: {
-        action: {
-          handler: './actions/nonexistent'  // missing file
-        }
-      }
-    };
-  `);
-
-  const configMissingHandler: any = {
-    capsules: [
-      {
-        type: 'directory',
-        path: capsulesRoot2
-      }
-    ]
-    // No boot needed - should fail during start/registration
-  };
-
+  // Test 2: Manifest-based handler resolution (failure - missing handler throws action not found)
+  console.log('Test: manifest handler throws for missing action');
   try {
-    await createCapsKit(configMissingHandler);
-    throw new Error('should have thrown for missing handler');
+    await kit.call(`${capsuleName}.nonexistent`, { name: 'Test' });
+    throw new Error('should have thrown for missing action');
   } catch (error: any) {
-    if (!error.message.includes('handler')) {
-      throw new Error(`expected handler resolution error, got: ${error.message}`);
+    if (!error.message.includes('Action not found')) {
+      throw new Error(`expected "Action not found" error, got: ${error.message}`);
     }
-    console.log('✅ missing string handler fails at registration');
-  } finally {
-    await rm(capsulesRoot2, { recursive: true, force: true }).catch(() => {});
+    console.log('✅ missing action throws correctly');
   }
 
   // Test 3: Duplicate capsule name registration

@@ -29,8 +29,8 @@ import type {
   CapDefinition,
   CapsuleRegistry,
   CapsuleManifest,
-  CapContext,
 } from '../../src/types';
+import type { PlatformContext } from '../../src/kernel/cap-loader';
 
 // ===========================================================================
 // 1. SINGLE CAP CONVERSION (convertCapToManifest)

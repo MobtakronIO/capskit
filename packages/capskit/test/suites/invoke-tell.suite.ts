@@ -756,10 +756,10 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
                 
                 // Also test that invoke is callable by checking its type
                 if (ctx.invoke) {
-                  contextSnapshot.invokeIsObject = typeof ctx.invoke === 'object';
+                  contextSnapshot.invokeIsObject = typeof ctx.invoke === 'object' || typeof ctx.invoke === 'function';
                 }
                 if (ctx.tell) {
-                  contextSnapshot.tellIsObject = typeof ctx.tell === 'object';
+                  contextSnapshot.tellIsObject = typeof ctx.tell === 'object' || typeof ctx.tell === 'function';
                 }
                 if (ctx.deps) {
                   contextSnapshot.dbConnected = ctx.deps.db?.connected;

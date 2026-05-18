@@ -7,7 +7,7 @@
  * - Test pre/post hooks
  */
 
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { createTestCapsKit, createTestAction } from '../src/index';
 import { createMockDeps, captureEvents, EventCapture } from '../src/index';
 import { assertActionResult, assertEvents, assertEventEmitted } from '../src/index';

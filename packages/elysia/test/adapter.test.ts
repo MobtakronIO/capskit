@@ -74,7 +74,7 @@ describe('Elysia Adapter', () => {
       
       expect(adapter.app).toBeUndefined();
       expect(adapter.sockets).toBeDefined();
-      expect(adapter.sockets['/ws/test']).toBeDefined();
+      expect(adapter.sockets['/ws/capskit']).toBeDefined();
       expect(typeof adapter.shutdown).toBe('function');
       
       await adapter.shutdown();
@@ -85,7 +85,7 @@ describe('Elysia Adapter', () => {
       
       expect(adapter.app).toBeDefined();
       expect(adapter.sockets).toBeDefined();
-      expect(adapter.sockets['/ws/test']).toBeDefined();
+      expect(adapter.sockets['/ws/capskit']).toBeDefined();
       expect(typeof adapter.shutdown).toBe('function');
       
       await adapter.shutdown();
@@ -184,8 +184,8 @@ describe('Elysia Adapter', () => {
       const sockets = createSocket(mockCapskit, {});
       
       expect(sockets).toBeDefined();
-      expect(sockets['/ws/test']).toBeDefined();
-      expect(typeof sockets['/ws/test'].message).toBe('function');
+      expect(sockets['/ws/capskit']).toBeDefined();
+      expect(typeof sockets['/ws/capskit'].message).toBe('function');
     });
   });
 
