@@ -1,4 +1,19 @@
-import type { CapsuleManifest } from '@mobtakronio/capskit';
+import type { CapsuleManifest, CapHandler, CapInput, CapContext } from '@mobtakronio/capskit';
+
+/**
+ * A simplified manifest format for testing that uses action handlers directly.
+ * This is converted to a runtime CapsuleManifest internally.
+ */
+export interface TestCapsuleManifest {
+  name: string;
+  dependencies?: string[];
+  description?: string;
+  actions: Record<string, {
+    handler: CapHandler;
+    pre?: Array<(input: CapInput, context: CapContext) => Promise<void> | void>;
+    post?: Array<(input: CapInput, result: unknown, context: CapContext) => Promise<unknown> | unknown>;
+  }>;
+}
 
 /**
  * Configuration for creating a test capsule
@@ -7,7 +22,7 @@ export interface TestCapsuleConfig {
   /**
    * The capsule manifest to test
    */
-  manifest: CapsuleManifest | CapsuleManifest[];
+  manifest: TestCapsuleManifest | TestCapsuleManifest[];
   
   /**
    * Optional initial dependencies for the test capsule

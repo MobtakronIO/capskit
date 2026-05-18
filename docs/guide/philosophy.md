@@ -1,294 +1,148 @@
 # Philosophy
 
-CapsKit embodies a set of design principles that distinguish it from traditional frameworks. This document explains the "why" behind the architecture.
+CapsKit exists because every other framework makes the same mistake: they couple business logic to transport. Express handlers mix validation, database queries, and response formatting. Controllers inherit from base classes that leak HTTP concerns into domain code. The result is code that is hard to test, harder to reuse, and impossible to move to a different transport without rewriting.
 
-## Capability Pattern
+CapsKit decouples them. Completely.
 
-The world is made of **capabilities**—things you can do. Send an email. Process a payment. Update a user record. Each capability is a cohesive unit of work.
+---
 
-CapsKit treats capabilities as first-class citizens. They're:
-- **Named** (identifiable)
-- **Discoverable** (listed in manifests)
-- **Invokable** (`call(action, payload)`)
-- **Independent** (no transport coupling)
+## The Problem
 
-Contrast with "controllers" in MVC frameworks, which mix routing, validation, business logic, and response formatting into one tangled mess.
+Business logic should not know it lives behind an HTTP server. It should not import `Request`, `Response`, or `Socket`. It should not care whether it was triggered by a REST call, a WebSocket message, a scheduled job, or another cap.
+
+Frameworks get this wrong by design. They start with the transport and bolt on structure. CapsKit starts with the function and adds transport as an afterthought — a pluggable adapter, not a foundation.
+
+---
+
+## What CapsKit Refuses
+
+**No god objects.** The kernel is not a catch-all. It is one of five built-in capsules, each with a single mission. Routing, events, health checks, WebSocket compilation — none of these belong in the kernel. They are separate capsules with separate responsibilities.
+
+**No transport in business logic.** A cap receives `CapInput` and `CapContext`. No `req`, no `res`, no framework-specific objects. The same cap works over HTTP, WebSockets, events, CLI, or direct invocation — zero code changes.
+
+**No hidden state.** Dependencies are declared and injected, never imported. What a cap needs is visible in its signature. Testing means passing mocks. No stubbing, no module mocking, no singleton resets.
+
+**No magic.** CapsKit does not scan directories at runtime, generate code behind your back, or rely on decorator metadata. Everything is explicit. If you can't read it in the source, it doesn't happen.
+
+---
+
+## Function-Oriented Design
+
+CapsKit uses functions only. No classes. No inheritance hierarchies. No `new` keyword. Every cap is an `async function` with a `meta` export and a `default` export.
+
+Functions compose naturally. They are trivially testable — call them with a mock context. They tree-shake cleanly. They have no hidden lifecycle, no `this` binding, no constructor side effects.
+
+One pattern. Every cap. Built-in and user caps are indistinguishable in structure.
+
+---
+
+## One Capsule = One Mission
+
+Every capsule has exactly one mission. Not three. Not "and also." One.
+
+| Capsule | Mission |
+|---|---|
+| **kernel** | The engine — execute actions, manage lifecycle |
+| **events** | Pub/sub messaging — emit, subscribe, dispatch |
+| **http** | Route compilation — CapMeta routes → compiled format |
+| **websocket** | WS compilation — CapMeta WS events → compiled format |
+| **system** | Introspection — health check, runtime inspection |
+
+The kernel does not own routing. It does not own events. It does not own health checks. Those are separate capsules. The kernel is not special — it follows the same rules as every user capsule.
+
+---
+
+## Caps Are Orchestrators, Not Implementors
+
+A `.cap.ts` file wires things together. It does not contain business logic, database queries, or pure computations. Those live in `.rule.ts`, `.helper.ts`, and `.repository.ts` files.
+
+The cap's job: call rules, invoke helpers, persist through repositories, emit events, return results. That's it. If a cap exceeds ~200 lines, the design is wrong — the logic belongs somewhere lower in the structure.
+
+This is not a suggestion. It is enforced by lint rules and kernel validation at boot.
+
+---
 
 ## Transport Agnosticism
 
-**Principle**: Business logic must not know about HTTP, WebSockets, or any transport.
+Business logic never sees HTTP. Never sees WebSockets. Never sees any transport protocol.
 
-Why? Because requirements change. Today you need an API endpoint. Tomorrow you need:
-- A CLI command
-- A background worker processing a queue
-- A scheduled job
-- Another service calling you directly
+Caps receive `CapInput` and `CapContext` — a pure, transport-neutral form. The adapter layer translates `Request`/`Response` into this form before the cap runs, and translates the cap's return value back into a response after.
 
-If your logic is polluted with `req`, `res`, `ctx`, `next`, you're stuck rewriting everything.
-
-CapsKit enforces this by making actions pure functions:
-```ts
-(payload: object, context: { deps, emit, call, use }) => result
-```
-
-No `Request`. No `Response`. The transport adapter (HTTP, WS) is responsible for translating to/from this pure form.
-
-## Declarative Configuration
-
-**Principle**: Declare *what* the system can do, not *how* to wire it together.
-
-Traditional frameworks: You write middleware, routes, controllers, services, manually connect them. Every new capability requires touching multiple files and understanding the complex wiring.
-
-CapsKit: You declare caps with metadata in `cap.meta.ts` and compose them into a CapsuleRegistry via `caps.ts`. The kernel reads the registry and generates the wiring automatically.
-
-```ts
-// Declarative: cap.meta.ts
-export const meta: CapMeta = {
-  name: 'user',
-  actions: {
-    create: { description: 'Create a new user' },
-    delete: { description: 'Delete a user' }
-  },
-  routes: [{ method: 'POST', path: '/users', action: 'create' }]
-}
-```
-
-The legacy `manifest.ts` pattern is also supported for backward compatibility:
-```ts
-export const service = {
-  name: 'user',
-  actions: { create: {...}, delete: {...} },
-  routes: [{ method: 'POST', path: '/users', action: 'create' }]
-}
-```
-
-The kernel handles:
-- HTTP → action mapping
-- Schema validation
-- Dependency injection
-- Event subscriptions
-- Interceptor chains
-
-**Benefits**: Easier to reason about, automatic documentation, simplifies testing.
-
-## Universal Pipelines
-
-**Principle**: All actions—regardless of how they're invoked—flow through the same middleware pipeline.
-
-Whether an action is called via:
+The same cap can be triggered by:
 - HTTP request
 - WebSocket message
-- `capskit.call()` from another action
 - Event subscription
+- `ctx.invoke()` from another cap
 - CLI command
 
-It experiences identical pre-processing (validation, auth, logging) and post-processing (transformations, metrics).
+No code changes. No conditional logic. No transport detection.
 
-This is achieved via **Kernel Interceptors** (global) and **Action Hooks** (per-action). They're composable, reusable, and attach consistently.
+---
 
-## Zero Framework Lock-in
+## Zero Runtime Dependencies
 
-**Principle**: Your capsules should never import framework-specific packages.
+The core `@mobtakronio/capskit` package ships with zero runtime dependencies. Nothing. Empty.
 
-No `express`, no `elysia`, no `socket.io`, no `bull`, no `bullmq`. Your business logic stays in pure TypeScript/JavaScript.
+The rule is simple: if every CapsKit app needs it and it can be built with zero dependencies, it stays in core. Otherwise, it is an external package. HTTP adapters, database integrations, caching, rate limiting — all external. All opt-in. All swappable.
 
-This achieves **framework agnosticism**. You can drop your capsule into any CapsKit host, and it just works. Swap out Elysia for Express? No capsule changes. Add a CLI? Reuse same actions.
+You choose your transport. You choose your database. CapsKit provides the structure.
 
-## Type Safety First
+---
 
-**Principle**: Types and schemas are not optional—they're core to the contract.
+## Constraints Breed Creativity
 
-CapsKit uses:
-- **TypeScript** for compile-time type checking
-- **JSON Schema** for runtime validation
-- **CapMeta and CapsuleManifest types** for structure enforcement
+CapsKit's constraints are not accidents. They are the design.
 
-Both `CapMeta` (for the Cap model) and `CapsuleManifest` (legacy) are fully typed:
-```ts
-interface CapsuleManifest {
-  name: string;
-  actions: Record<string, ActionDefinition>;
-  // ...
-}
-```
+**~200-line cap limit.** Forces decomposition. If you can't express a cap's orchestration in 200 lines, you haven't found the right abstractions yet.
 
-And actions can have typed payloads:
-```ts
-interface CreateUserPayload {
-  name: string
-  email: string
-}
-export default async function create(payload: CreateUserPayload, ctx) { ... }
-```
+**Dependency pyramid.** Imports flow down only: `.cap.ts` → `.rule.ts` / `.helper.ts` / `.repository.ts` → `.type.ts` / `.error.ts` / `.constant.ts`. No sideways imports. No upward imports. Enforced by lint rules.
 
-This catches errors early—in development, before code runs.
+**No `utils.ts`.** Utility files are where good design goes to die. If code is shared across capsules, it belongs in a shared capsule or a dedicated package. If it's only used in one place, it stays there.
 
-## Composable Abstractions
+Constraints force decisions. Decisions force clarity.
 
-**Principle**: Small, orthogonal concepts that combine elegantly.
+---
 
-CapsKit has a minimal set of primitives:
-- **Capsules** (containers)
-- **Actions** (units of work)
-- **Events** (pub/sub)
-- **Interceptors** (pipeline)
-- **Traits** (route metadata)
+## Prove Before You Abstract
 
-You can build complex patterns by combining them:
-- Feature flags → trait + event
-- Audit logging → interceptor
-- Rate limiting → trait + redis
-- Transactional consistency → interceptor + database transaction
+CapsKit has a graduation rule: a pattern must be proven in at least two user capsules before it earns a place in the core or shared structure.
 
-Each concept is simple, documented, and reusable.
+This prevents premature abstraction — the root of most framework bloat. You don't build a shared helper because you think you'll need it. You build it because two capsules already have the same logic.
 
-## Predictable Lifecycle
+Abstract after evidence. Never before.
 
-**Principle**: Every action goes through a deterministic, observable lifecycle.
-
-```
-[Adapter] → [Interceptors] → [Pre Hooks] → [Handler] → [Post Hooks] → [Interceptors] → [Adapter]
-```
-
-You can plug in at any layer:
-- Adapter: Custom request parsing, response formatting
-- Interceptor: Global logging, error handling, metrics
-- Pre Hook: Input validation, enrichment
-- Handler: Business logic (pure)
-- Post Hook: Transformation, side effects
-
-This predictability makes debugging, monitoring, and testing feasible.
+---
 
 ## Explicit Dependencies
 
-**Principle**: Dependencies are declared and injected, never imported directly.
-
-No `import { db } from '../database'`. Instead:
-```ts
-const ctx = createCapsKit({
-  dependencies: { database: dbInstance }
-})
-```
-
-Inside action: `ctx.deps.database`
-
-Benefits:
-- Testability (mock deps)
-- Swappable implementations (swap Redis for Memcached)
-- Clear contracts (what does this capsule need?)
-- No circular dependency surprises
-
-## Cap Registry as Single Source of Truth
-
-**Principle**: The CapsuleRegistry (`caps.ts`) and Cap metadata (`cap.meta.ts`) declare everything the kernel needs to know.
-
-- What actions exist
-- What events are published/subscribed
-- What routes are exposed
-- What dependencies are required
-
-The legacy `manifest.ts` pattern serves the same role for backward compatibility.
-
-This enables:
-- **Automatic documentation generation**
-- **Validation at boot time**
-- **Introspection** (`capskit.describe('capsule-name')`)
-- **IDE support** (CapMeta and CapsuleManifest are typed)
-
-## Minimalism
-
-**Principle**: Do one thing well. Avoid feature creep.
-
-CapsKit is not:
-- An ORM
-- A database
-- A task queue
-- A full framework
-
-It's a **kernel**—the smallest possible piece that enforces the capability pattern and orchestrates capsules. Everything else (validation, auth, DBs, caches) are dependencies you inject.
-
-This keeps the core lean, testable, and understandable.
-
-## Design by Contract
-
-**Principle**: Actions have implicit contracts via schemas and types.
-
-When you declare an action:
-```ts
-{
-  handler: createUser,
-  schema: {
-    type: 'object',
-    properties: {
-      email: { type: 'string', format: 'email' }
-    },
-    required: ['email']
-  }
-}
-```
-
-The contract is:
-- **Precondition**: Input must match schema (validated by kernel)
-- **Postcondition**: Handler returns a result (or throws)
-- **Side effects**: Documented via `events.publishes` and deps usage
-
-The kernel enforces the precondition. You ensure the postcondition.
-
-## Error as Data
-
-**Principle**: Errors are structured, typed, and carry meaning.
-
-Not just `throw new Error('Something broke')`. Use specific error types:
+Dependencies are declared at the platform level and injected through `ctx.deps`. Never imported directly.
 
 ```ts
-if (!user) throw new NotFoundError('User not found')
-if (!canEdit) throw new AuthorizationError('Not allowed')
-if (invalid) throw new ValidationError(details)
+// Platform setup
+const platform = await createCapsKitPlatform({
+  capsuleDirs: ['./caps'],
+  dependencies: {
+    database: createDatabaseConnection(),
+    'jwt-secret': process.env.JWT_SECRET,
+  },
+});
+
+// In a cap
+const order = await orderRepository.create(ctx.deps.database, input);
 ```
 
-Adapters map these to appropriate protocol responses (HTTP 404, WS close code, etc.).
+This gives you testability (pass mocks), swappability (change implementations without touching cap code), and clear contracts (a cap's needs are visible). It also eliminates circular dependencies — dependencies flow one direction.
 
-## Eventual Consistency via Events
-
-**Principle**: Decouple capsules with events, not direct calls.
-
-Instead of:
-```ts
-// User capsule calls Order capsule directly
-await ctx.call('order-capsule.create', ...)
-```
-
-Use events:
-```ts
-// User capsule emits event
-ctx.emit('user.created', { userId })
-
-// Order capsule subscribes to 'user.created'
-```
-
-Benefits: Loose coupling, easier to add/remove listeners, async processing, audit trail.
-
-## Testing Friendliness
-
-**Principle**: If it's hard to test, the design is wrong.
-
-Because actions are pure functions, testing is trivial:
-```ts
-const result = await createUser({ name: 'Alice', email: 'alice@test.com' }, mockCtx)
-expect(result.user.email).toBe('alice@test.com')
-```
-
-No HTTP mocking, no DB containers, no complex fixtures. Just call a function with a mocked context.
+---
 
 ## Conclusion
 
-CapsKit's philosophy centers on **separation of concerns**, **type safety**, and **developer experience**. It's a small kernel that enforces good architecture, leaving the rest to your domain logic.
+CapsKit's philosophy is simple: **functions over classes, missions over monoliths, structure over convention, zero over many**. Every design decision flows from these principles. If a feature request conflicts with them, the answer is no.
 
-These principles guide every design decision. If a feature request conflicts with them, the answer is usually "No."
+---
 
 ## Further Reading
 
-- **Architecture**: System-level view
-- **Capsules**: Manifest structure and organization
-- **Adapters**: Transport layer implementations
-- **Interceptors & Traits**: Cross-cutting concerns
+- [Architecture](./architecture.md) — System-level view with 5 built-in capsules
+- [Capsules](./capsules.md) — Capsule structure and file conventions
+- [Conventions](./conventions.md) — File suffix reference and dependency rules

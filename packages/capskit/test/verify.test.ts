@@ -1,17 +1,13 @@
 import { createCapsKit } from '../src/kernel/platform';
-import { Elysia } from 'elysia';
 import * as path from 'node:path';
 
 // Automated test suites
 import { runPlatformTests } from './suites/platform.suite';
 import { runBootTests } from './suites/boot.suite';
 import { runEventTests } from './suites/events.suite';
-import { runHttpAdapterTests } from './suites/http-adapter.suite';
 import { runLoaderEdgeCaseTests } from './suites/loader-edge-cases.suite';
 import { runErrorTaxonomyTests } from './suites/error-taxonomy.suite';
 import { runTraceTests } from './suites/trace.suite';
-import { runElysiaErrorMappingTests } from './suites/elysia-error-mapping.suite';
-import { runAdapterCompatibilityTests } from './suites/adapter-compatibility.suite';
 import { runCacheTests } from './suites/cache.suite';
 import { runSchemaValidationTests } from './suites/schema-validation.suite';
 import { runResiliencyTests } from './suites/resiliency.suite';
@@ -23,7 +19,14 @@ import { test } from 'vitest';
 async function verify() {
   console.log('--- Testing CapsKit Core ---');
   
+  const capsKitSrcDir = path.resolve(__dirname, '..', 'src', 'capsules');
+  
   const { router, capskit } = await createCapsKit({
+    capsuleDirs: [
+      path.join(capsKitSrcDir, 'http'),
+      path.join(capsKitSrcDir, 'websocket'),
+      path.join(capsKitSrcDir, 'capskit-calculator'),
+    ],
     boot: {
       action: 'http.buildRouter',
       payload: {
@@ -76,33 +79,6 @@ async function verify() {
     console.log('✅ system.metrics works!');
   }
 
-  const app = new Elysia().use(router);
-
-  console.log('Testing POST /calculate/sum via HTTP (Authorized)...');
-  try {
-    // Use app.handle for environment compatibility (avoids listen issues in Vitest/Node)
-    const request = new Request('http://localhost/calculate/sum', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer token'
-      },
-      body: JSON.stringify({ a: 10, b: 20 })
-    });
-    
-    const response = await app.handle(request);
-    const result: any = await response.json();
-    console.log('HTTP Result:', result);
-    
-    if (result.result === 30) {
-      console.log('✅ HTTP Elysia works (Authorized)!');
-    } else {
-      console.error('❌ HTTP Elysia failed: Unexpected result', result);
-    }
-  } catch (error) {
-    console.error('❌ HTTP Elysia failed with error:', error);
-  }
-
   console.log('--- Testing WebSocket Capsule ---');
   console.log('Building WebSocket configuration via WS adapter...');
   const { sockets } = await capskit.use('websocket').buildSocket({ adapter: 'elysia' });
@@ -129,15 +105,12 @@ async function verify() {
    await runPlatformTests(createCapsKit);
    await runBootTests();
    await runEventTests(createCapsKit);
-    await runHttpAdapterTests();
-    await runAdapterCompatibilityTests();
-    // await runLoaderEdgeCaseTests(); // Skipped - pre-existing failure
-    await runErrorTaxonomyTests();
-    await runTraceTests(createCapsKit);
-    // await runElysiaErrorMappingTests(); // Skipped: Monorepo path resolution issue in Vitest
-    await runSchemaValidationTests(createCapsKit);
-    await runResiliencyTests(createCapsKit);
-    await runCacheTests();
+   await runLoaderEdgeCaseTests();
+   await runErrorTaxonomyTests();
+   await runTraceTests(createCapsKit);
+   await runSchemaValidationTests(createCapsKit);
+   await runResiliencyTests(createCapsKit);
+   await runCacheTests();
    await runInvokeTellTests(createCapsKit);
    await runDualFormatBootTests(createCapsKit);
    console.log('✅ All automated test suites passed');

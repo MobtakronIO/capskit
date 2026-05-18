@@ -32,9 +32,8 @@ import type {
   CapDefinition,
   CapsuleRegistry,
   
-  // Existing types for backward compatibility
-  ActionContext,
-  ActionInput,
+  // Backward compat
+  CapInput,
 } from '../src/types';
 
 // ============================================================
@@ -198,7 +197,7 @@ type SumResult = { result: number };
 type SumHandler = CapHandler<{ a: number; b: number }, SumResult>;
 
 // Valid handler implementation
-const sumHandler: SumHandler = async (input: ActionInput, ctx: CapContext): Promise<SumResult> => {
+const sumHandler: SumHandler = async (input: CapInput, ctx: CapContext): Promise<SumResult> => {
   const { a, b } = input.body;
   ctx.emit('sum.computed', { a, b });
   return { result: a + b };
@@ -208,14 +207,14 @@ const sumHandler: SumHandler = async (input: ActionInput, ctx: CapContext): Prom
 // 10. CapClass — using CapContext
 // ============================================================
 class CalculatorCap implements CapClass {
-  async sum(input: ActionInput, ctx: ActionContext): Promise<{ result: number }> {
-    // Note: CapClass still uses ActionContext for backward compatibility
+  async sum(input: CapInput, ctx: CapContext): Promise<{ result: number }> {
+    // Note: CapClass still uses CapContext for backward compatibility
     // but can be gradually migrated to CapContext
     const { a, b } = input.body;
     return { result: a + b };
   }
   
-  [action: string]: (input: ActionInput, context: ActionContext) => Promise<any>;
+  [action: string]: (input: CapInput, context: CapContext) => Promise<any>;
 }
 
 // ============================================================
@@ -260,9 +259,9 @@ const corrId: CorrelationId = 'abc-123-def';
 const actionName: ActionName = 'users.create';
 
 // ============================================================
-// 13. Backward compatibility — ActionContext still works
+// 13. Backward compatibility — CapContext still works
 // ============================================================
-const actionCtx: ActionContext = {
+const actionCtx: CapContext = {
   body: {},
   deps: {},
   emit: () => {},

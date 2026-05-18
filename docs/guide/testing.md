@@ -1,424 +1,268 @@
 # Testing
 
-Testing CapsKit applications is straightforward because actions are pure functions. This guide covers unit testing actions, integration testing capsules, and mocking dependencies.
+CapsKit applications are highly testable because caps are functions, rules are pure, and helpers have no I/O. This guide covers testing at every layer.
 
-> **Note**: Testing works identically whether you use the Cap model or legacy manifest format. Action handlers are always pure functions — the loading format doesn't change how you test.
+---
 
-## Unit Testing Actions
+## Testing Pure Functions
 
-Actions are simple `async` functions. Test them in isolation:
+### Testing Helpers
+
+Helpers are pure functions — no I/O, no `ctx.deps`. Test them directly:
 
 ```ts
-import { test, expect } from 'bun:test'
-import createUser from '../../capsules/user/actions/create'
+import { test, expect } from 'vitest';
+import { calculateTotal } from './calculate-total.helper';
 
-test('create user returns user object', async () => {
-  const mockDb = {
-    users: {
-      create: async (data) => ({ id: '1', ...data })
-    }
-  }
-  
-  const deps = {
-    database: mockDb,
-    logger: { info: () => {} }
-  }
-  
-  const ctx = {
-    deps,
-    emit: () => {},
-    call: async () => ({}),
-    use: () => ({})
-  }
-  
-  const result = await createUser(
-    { name: 'Alice', email: 'alice@example.com' },
-    ctx
-  )
-  
-  expect(result.user).toEqual({
-    id: '1',
-    name: 'Alice',
-    email: 'alice@example.com'
-  })
-})
+test('calculates total from items', () => {
+  const items = [
+    { price: 10, quantity: 2 },
+    { price: 5, quantity: 3 },
+  ];
+  expect(calculateTotal(items)).toBe(35);
+});
+
+test('applies discount', () => {
+  const items = [{ price: 100, quantity: 1 }];
+  expect(calculateTotal(items, 20)).toBe(80);
+});
+
+test('discount cannot make total negative', () => {
+  const items = [{ price: 10, quantity: 1 }];
+  expect(calculateTotal(items, 100)).toBe(0);
+});
 ```
 
-### Mocking Context
+### Testing Rules
 
-Create a helper for mock contexts:
+Rules return `boolean` or throw. Test both paths:
+
+```ts
+import { test, expect } from 'vitest';
+import { canCancel } from './can-cancel.rule';
+
+test('can cancel a pending order', () => {
+  const order = { status: 'pending' };
+  expect(canCancel(order as any)).toBe(true);
+});
+
+test('cannot cancel a shipped order', () => {
+  const order = { status: 'shipped' };
+  expect(canCancel(order as any)).toBe(false);
+});
+
+test('cannot cancel an already cancelled order', () => {
+  const order = { status: 'cancelled' };
+  expect(canCancel(order as any)).toBe(false);
+});
+```
+
+---
+
+## Mocking CapContext for Cap Testing
+
+Create a mock context helper:
 
 ```ts
 // test/mock-context.ts
-import type { ActionContext } from '@mobtakronio/capskit'
+import type { CapContext } from '@mobtakronio/capskit';
 
 export function createMockContext(
-  depsOverrides: Partial<ActionContext['deps']> = {}
-): ActionContext {
-  const defaultDeps = {
-    database: { 
-      users: { 
-        create: async (u) => ({ id: '1', ...u }) 
-      } 
-    },
-    logger: { info: () => {}, error: () => {} },
-    config: { jwtSecret: 'test' }
-  }
-  
+  overrides: Partial<CapContext> = {}
+): CapContext {
   return {
-    deps: { ...defaultDeps, ...depsOverrides },
+    deps: {
+      database: {
+        orders: {
+          create: async (data: any) => ({ id: '1', ...data }),
+          findById: async (id: string) => ({ id, status: 'pending' }),
+        },
+      },
+      logger: { info: () => {}, error: () => {} },
+    },
     emit: () => {},
-    call: async () => ({ }),
-    use: () => ({ })
-  }
+    invoke: async () => ({}),
+    tell: () => {},
+    use: () => ({}) as any,
+    ...overrides,
+  };
 }
 ```
 
-Now tests are cleaner:
+Now test caps cleanly:
 
 ```ts
-import { createMockContext } from '../../../test/mock-context'
+import { test, expect, vi } from 'vitest';
+import createOrder from './create-order.cap';
+import { createMockContext } from '../../../test/mock-context';
 
-test('create user', async () => {
-  const ctx = createMockContext()
-  const result = await createUser({ name: 'Bob', email: 'bob@test.com' }, ctx)
-  expect(result.user.email).toBe('bob@test.com')
-})
-```
+test('creates an order and emits event', async () => {
+  const emitted: Array<{ event: string; data: any }> = [];
+  const ctx = createMockContext({
+    emit: (event, data) => emitted.push({ event, data }),
+  });
 
-## Testing Schema Validation
-
-The kernel validates payloads against JSON Schema before invoking the handler. Test that invalid payloads throw `ValidationError`:
-
-```ts
-import { test, expect } from 'bun:test'
-import { ValidationError } from '@mobtakronio/capskit'
-
-test('create user validates required fields', async () => {
-  const ctx = createMockContext()
-  
-  await expect(
-    createUser({ name: 'Alice' }, ctx) // missing email
-  ).rejects.toThrow(ValidationError)
-})
-```
-
-For more detailed validation testing, invoke the kernel's validation directly:
-
-```ts
-import { validatePayload } from '@mobtakronio/capskit/kernel/validation'
-
-test('schema validation', () => {
-  const schema = {
-    type: 'object',
-    properties: {
-      email: { type: 'string', format: 'email' }
+  const input = {
+    body: {
+      items: [{ price: 10, quantity: 2 }],
+      discount: 5,
     },
-    required: ['email']
-  } as const
-  
-  const valid = validatePayload(schema, { email: 'test@example.com' })
-  expect(valid).toBe(true)
-  
-  const invalid = validatePayload(schema, { name: 'Test' })
-  expect(invalid).toBe(false)
-})
+  };
+
+  const result = await createOrder(input, ctx);
+
+  expect(result.order).toBeDefined();
+  expect(emitted).toContainEqual({
+    event: 'order.created',
+    data: { orderId: '1' },
+  });
+});
 ```
 
-## Testing Hooks
+---
 
-Hooks run before/after the handler. Test them in isolation:
+## Testing Repository Functions with Mock DB
+
+Repository functions accept a DB client as their first argument. Pass a mock:
 
 ```ts
-import { test, expect } from 'bun:test'
-import { preLog } from '../../capsules/user/hooks/preLog'
-import { postTransform } from '../../capsules/user/hooks/postTransform'
+import { test, expect, vi } from 'vitest';
+import { orderRepository } from './order.repository';
 
-test('preLog hook', async () => {
-  const deps = { logger: { info: (msg) => { /* assertion */ } } }
-  const ctx = { deps }
-  
-  await preLog({ body: { name: 'Alice' } }, ctx)
-  // Assert logger was called
-})
+test('creates an order', async () => {
+  const mockDb = {
+    orders: {
+      create: vi.fn().mockResolvedValue({ id: '1', items: [], total: 20 }),
+    },
+  };
 
-test('postTransform hook', async () => {
-  const result = await postTransform(
-    { body: { name: 'Alice' } },
-    { user: { id: '1', name: 'Alice' } },
-    { deps: {} }
-  )
-  
-  expect(result).toEqual({ user: { id: '1', name: 'Alice', createdAt: expect.any(String) } })
-})
+  const result = await orderRepository.create(mockDb, {
+    items: [],
+    total: 20,
+    status: 'pending',
+  });
+
+  expect(mockDb.orders.create).toHaveBeenCalledWith({
+    data: { items: [], total: 20, status: 'pending' },
+  });
+  expect(result.id).toBe('1');
+});
+
+test('returns null when order not found', async () => {
+  const mockDb = {
+    orders: {
+      findById: vi.fn().mockResolvedValue(null),
+    },
+  };
+
+  const result = await orderRepository.findById(mockDb, 'nonexistent');
+  expect(result).toBeNull();
+});
 ```
 
-## Integration Testing
+---
 
-Test the full action pipeline (including schema validation, hooks, interceptors):
+## Testing Hook Chains
+
+Test hooks in isolation by calling them directly:
 
 ```ts
-import { test, expect } from 'bun:test'
-import { createCapsKit } from '@mobtakronio/capskit'
+import { test, expect, vi } from 'vitest';
+import requireAuth from './require-auth.cap';
+import { AuthorizationError } from '@mobtakronio/capskit';
 
-test('full pipeline: create user', async () => {
-  const { capskit } = await createCapsKit({
-    capsules: [{ type: 'directory', path: './test-capsules/user' }],
+test('throws when no token provided', async () => {
+  const ctx = { user: undefined } as any;
+  const input = { headers: {} };
+
+  await expect(requireAuth(input, ctx)).rejects.toThrow(AuthorizationError);
+});
+
+test('sets ctx.user when valid token provided', async () => {
+  const ctx = { user: undefined } as any;
+  const input = {
+    headers: { authorization: 'Bearer valid-token' },
+  };
+
+  await requireAuth(input, ctx);
+  expect(ctx.user).toBeDefined();
+});
+```
+
+---
+
+## Integration Testing with createCapsKitPlatform
+
+Test the full pipeline including boot, hook resolution, and cap execution:
+
+```ts
+import { test, expect } from 'vitest';
+import { createCapsKitPlatform } from '@mobtakronio/capskit';
+
+test('full pipeline: create order', async () => {
+  const platform = await createCapsKitPlatform({
+    capsuleDirs: ['./test-caps'],
     dependencies: {
-      database: mockDb,
-      logger: { info: () => {} }
-    }
-  })
-  
-  // Call through the kernel (full pipeline)
-  const result = await capskit.use('user-capsule').create({
-    name: 'Alice',
-    email: 'alice@example.com'
-  })
-  
-  expect(result.user).toMatchObject({
-    name: 'Alice',
-    email: 'alice@example.com'
-  })
-  
-  await capskit.stop()
-})
+      database: {
+        orders: {
+          create: async (data: any) => ({ id: '1', ...data }),
+        },
+      },
+    },
+  });
+
+  const result = await platform.call('orders.create-order', {
+    body: { items: [{ price: 10, quantity: 2 }] },
+  });
+
+  expect(result.order).toBeDefined();
+});
 ```
 
-### With HTTP Adapter
+---
 
-Test complete HTTP request/response:
+## Using @mobtakronio/capskit-testing
+
+The testing package provides utilities for common testing patterns:
 
 ```ts
-import { test, expect } from 'bun:test'
-import { Elysia } from 'elysia'
-import { createCapsKit } from '@mobtakronio/capskit'
+import { test, expect } from 'vitest';
+import { createTestPlatform, mockDeps } from '@mobtakronio/capskit-testing';
+import createOrder from './create-order.cap';
 
-test('POST /users returns 200', async () => {
-  const { capskit } = await createCapsKit({
-    capsules: [{ type: 'directory', path: './src/capsules' }],
-    dependencies: { database: mockDb }
-  })
-  
-  const { router } = await capskit.use('http').buildRouter({ adapter: 'elysia' })
-  
-  const app = new Elysia().use(router)
-  
-  const response = await app.request('/users')
-    .post({ name: 'Alice', email: 'alice@example.com' })
-  
-  expect(response.status).toBe(200)
-  expect(await response.json()).toMatchObject({
-    user: { email: 'alice@example.com' }
-  })
-  
-  await capskit.stop()
-})
+test('with test helper', async () => {
+  const { platform, ctx } = await createTestPlatform({
+    capsuleDirs: ['./test-caps'],
+    deps: mockDeps({
+      database: {
+        orders: { create: async (d: any) => ({ id: '1', ...d }) },
+      },
+    }),
+  });
+
+  const result = await platform.call('orders.create-order', {
+    body: { items: [{ price: 10, quantity: 2 }] },
+  });
+
+  expect(result.order.id).toBe('1');
+});
 ```
 
-## Testing Events
-
-Test that events are emitted correctly:
-
-```ts
-test('delete user emits user.deleted event', async () => {
-  const emittedEvents: Array<{ event: string; data: any }> = []
-  
-  const ctx = {
-    deps: { database: mockDb },
-    emit: (event, data) => emittedEvents.push({ event, data }),
-    call: async () => ({}),
-    use: () => ({})
-  }
-  
-  await deleteUser({ id: '123' }, ctx)
-  
-  expect(emittedEvents).toHaveLength(1)
-  expect(emittedEvents[0]).toEqual({
-    event: 'user.deleted',
-    data: { userId: '123' }
-  })
-})
-```
-
-## Testing Interceptors
-
-Test interceptors in isolation:
-
-```ts
-import { test, expect } from 'bun:test'
-import { loggingInterceptor } from '../../kernel/interceptors/logging'
-
-test('loggingInterceptor logs action and duration', async () => {
-  const logs: string[] = []
-  const logger = { info: (msg: string) => logs.push(msg) }
-  
-  const interceptor = loggingInterceptor({ logger })
-  
-  const result = await interceptor(
-    'user.create',
-    { name: 'Alice' },
-    { deps: {} },
-    async () => ({ user: { id: '1' } })
-  )
-  
-  expect(result).toEqual({ user: { id: '1' } })
-  expect(logs[0]).toContain('user.create')
-  expect(logs[0]).toContain('duration')
-})
-```
-
-## Testing Traits
-
-Test trait handlers directly:
-
-```ts
-test('auth role trait grants access to admin', async () => {
-  const traitHandler = (role, ctx) => {
-    const userRole = ctx.deps.auth.currentUser().role
-    if (userRole !== role) throw new AuthorizationError()
-  }
-  
-  const ctx = {
-    deps: {
-      auth: { currentUser: () => ({ role: 'admin' }) }
-    }
-  }
-  
-  // Should not throw
-  await expect(traitHandler('admin', ctx)).resolves.toBeUndefined()
-})
-
-test('auth role trait denies non-admin', async () => {
-  const traitHandler = (role, ctx) => {
-    const userRole = ctx.deps.auth.currentUser().role
-    if (userRole !== role) throw new AuthorizationError()
-  }
-  
-  const ctx = {
-    deps: {
-      auth: { currentUser: () => ({ role: 'user' }) }
-    }
-  }
-  
-  await expect(traitHandler('admin', ctx)).rejects.toThrow(AuthorizationError)
-})
-```
-
-## Database Testing
-
-For integration tests with real database:
-
-```ts
-import { test, expect } from 'bun:test'
-import { Database } from '../database'
-
-let db: Database
-
-test.beforeEach(async () => {
-  db = new Database('postgresql://localhost:5432/test')
-  await db.migrate()
-  await db.seed() // optional fixture data
-})
-
-test.afterEach(async () => {
-  await db.disconnect()
-})
-
-test('create and retrieve user', async () => {
-  const user = await db.users.create({ name: 'Alice', email: 'alice@test.com' })
-  const found = await db.users.findById(user.id)
-  expect(found.email).toBe('alice@test.com')
-})
-```
-
-## End-to-End Testing
-
-Simulate real usage scenarios:
-
-```ts
-test('user registration flow', async () => {
-  // 1. Create user
-  const createResult = await capskit.use('user-capsule').create({
-    name: 'Alice',
-    email: 'alice@example.com'
-  })
-  
-  // 2. User receives welcome email (check event emitted)
-  const emits: any[] = []
-  capskit.on('event', (event, data) => emits.push({ event, data }))
-  
-  // 3. Verify user was created
-  const getResult = await capskit.use('user-capsule').get({
-    id: createResult.user.id
-  })
-  
-  expect(getResult.user.name).toBe('Alice')
-  expect(emits).toContainEqual({
-    event: 'user.created',
-    data: { userId: createResult.user.id }
-  })
-})
-```
+---
 
 ## Testing Best Practices
 
-1. **Test one thing per test**—single assertion pattern
-2. **Use descriptive test names**—`'should throw ValidationError when email missing'`
-3. **Mock external services**—databases, APIs, Redis; use in-memory fakes
-4. **Isolate state**—create fresh caps kit per test or use `beforeEach` cleanup
-5. **Test error cases**—validation, not-found, auth failures
-6. **Avoid testing internals**—test through public API (`call()`, `use()`)
-7. **Setup/teardown**—clean resources after each test
+1. **Test pure functions directly** — helpers and rules need no mocking.
+2. **Mock CapContext for cap tests** — use `createMockContext`.
+3. **Mock DB for repository tests** — pass mock DB as first argument.
+4. **Test error paths** — validation failures, not-found, auth errors.
+5. **One assertion per test** — clear, focused test cases.
+6. **Fresh instance per test** — no shared mutable state between tests.
 
-## Recommended Libraries
-
-- **Bun test** (included): Fast, built-in
-- **Vitest**: Vite-powered, great DX
-- **@vitest/coverage-v8**: Code coverage
-- **sinon**: Advanced stubs/spies (if needed)
-- **@faker-js/fake**: Realistic test data
-
-## Troubleshooting
-
-### "Cannot find module '@mobtakronio/capskit' in tests"
-
-Use relative imports in tests or configure module aliasing:
-
-```ts
-// vitest.config.ts
-import { defineConfig } from 'vitest/config'
-import tsconfig from './tsconfig.json'
-
-export default defineConfig({
-  resolve: {
-    alias: tsconfig.compilerOptions.paths
-  }
-})
-```
-
-### "Tests leak resources"
-
-Ensure you're closing connections:
-
-```ts
-test.afterEach(async () => {
-  await capskit.stop()
-  await db.disconnect()
-  await redis.disconnect()
-})
-```
-
-### "Tests are flaky"
-
-Common causes:
-- Shared mutable state (use fresh caps kit per test)
-- Unawaited async operations (always `await`)
-- Race conditions in parallel tests (use `test.serial`)
+---
 
 ## Next Steps
 
-- **Architecture**: Review overall system design for testability
-- **Dependencies**: Learn dependency mocking patterns
-- **Interceptors**: Test global middleware behavior
-- **Events**: Verify pub/sub flows
+- [Capsules](./capsules.md) — Capsule structure and file conventions
+- [Hooks](./hooks.md) — Cross-cutting concerns as caps
+- [Dependencies](./dependencies.md) — CapsuleDefinition and auto-discovery

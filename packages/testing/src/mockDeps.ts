@@ -212,7 +212,7 @@ export function createMockDeps(options: MockDepsOptions = {}) {
  * console.log(mockFn.callCount); // 2
  * ```
  */
-export function createMockFn<T extends (...args: unknown[]) => unknown = () => Promise<void>>() {
+export function createMockFn() {
   const calls: unknown[][] = [];
   
   const instance = {

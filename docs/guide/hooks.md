@@ -1,254 +1,310 @@
-# Action Hooks
+# Hooks
 
-Hooks allow you to run logic before and after an action handler executes. They're perfect for cross-cutting concerns like validation, logging, authentication, and result transformation.
+Hooks are caps with `kind: 'hook'` that wrap cap handlers in a middleware pipeline. They replace the legacy trait and hook systems with a transport-agnostic, declarative approach.
 
-> **Note**: The examples below use the legacy `CapsuleManifest` format. In the recommended **Cap model**, hooks are configured per-action in `cap.meta.ts`. See [Capsules](./capsules.md) for full Cap model documentation.
+---
 
-## Overview
+## What Are Hooks?
 
-CapsKit supports two types of hooks:
+A hook is a `.cap.ts` file with `kind: 'hook'` in its meta. Hooks run in two phases:
 
-| Hook Type | When it Runs | Use Case |
-|------------|--------------|----------|
-| **Pre-hooks** | Before the handler | Validation, authentication, logging |
-| **Post-hooks** | After the handler | Result transformation, caching, auditing |
+- **Pre hooks** — run before the cap handler (auth, validation, logging)
+- **Post hooks** — run after the cap handler (response transformation, audit logging)
 
-## Pre-Hooks
+Hooks are **transport-agnostic** — they work for HTTP, WebSocket, events, and `ctx.invoke()` calls.
 
-Pre-hooks run before the action handler. They receive the input payload and context, but cannot modify the result.
+---
 
-### Basic Pre-Hook
+## Writing a Hook Cap
 
-```ts
-import { CapsuleManifest } from '@mobtakronio/capskit';
-
-const loggingHook = async (input, context) => {
-  console.log(`[Action] Called with:`, input.body);
-};
-
-export const service: CapsuleManifest = {
-  name: 'users',
-  actions: {
-    create: {
-      handler: './actions/create',
-      pre: [loggingHook],
-      description: 'Create a new user'
-    }
-  }
-};
-```
-
-### Validation Pre-Hook
+A hook cap follows the same `.cap.ts` format as an action cap, but with `kind: 'hook'`:
 
 ```ts
-const validateEmail = async (input, context) => {
-  const { email } = input.body;
-  
-  if (!email || !email.includes('@')) {
-    throw new Error('Invalid email address');
-  }
+// capsules/security/caps/require-auth.cap.ts
+import { CapInput, CapContext, CapMeta, AuthorizationError } from '@mobtakronio/capskit';
+import { decodeJWT } from '../helpers/decode-jwt.helper';
+import { isTokenExpired } from '../rules/is-token-expired.rule';
+
+export const meta: CapMeta = {
+  name: 'require-auth',
+  kind: 'hook',
 };
 
-export const service: CapsuleManifest = {
-  name: 'users',
-  actions: {
-    create: {
-      handler: './actions/create',
-      pre: [validateEmail],
-      description: 'Create a new user'
-    }
-  }
-};
-```
-
-### Authentication Pre-Hook
-
-```ts
-const requireAuth = async (input, context) => {
-  const token = context.deps.token;
-  
-  if (!token) {
-    throw new AuthorizationError('Authentication required');
-  }
-  
-  // Verify token and attach user to context
-  const user = await verifyToken(token);
-  context.deps.user = user;
-};
-
-export const service: CapsuleManifest = {
-  name: 'billing',
-  actions: {
-    charge: {
-      handler: './actions/charge',
-      pre: [requireAuth],
-      description: 'Charge a user'
-    }
-  }
-};
-```
-
-## Post-Hooks
-
-Post-hooks run after the action handler completes. They receive the input, the result, and context. They can transform the result by returning a new value.
-
-### Basic Post-Hook
-
-```ts
-const logResult = async (input, result, context) => {
-  console.log(`[Action] Result:`, result);
-  // Return undefined to keep original result
-};
-
-export const service: CapsuleManifest = {
-  name: 'calculator',
-  actions: {
-    sum: {
-      handler: './actions/sum',
-      post: [logResult],
-      description: 'Sum two numbers'
-    }
-  }
-};
-```
-
-### Result Transformation
-
-```ts
-const addTimestamp = async (input, result, context) => {
-  return {
-    ...result,
-    timestamp: new Date().toISOString()
-  };
-};
-
-export const service: CapsuleManifest = {
-  name: 'api',
-  actions: {
-    getData: {
-      handler: './actions/getData',
-      post: [addTimestamp],
-      description: 'Get data with timestamp'
-    }
-  }
-};
-```
-
-### Caching Post-Hook
-
-```ts
-const cacheResult = async (input, result, context) => {
-  const cache = context.deps.cache;
-  const key = `action:${input.body.id}`;
-  
-  await cache.set(key, result, { ttl: 3600 });
-  
-  // Return undefined to keep original result
-};
-
-export const service: CapsuleManifest = {
-  name: 'products',
-  actions: {
-    get: {
-      handler: './actions/get',
-      post: [cacheResult],
-      description: 'Get product by ID'
-    }
-  }
-};
-```
-
-## Multiple Hooks
-
-Hooks run in the order they're defined. Pre-hooks run sequentially, post-hooks run sequentially and can chain transformations.
-
-```ts
-const validateInput = async (input, context) => {
-  // Validation logic
-};
-
-const logStart = async (input, context) => {
-  console.log('Starting action...');
-};
-
-const logEnd = async (input, result, context) => {
-  console.log('Action completed');
-};
-
-const transformResult = async (input, result, context) => {
-  return { data: result, success: true };
-};
-
-export const service: CapsuleManifest = {
-  name: 'orders',
-  actions: {
-    process: {
-      handler: './actions/process',
-      pre: [validateInput, logStart],
-      post: [logEnd, transformResult],
-      description: 'Process an order'
-    }
-  }
-};
-```
-
-## Hook Context
-
-Hooks receive the same `ActionContext` as handlers:
-
-```ts
-interface ActionContext {
-  params?: any;           // Route parameters (HTTP adapter)
-  body?: any;             // Request body
-  query?: Record<string, any>; // Query parameters
-  deps: Record<string, any>;   // Injected dependencies
-  emit: (event: string, data: any) => void;  // Event emitter
-  call: (action: string, payload: any) => Promise<any>; // Call other actions
-  use: <TCapsule = any>(capsuleName: string) => TCapsule; // Get capsule client
+export default async function requireAuth(input: CapInput, ctx: CapContext) {
+  const token = input.headers?.authorization?.replace('Bearer ', '');
+  if (!token) throw new AuthorizationError('Authentication required');
+  const payload = decodeJWT(token);
+  if (isTokenExpired(payload)) throw new AuthorizationError('Token expired');
+  ctx.user = payload;
 }
 ```
 
-## Error Handling
+### Hook Meta Fields
 
-If a pre-hook throws an error, the action handler is never called. If a post-hook throws, the error propagates to the caller.
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `name` | `string` | Yes | Unique hook name |
+| `kind` | `'hook'` | Yes | Identifies this as a hook cap |
+
+---
+
+## Capsule-Level Hooks
+
+Define hooks once in `capsule.ts` to apply to **all caps** in that capsule:
 
 ```ts
-const checkRateLimit = async (input, context) => {
-  const limiter = context.deps.rateLimiter;
-  const userId = context.deps.user?.id;
-  
-  if (userId && await limiter.isLimited(userId)) {
-    throw new Error('Rate limit exceeded');
-  }
-};
+// capsules/orders/capsule.ts
+import { CapsuleDefinition } from '@mobtakronio/capskit';
 
-export const service: CapsuleManifest = {
-  name: 'api',
-  actions: {
-    search: {
-      handler: './actions/search',
-      pre: [checkRateLimit],
-      description: 'Search with rate limiting'
-    }
-  }
+export default {
+  name: 'orders',
+  dependencies: ['database'],
+  hooks: {
+    pre: [
+      { name: 'require-auth' },           // applies to ALL caps in this capsule
+      { name: 'validate-input', caps: ['create-order', 'update-order'] },  // specific caps only
+    ],
+    post: [
+      { name: 'audit-log' },              // applies to ALL caps
+    ],
+  },
+} satisfies CapsuleDefinition;
+```
+
+### CapsuleHook Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `name` | `string` | — | Hook cap name |
+| `caps` | `string \| string[]` | `'*'` (all) | Which caps this hook applies to |
+
+### Per-Cap Hooks Still Work
+
+Capsule-level hooks merge with per-cap hooks. Capsule hooks run **first**, then cap-level hooks:
+
+```ts
+// capsules/orders/caps/delete-order.cap.ts
+export const meta: CapMeta = {
+  name: 'delete-order',
+  kind: 'action',
+  hooks: {
+    post: ['notify-admin'],  // additional to capsule-level hooks
+  },
 };
 ```
 
+Final pipeline for `delete-order`:
+- **Pre**: `require-auth` (from capsule) → `validate-input` (from capsule, scoped to this cap)
+- **Post**: `audit-log` (from capsule) → `notify-admin` (from cap)
+
+---
+
+## Referencing Hooks in Action Caps
+
+Cap caps declare which hooks run before/after them in the `meta.hooks` object:
+
+```ts
+// capsules/orders/caps/delete-order.cap.ts
+import { CapInput, CapContext, CapMeta } from '@mobtakronio/capskit';
+
+export const meta: CapMeta = {
+  name: 'delete-order',
+  kind: 'action',
+  hooks: {
+    pre: ['require-auth', 'require-admin-role'],
+  },
+  routes: [{ method: 'DELETE', path: '/orders/:id', cap: 'delete-order' }],
+};
+
+export default async function deleteOrder(input: CapInput, ctx: CapContext) {
+  // Hooks have already run — ctx.user is set
+  const { id } = input.params;
+  // ... delete logic
+  return { deleted: true };
+}
+```
+
+The kernel resolves hook names at boot time and chains them before the cap handler.
+
+---
+
+## Hook Formats
+
+### Pre Hooks Only (Object Format)
+
+```ts
+export const meta: CapMeta = {
+  name: 'create-order',
+  kind: 'action',
+  hooks: {
+    pre: ['require-auth', 'validate-input'],
+  },
+};
+```
+
+### Post Hooks
+
+Post hooks run after the cap handler and receive the result via `ctx.result`:
+
+```ts
+// capsules/observability/caps/audit-log.cap.ts
+import { CapInput, CapContext, CapMeta } from '@mobtakronio/capskit';
+
+export const meta: CapMeta = {
+  name: 'audit-log',
+  kind: 'hook',
+};
+
+export default async function auditLog(input: CapInput, ctx: CapContext) {
+  const result = await ctx.next();
+  ctx.deps.logger.info(`Action completed`, {
+    cap: ctx.actionName,
+    result: ctx.result,
+  });
+  return result;
+}
+```
+
+```ts
+// Cap cap using post hooks
+export const meta: CapMeta = {
+  name: 'delete-order',
+  kind: 'action',
+  hooks: {
+    pre: ['require-auth'],
+    post: ['audit-log'],
+  },
+};
+```
+
+### Both Phases
+
+```ts
+export const meta: CapMeta = {
+  name: 'delete-order',
+  kind: 'action',
+  hooks: {
+    pre: ['require-auth', 'rate-limit'],
+    post: ['audit-log', 'notify-admin'],
+  },
+};
+```
+
+### Backward Compat (Array Format)
+
+A plain array is treated as pre hooks only:
+
+```ts
+export const meta: CapMeta = {
+  name: 'create-order',
+  kind: 'action',
+  hooks: ['require-auth', 'validate-input'], // treated as pre hooks
+};
+```
+
+---
+
+## The Hooks Pipeline
+
+When an action is invoked, the kernel builds a Koa-style middleware dispatch chain:
+
+```
+Request → Pre Hook 1 → Pre Hook 2 → ... → Cap Handler → Post Hook 1 → Post Hook 2 → Response
+```
+
+### Execution Flow
+
+```
+1. Kernel resolves capsule-level hooks (filtered by caps field)
+2. Kernel resolves cap-level hooks from meta.hooks
+3. Kernel builds middleware chain: [capsulePre..., capPre..., handler, capPost..., capsulePost...]
+4. Kernel dispatches through the chain
+5. Each hook calls ctx.next() to continue
+6. If any hook throws, the chain aborts
+7. The cap handler runs between pre and post hooks
+```
+
+---
+
+## Examples
+
+### Auth Hook
+
+```ts
+// capsules/security/caps/require-auth.cap.ts
+import { CapInput, CapContext, CapMeta, AuthorizationError } from '@mobtakronio/capskit';
+import { decodeJWT } from '../helpers/decode-jwt.helper';
+
+export const meta: CapMeta = {
+  name: 'require-auth',
+  kind: 'hook',
+};
+
+export default async function requireAuth(input: CapInput, ctx: CapContext) {
+  const token = input.headers?.authorization?.replace('Bearer ', '');
+  if (!token) throw new AuthorizationError('Authentication required');
+  const payload = decodeJWT(token);
+  ctx.user = payload;
+}
+```
+
+### Logging Hook (Both Phases)
+
+```ts
+// capsules/observability/caps/log-request.cap.ts
+import { CapInput, CapContext, CapMeta } from '@mobtakronio/capskit';
+
+export const meta: CapMeta = {
+  name: 'log-request',
+  kind: 'hook',
+};
+
+export default async function logRequest(input: CapInput, ctx: CapContext) {
+  const start = Date.now();
+  ctx.deps.logger.info(`Action started`, { cap: ctx.actionName });
+
+  const result = await ctx.next();
+
+  const duration = Date.now() - start;
+  ctx.deps.logger.info(`Action completed`, { cap: ctx.actionName, duration });
+
+  return result;
+}
+```
+
+### Role-Based Access Hook
+
+```ts
+// capsules/security/caps/require-role.cap.ts
+import { CapInput, CapContext, CapMeta, AuthorizationError } from '@mobtakronio/capskit';
+
+export const meta: CapMeta = {
+  name: 'require-admin-role',
+  kind: 'hook',
+};
+
+export default async function requireAdminRole(input: CapInput, ctx: CapContext) {
+  if (!ctx.user || ctx.user.role !== 'admin') {
+    throw new AuthorizationError('Admin role required');
+  }
+}
+```
+
+---
+
 ## Best Practices
 
-1. **Keep hooks focused** - Each hook should do one thing
-2. **Use dependencies** - Access shared services via `context.deps`
-3. **Handle errors gracefully** - Throw meaningful errors
-4. **Document side effects** - Make it clear when hooks modify results
-5. **Order matters** - Put validation hooks before logging hooks
+1. **One concern per hook** — auth, logging, rate limiting should each be separate.
+2. **Use capsule-level hooks for cross-cutting concerns** — define `require-auth` once in `capsule.ts` instead of repeating it on every cap.
+3. **Scope capsule hooks with `caps`** — use `caps: ['create', 'update']` to target specific caps within a capsule.
+4. **Throw specific errors** — use `AuthorizationError`, `ValidationError`, etc.
+5. **Keep hooks under 200 lines** — same hard limit as action caps.
+6. **Import from lower layers only** — helpers, rules, types, errors, constants.
 
-## When to Use Hooks vs. Interceptors
+---
 
-| Use Hooks When | Use Interceptors When |
-|----------------|----------------------|
-| Logic is action-specific | Logic applies to all actions |
-| You need result transformation | You need global logging/metrics |
-| You want per-action control | You want centralized control |
-| Logic varies by capsule | Logic is consistent everywhere |
+## Next Steps
 
-See [Interceptors](/guide/interceptors) for global middleware patterns.
+- [Capsules](./capsules.md) — Capsule structure and file conventions
+- [Actions](./caps.md) — Action handler signature and cap file format
+- [Events](./events.md) — Event-driven communication

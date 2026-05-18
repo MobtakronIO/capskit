@@ -1,5 +1,89 @@
 # Changelog
 
+## [0.1.0] - 2026-05-16
+
+### 🚀 New Features
+
+#### Client SDK (@mobtakronio/capskit-client)
+- `createCapsKitClient()` factory with three transport modes: `http`, `websocket`, `auto`
+- `client.call<T>(actionPath, payload?)` — typed action invocation
+- `client.use<T>(capsuleName)` — typed capsule proxy with IDE autocomplete
+- `client.emit(event, data)` — publish events to server
+- `client.tell(actionPath, payload)` — fire-and-forget dispatch
+- `client.describe()` — fetch server manifest
+- `client.subscribe(pattern, handler)` — real-time event subscriptions (WebSocket)
+- `client.loadManifest()` — cache manifest for proxy autocomplete
+- `client.disconnect()` — close connections and clear subscriptions
+
+#### Offline-First Support
+- `OfflineQueue` class with IndexedDB persistence and memory fallback
+- Auto-queuing of `call()` and `emit()` when browser goes offline
+- Auto-flush on `online` event
+- `getQueueStatus()`, `flushQueue()`, `clearQueue()` management APIs
+- Configurable max queue size with oldest-entry eviction
+
+#### Interceptor Pipeline
+- `buildInterceptorPipeline()` — core pipeline builder
+- `ClientInterceptor` interface with `before`/`after` hooks
+- `loggingInterceptor` — call logging with duration
+- `authInterceptor({ getToken })` — auth token injection
+- `errorNormalizationInterceptor` — normalize raw errors to CapsKitClientError
+- `retryInterceptor({ maxRetries, backoff, retryOn })` — configurable retry with backoff
+- Short-circuit support (before hooks can set result to skip the call)
+
+#### Type Generator CLI
+- `npx capskit generate --url <url> --output <file>`
+- Generates capsule interfaces, event types, call/use overloads
+- JSON Schema to TypeScript type conversion
+- JSDoc descriptions from schema `description` fields
+- `TypedCapsKitClient` combined type
+
+#### React Integration (@mobtakronio/capskit-react)
+- `CapsKitProvider` — context provider for client
+- `useCapsKit()` — access client from context
+- `useAction<T>(path, payload?, options?)` — execute actions with loading/error state
+- `useSubscription<T>(pattern, options?)` — real-time event subscriptions
+- `useCapsule<T>(name)` — memoized typed capsule proxy
+
+#### Vue Integration (@mobtakronio/capskit-vue)
+- `provideCapsKit(client)` — provide client at app/component level
+- `injectCapsKit()` — access client from injection context
+- `useAction<T>(path, payload?, options?)` — reactive action execution with refs
+- `useSubscription<T>(pattern, options?)` — reactive event subscriptions
+- `useCapsule<T>(name)` — computed typed capsule proxy
+
+#### WebSocket Protocol
+- JSON frame format: `{ command, id, payload }`
+- Commands: `call`, `emit`, `tell`, `subscribe`, `unsubscribe`, `describe`
+- Server-pushed event frames
+- Ping/pong keepalive
+- Automatic reconnection with exponential backoff
+- Subscription restoration after reconnect
+
+#### Client Error Types
+- `CapsKitClientError` — base error class
+- `ActionNotFoundError` — action does not exist
+- `ActionExecutionError` — action execution failed
+- `ValidationError` — input validation failed
+- `NetworkError` — network connectivity issue
+- `AuthError` — authentication failure
+- `OfflineError` — offline queue operation
+- `SubscriptionError` — subscription not supported (HTTP-only mode)
+
+### 📖 Documentation
+- Client SDK guide with full API reference
+- Interceptor documentation with built-in and custom examples
+- Offline support guide with queue management
+- React integration guide with hooks and examples
+- Vue integration guide with composables and examples
+- Type generator CLI documentation
+- WebSocket protocol specification
+- Updated quick-start with client-side section
+- Updated index.md with client feature cards
+- Updated README.md with client ecosystem overview
+
+[0.1.0]: https://github.com/MobtakronIO/capskit/releases/tag/v0.1.0
+
 ## [0.4.0] - 2026-03-29
 
 ### 🚀 New Features

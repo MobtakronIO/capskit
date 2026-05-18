@@ -34,11 +34,77 @@ my-capsule/
 
 ## 📦 Repository Structure
 
-This is a monorepo containing the core kernel and official adapters:
+This is a monorepo containing the core kernel, client SDK, framework integrations, and official adapters:
 
 - [**@mobtakronio/capskit**](./packages/capskit) — The Core Kernel and System Capsules.
+- [**@mobtakronio/capskit-client**](./packages/client) — Typed client SDK with offline support and interceptors.
+- [**@mobtakronio/capskit-react**](./packages/react) — React hooks (`useAction`, `useSubscription`, `useCapsule`).
+- [**@mobtakronio/capskit-vue**](./packages/vue) — Vue 3 composables for CapsKit.
 - [**@mobtakronio/capskit-http-elysia**](./packages/capskit-http-elysia) — Elysia HTTP Transport Adapter.
 - [**@mobtakronio/capskit-websocket-elysia**](./packages/capskit-websocket-elysia) — Elysia WebSocket Transport Adapter.
+
+## 🌐 Client-Side SDK
+
+CapsKit isn't just a server framework — it ships a complete client ecosystem for building frontends.
+
+### Typed Client
+
+```ts
+import { createCapsKitClient } from '@mobtakronio/capskit-client';
+
+const client = createCapsKitClient({
+  baseUrl: 'http://localhost:3000',
+  transport: 'auto',     // HTTP for calls, WebSocket for subscriptions
+  offline: { enabled: true },
+});
+
+// Call actions
+const result = await client.call('orders.sum', { a: 15, b: 30 });
+
+// Typed capsule proxy
+const orders = client.use('orders');
+await orders.sum({ a: 15, b: 30 });
+
+// Real-time subscriptions
+const unsub = client.subscribe('order.*', (data) => console.log(data));
+```
+
+### React Hooks
+
+```tsx
+import { CapsKitProvider, useAction, useSubscription } from '@mobtakronio/capskit-react';
+
+<CapsKitProvider client={client}>
+  <OrderList />
+</CapsKitProvider>
+
+function OrderList() {
+  const { data, loading } = useAction('orders.list', undefined, { immediate: true });
+  const { latest } = useSubscription('order.created');
+  // ...
+}
+```
+
+### Vue Composables
+
+```vue
+<script setup>
+import { provideCapsKit, useAction, useSubscription } from '@mobtakronio/capskit-vue';
+
+provideCapsKit(client);
+
+const { data, loading } = useAction('orders.list', undefined, { immediate: true });
+const { latest } = useSubscription('order.created');
+</script>
+```
+
+### Features
+
+- **Three transport modes**: HTTP, WebSocket, or Auto (HTTP + lazy WebSocket)
+- **Offline queue**: IndexedDB-backed, auto-flush on reconnect
+- **Interceptor pipeline**: Auth, logging, retry, error normalization
+- **Type generation**: `npx capskit generate --url <url> --output <file>`
+- **Framework integrations**: React and Vue with typed hooks/composables
 
 ## 🛠️ Quick Start
 
@@ -46,12 +112,12 @@ This is a monorepo containing the core kernel and official adapters:
 
 ```typescript
 // src/capsules/math-capsule/.cap/calculator/cap.ts
-import { ActionInput, CapContext } from '@mobtakronio/capskit';
+import { CapInput, CapContext } from '@mobtakronio/capskit';
 
 export default class CalculatorCap {
   [action: string]: any;  // Required for dynamic dispatch
 
-  async sum(input: ActionInput, _ctx: CapContext): Promise<{ result: number }> {
+  async sum(input: CapInput, _ctx: CapContext): Promise<{ result: number }> {
     const { a, b } = input.body;
     return { result: a + b };
   }

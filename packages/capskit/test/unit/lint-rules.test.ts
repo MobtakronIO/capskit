@@ -44,6 +44,7 @@ import { rule as noCapLogicMissing } from '../../src/lint/no-cap-logic-missing';
 import { rule as capsRegistryRequired } from '../../src/lint/caps-registry-required';
 import { rule as noManifestInCap } from '../../src/lint/no-manifest-in-cap';
 import { rule as noFrameworkCouplingInCap } from '../../src/lint/no-framework-coupling-in-cap';
+import maxCapSteps from '../../src/lint/max-cap-steps';
 
 // ── Temp fixture infrastructure ───────────────────────────────────────────
 
@@ -595,3 +596,131 @@ new RuleTester(testerConfig).run(
     ],
   },
 );
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RULE 7: @capskit/max-cap-steps
+// ═══════════════════════════════════════════════════════════════════════════
+
+new RuleTester(testerConfig).run('@capskit/max-cap-steps', maxCapSteps, {
+  valid: [
+    // Thin orchestrator — 3 steps (parse, load, return)
+    {
+      code: `export default async function boot(input, ctx) {
+  const { dirs } = parseBootInput(input);
+  const state = buildBootState();
+  await loadCapsules(dirs, state);
+  return { status: 'ready' };
+}`,
+      filename: '/capsule/caps/boot.cap.ts',
+    },
+
+    // Exactly 4 steps — at the limit
+    {
+      code: `export default async function process(input, ctx) {
+  const data = parseInput(input);
+  const validated = validate(data);
+  const result = await transform(validated);
+  await persist(result);
+  return result;
+}`,
+      filename: '/capsule/caps/process.cap.ts',
+    },
+
+    // Only input parsing + return — 0 steps
+    {
+      code: `export default async function simple(input, ctx) {
+  const { name } = input.body || {};
+  return { greeting: \`Hello \${name}\` };
+}`,
+      filename: '/capsule/caps/simple.cap.ts',
+    },
+
+    // Non-cap file — ignored regardless of complexity
+    {
+      code: `export function doEverything() {
+  const a = parse();
+  const b = load();
+  const c = scan();
+  const d = validate();
+  const e = sort();
+  const f = run();
+  return { a, b, c, d, e, f };
+}`,
+      filename: '/capsule/helpers/do-everything.helper.ts',
+    },
+
+    // Arrow function export — 2 steps
+    {
+      code: `export default async (input, ctx) => {
+  const data = await fetchData();
+  return { data };
+}`,
+      filename: '/capsule/caps/fetch.cap.ts',
+    },
+  ],
+
+  invalid: [
+    // 5 steps — exceeds limit
+    {
+      code: `export default async function boot(input, ctx) {
+  const { dirs, deps, disable } = input.body;
+  const state = { capsules: new Map(), caps: new Map(), deps };
+  await loadBuiltins(disable, state);
+  await scanUserDirs(dirs, state);
+  const sorted = validateAndOrder(state);
+  await runLifecycles(sorted, state);
+  return { status: 'ready', count: state.capsules.size };
+}`,
+      filename: '/capsule/caps/boot.cap.ts',
+      errors: [
+        {
+          messageId: 'exceeded',
+          data: { file: '/capsule/caps/boot.cap.ts', steps: '5', max: '4' },
+        },
+      ],
+    },
+
+    // 6 steps with loops and conditionals
+    {
+      code: `export default async function complex(input, ctx) {
+  const config = parseConfig(input);
+  const state = initState(config);
+  for (const item of config.items) {
+    await processItem(item, state);
+  }
+  if (config.validate) {
+    validateState(state);
+  }
+  const sorted = topologicalSort(state);
+  await runHooks(sorted);
+  return shapeResponse(state);
+}`,
+      filename: '/capsule/caps/complex.cap.ts',
+      errors: [
+        {
+          messageId: 'exceeded',
+          data: { file: '/capsule/caps/complex.cap.ts', steps: '6', max: '4' },
+        },
+      ],
+    },
+
+    // 5 steps with variable declarations that call functions
+    {
+      code: `export default async function data(input, ctx) {
+  const parsed = parseBody(input);
+  const connection = await createConnection(parsed);
+  const result = await connection.query(parsed.sql);
+  const formatted = formatResult(result);
+  await connection.close();
+  return formatted;
+}`,
+      filename: '/capsule/caps/query.cap.ts',
+      errors: [
+        {
+          messageId: 'exceeded',
+          data: { file: '/capsule/caps/query.cap.ts', steps: '5', max: '4' },
+        },
+      ],
+    },
+  ],
+});

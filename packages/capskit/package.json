@@ -13,35 +13,50 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
-    "./lint/no-direct-call": {
-      "types": "./dist/lint/no-direct-call.d.ts",
-      "import": "./dist/lint/no-direct-call.js",
-      "require": "./dist/lint/no-direct-call.cjs"
+    "./lint/max-cap-lines": {
+      "types": "./dist/lint/max-cap-lines.d.ts",
+      "import": "./dist/lint/max-cap-lines.js",
+      "require": "./dist/lint/max-cap-lines.cjs"
     },
-    "./lint/no-cap-meta-missing": {
-      "types": "./dist/lint/no-cap-meta-missing.d.ts",
-      "import": "./dist/lint/no-cap-meta-missing.js",
-      "require": "./dist/lint/no-cap-meta-missing.cjs"
+    "./lint/max-cap-steps": {
+      "types": "./dist/lint/max-cap-steps.d.ts",
+      "import": "./dist/lint/max-cap-steps.js",
+      "require": "./dist/lint/max-cap-steps.cjs"
     },
-    "./lint/no-cap-logic-missing": {
-      "types": "./dist/lint/no-cap-logic-missing.d.ts",
-      "import": "./dist/lint/no-cap-logic-missing.js",
-      "require": "./dist/lint/no-cap-logic-missing.cjs"
+    "./lint/no-cap-imports-cap": {
+      "types": "./dist/lint/no-cap-imports-cap.d.ts",
+      "import": "./dist/lint/no-cap-imports-cap.js",
+      "require": "./dist/lint/no-cap-imports-cap.cjs"
     },
-    "./lint/caps-registry-required": {
-      "types": "./dist/lint/caps-registry-required.d.ts",
-      "import": "./dist/lint/caps-registry-required.js",
-      "require": "./dist/lint/caps-registry-required.cjs"
+    "./lint/no-import-violation": {
+      "types": "./dist/lint/no-import-violation.d.ts",
+      "import": "./dist/lint/no-import-violation.js",
+      "require": "./dist/lint/no-import-violation.cjs"
     },
-    "./lint/no-manifest-in-cap": {
-      "types": "./dist/lint/no-manifest-in-cap.d.ts",
-      "import": "./dist/lint/no-manifest-in-cap.js",
-      "require": "./dist/lint/no-manifest-in-cap.cjs"
+    "./lint/require-cap-meta": {
+      "types": "./dist/lint/require-cap-meta.d.ts",
+      "import": "./dist/lint/require-cap-meta.js",
+      "require": "./dist/lint/require-cap-meta.cjs"
     },
-    "./lint/no-framework-coupling-in-cap": {
-      "types": "./dist/lint/no-framework-coupling-in-cap.d.ts",
-      "import": "./dist/lint/no-framework-coupling-in-cap.js",
-      "require": "./dist/lint/no-framework-coupling-in-cap.cjs"
+    "./lint/require-cap-handler": {
+      "types": "./dist/lint/require-cap-handler.d.ts",
+      "import": "./dist/lint/require-cap-handler.js",
+      "require": "./dist/lint/require-cap-handler.cjs"
+    },
+    "./lint/no-class-in-cap": {
+      "types": "./dist/lint/no-class-in-cap.d.ts",
+      "import": "./dist/lint/no-class-in-cap.js",
+      "require": "./dist/lint/no-class-in-cap.cjs"
+    },
+    "./lint/no-index-signature": {
+      "types": "./dist/lint/no-index-signature.d.ts",
+      "import": "./dist/lint/no-index-signature.js",
+      "require": "./dist/lint/no-index-signature.cjs"
+    },
+    "./lint/banned-words": {
+      "types": "./dist/lint/banned-words.d.ts",
+      "import": "./dist/lint/banned-words.js",
+      "require": "./dist/lint/banned-words.cjs"
     },
     "./lint": "./dist/lint/index.js"
   },
@@ -58,24 +73,14 @@
     "dev": "tsup --watch",
     "lint": "eslint eslint.config.js",
     "test": "vitest run",
-    "docs:dev": "vitepress dev ../../docs",
-    "docs:build": "vitepress build ../../docs",
-    "docs:preview": "vitepress preview ../../docs",
     "prepublishOnly": "npm run build"
   },
+  "dependencies": {},
   "devDependencies": {
-    "@mobtakronio/elysia": "^0.2.0",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.4.0",
-    "@typescript-eslint/eslint-plugin": "^8.57.2",
-    "@typescript-eslint/parser": "^8.57.2",
-    "elysia": "^1.4.27",
     "eslint": "^10.1.0",
     "tsup": "^8.5.1",
-    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vitepress": "^1.6.4",
-    "vitest": "^4.1.6",
-    "vue": "^3.5.30"
+    "vitest": "^4.1.6"
   }
 }

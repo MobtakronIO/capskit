@@ -17,6 +17,11 @@ import { convertRegistryToManifest } from '../src/kernel/cap-loader';
 import { createCapsKit } from '../src/kernel/platform';
 import { ValidationError, AuthorizationError } from '../src/kernel/errors';
 import type { CapsuleRegistry, CapsuleManifest } from '../src/types';
+import * as path from 'node:path';
+
+// HTTP capsule is no longer builtin — it must be loaded as a capsule source.
+const capsKitSrcDir = path.resolve(__dirname, '..', 'src', 'capsules');
+const httpCapsuleDir = path.join(capsKitSrcDir, 'http');
 
 // ===========================================================================
 // 1. STATIC: HTTP capsule registry → manifest conversion
@@ -149,6 +154,7 @@ describe('HTTP Capsule Registry → Manifest Conversion (Static)', () => {
 describe('End-to-End: CapsKit boot → HTTP router generation', () => {
   test('createCapsKit boots with http.buildRouter and returns a router', async () => {
     const { router, capskit } = await createCapsKit({
+      capsuleDirs: [httpCapsuleDir],
       boot: {
         action: 'http.buildRouter',
         payload: { adapter: 'elysia' },
@@ -170,6 +176,7 @@ describe('End-to-End: CapsKit boot → HTTP router generation', () => {
   test('router handles POST to capsule routes using cap-based metadata', async () => {
     const { router } = await createCapsKit({
       capsules: [
+        { type: 'directory', path: httpCapsuleDir },
         {
           type: 'manifest',
           manifest: {
@@ -207,6 +214,7 @@ describe('End-to-End: CapsKit boot → HTTP router generation', () => {
   test('HTTP router maps ValidationError to 400', async () => {
     const { router } = await createCapsKit({
       capsules: [
+        { type: 'directory', path: httpCapsuleDir },
         {
           type: 'manifest',
           manifest: {
@@ -242,6 +250,7 @@ describe('End-to-End: CapsKit boot → HTTP router generation', () => {
   test('HTTP router maps AuthorizationError to 403', async () => {
     const { router } = await createCapsKit({
       capsules: [
+        { type: 'directory', path: httpCapsuleDir },
         {
           type: 'manifest',
           manifest: {
@@ -273,6 +282,7 @@ describe('End-to-End: CapsKit boot → HTTP router generation', () => {
   test('HTTP router handles unknown errors as 500', async () => {
     const { router } = await createCapsKit({
       capsules: [
+        { type: 'directory', path: httpCapsuleDir },
         {
           type: 'manifest',
           manifest: {

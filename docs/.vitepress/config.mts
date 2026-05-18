@@ -6,52 +6,73 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: 'Home', link: '/' },
-      { text: 'Guide', link: '/guide/introduction' },
-      { text: 'Examples', link: '/guide/examples/quick' }
+      { text: 'Guide', link: '/guide/quick-start' }
     ],
     sidebar: [
       {
         text: 'Getting Started',
         items: [
-          { text: 'Introduction', link: '/guide/introduction' },
           { text: 'Philosophy', link: '/guide/philosophy' },
-          { text: 'Quick Start', link: '/guide/quick-start' }
+          { text: 'Quick Start', link: '/guide/quick-start' },
+          { text: 'Architecture Overview', link: '/guide/architecture' }
         ]
       },
       {
         text: 'Core Concepts',
         items: [
-          { text: 'Architecture Overview', link: '/guide/architecture' },
-          { text: 'Capsules & Manifests', link: '/guide/capsules' },
-          { text: 'Actions & Handlers', link: '/guide/actions' },
-          { text: 'Action Hooks', link: '/guide/hooks' },
-          { text: 'Capsule Clients', link: '/guide/clients' },
-          { text: 'Dependencies', link: '/guide/dependencies' }
+          { text: 'Capsules', link: '/guide/capsules' },
+          { text: 'Caps', link: '/guide/caps' },
+          { text: 'Hooks', link: '/guide/hooks' },
+          { text: 'Events', link: '/guide/events' },
+          { text: 'Dependencies', link: '/guide/dependencies' },
+          { text: 'Conventions', link: '/guide/conventions' }
         ]
       },
       {
-        text: 'Adapters',
+        text: 'Client SDK',
         items: [
-          { text: 'HTTP Adapter', link: '/guide/adapters/http' },
-          { text: 'WebSocket Adapter', link: '/guide/adapters/websocket' }
+          { text: 'Client', link: '/guide/client' },
+          { text: 'Interceptors', link: '/guide/interceptors' },
+          { text: 'Offline Queue', link: '/guide/offline' },
+          { text: 'WebSocket Protocol', link: '/guide/websocket' },
+          { text: 'Type Generator', link: '/guide/type-generator' }
         ]
       },
       {
-        text: 'Advanced Guide',
+        text: 'Frontend Integration',
         items: [
-          { text: 'Kernel Interceptors', link: '/guide/interceptors' },
-          { text: 'Route Traits', link: '/guide/traits' },
-          { text: 'Event Bus', link: '/guide/events' },
-          { text: 'Loader & Discovery', link: '/guide/loader' },
-          { text: 'Error Handling', link: '/guide/errors' },
+          { text: 'React Hooks', link: '/guide/react' },
+          { text: 'Vue Composables', link: '/guide/vue' }
+        ]
+      },
+      {
+        text: 'Built-in Capsules',
+        items: [
+          { text: 'Overview', link: '/guide/built-in-capsules' }
+        ]
+      },
+      {
+        text: 'Error Handling',
+        items: [
+          { text: 'Errors', link: '/guide/errors' }
+        ]
+      },
+      {
+        text: 'Testing',
+        items: [
           { text: 'Testing', link: '/guide/testing' }
         ]
       },
       {
-        text: 'Examples',
+        text: 'Plugins',
         items: [
-          { text: 'Quick Examples', link: '/guide/examples/quick' },
-          { text: 'Full Project', link: '/guide/examples/full-project' }
+          { text: 'Adapter Contract', link: '/plugins/adapter-contract' }
+        ]
+      },
+      {
+        text: 'Init Examples',
+        items: [
+          { text: 'Examples', link: '/init-examples' }
         ]
       }
     ],

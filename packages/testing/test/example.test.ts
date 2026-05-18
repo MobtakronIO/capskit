@@ -11,7 +11,7 @@ import { describe, it, expect, beforeEach } from 'bun:test';
 import { createTestCapsKit, createTestAction } from '../src/index';
 import { createMockDeps, captureEvents, EventCapture } from '../src/index';
 import { assertActionResult, assertEvents, assertEventEmitted } from '../src/index';
-import type { ActionHandler, ActionContext, ActionInput } from '@mobtakronio/capskit';
+import type { CapHandler, CapContext, CapInput } from '@mobtakronio/capskit';
 
 describe('@capskit/testing toolkit', () => {
   describe('createTestCapsKit', () => {
@@ -21,7 +21,7 @@ describe('@capskit/testing toolkit', () => {
           name: 'test-capsule',
           actions: {
             getUser: {
-              handler: async (input: ActionInput): Promise<unknown> => {
+              handler: async (input: CapInput): Promise<unknown> => {
                 return { id: input.body.id, name: 'Alice' };
               }
             }
@@ -40,7 +40,7 @@ describe('@capskit/testing toolkit', () => {
           name: 'users',
           actions: {
             find: {
-              handler: async (input: ActionInput): Promise<unknown> => {
+              handler: async (input: CapInput): Promise<unknown> => {
                 return { id: input.body.id };
               }
             }
@@ -59,7 +59,7 @@ describe('@capskit/testing toolkit', () => {
           name: 'test',
           actions: {
             createOrder: {
-              handler: (input: ActionInput, ctx: ActionContext): Promise<unknown> => {
+              handler: (input: CapInput, ctx: CapContext): Promise<unknown> => {
                 ctx.emit('order:created', { orderId: '123', item: input.body.item });
                 return Promise.resolve({ orderId: '123', status: 'created' });
               }
@@ -84,7 +84,7 @@ describe('@capskit/testing toolkit', () => {
           name: 'test',
           actions: {
             getData: {
-              handler: async (input: ActionInput, ctx: ActionContext): Promise<unknown> => {
+              handler: async (input: CapInput, ctx: CapContext): Promise<unknown> => {
                 const db = ctx.deps.db as Record<string, (sql: string, params: unknown[]) => Promise<{ rows: unknown[] }>>;
                 const result = await db.query('SELECT * FROM users WHERE id = ?', [input.body.id]);
                 return result;
@@ -139,7 +139,7 @@ describe('@capskit/testing toolkit', () => {
             getValue: {
               handler: async (): Promise<number> => 42,
               post: [
-                async (_input: ActionInput, result: unknown): Promise<number> => {
+                async (_input: CapInput, result: unknown): Promise<number> => {
                   postHookResult = result;
                   return (result as number) * 2; // Modify the result
                 }
@@ -160,7 +160,7 @@ describe('@capskit/testing toolkit', () => {
     it('should create a test harness for a single action', async () => {
       const harness = createTestAction(
         'greet',
-        async (input: ActionInput): Promise<{ message: string }> => ({
+        async (input: CapInput): Promise<{ message: string }> => ({
           message: `Hello, ${input.body.name}!`
         })
       );
@@ -296,7 +296,7 @@ describe('@capskit/testing toolkit', () => {
           name: 'test',
           actions: {
             createUser: {
-              handler: (input: ActionInput, ctx: ActionContext): Promise<{ id: number }> => {
+              handler: (input: CapInput, ctx: CapContext): Promise<{ id: number }> => {
                 ctx.emit('user:created', { id: 1, name: input.body.name });
                 ctx.emit('email:sent', { to: input.body.email, template: 'welcome' });
                 return Promise.resolve({ id: 1 });
@@ -357,14 +357,14 @@ describe('@capskit/testing toolkit', () => {
           name: 'inventory',
           actions: {
             listProducts: {
-              handler: async (_input: ActionInput, ctx: ActionContext): Promise<unknown> => {
+              handler: async (_input: CapInput, ctx: CapContext): Promise<unknown> => {
                 const db = ctx.deps.db as Record<string, (sql: string, params: unknown[]) => Promise<{ rows: unknown[] }>>;
                 const result = await db.query('SELECT * FROM products', []);
                 return result.rows;
               }
             },
             createProduct: {
-              handler: async (input: ActionInput, ctx: ActionContext): Promise<{ id: number }> => {
+              handler: async (input: CapInput, ctx: CapContext): Promise<{ id: number }> => {
                 const db = ctx.deps.db as Record<string, (table: string, data: unknown) => Promise<{ id: number }>>;
                 const result = await db.insert('products', input.body);
                 ctx.emit('product:created', { id: result.id, name: input.body.name });
@@ -493,7 +493,7 @@ describe('@capskit/testing toolkit', () => {
           name: 'test',
           actions: {
             emitAndFail: {
-              handler: async (_input: ActionInput, ctx: ActionContext): Promise<string> => {
+              handler: async (_input: CapInput, ctx: CapContext): Promise<string> => {
                 ctx.emit('before-error', { step: 1 });
                 throw new Error('Expected failure');
               }

@@ -1,6 +1,6 @@
 {
   "name": "@capskit/testing",
-  "version": "0.2.0",
+  "version": "0.5.0",
   "description": "Testing toolkit for capskit capsules and actions",
   "license": "MIT",
   "type": "module",
@@ -32,7 +32,7 @@
     "typescript": "^5.9.3"
   },
   "peerDependencies": {
-    "@mobtakronio/capskit": "*"
+    "@mobtakronio/capskit": "^0.5.0"
   },
   "peerDependenciesMeta": {
     "@mobtakronio/capskit": {

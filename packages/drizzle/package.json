@@ -1,6 +1,6 @@
 {
   "name": "@mobtakronio/capskit-drizzle",
-  "version": "0.1.0",
+  "version": "0.5.0",
   "description": "Drizzle ORM capsule for CapsKit — injectable database access with Postgres and SQLite support",
   "license": "MIT",
   "type": "module",

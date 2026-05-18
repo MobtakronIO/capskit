@@ -1,6 +1,6 @@
 {
   "name": "@mobtakronio/capskit-cache",
-  "version": "0.1.0",
+  "version": "0.5.0",
   "description": "Pluggable cache adapters for CapsKit — memory, Redis, SQLite backends with middleware",
   "license": "MIT",
   "type": "module",

@@ -1,330 +1,284 @@
 # Interceptors
 
-Interceptors are global middleware that wrap every action call in the system. They're perfect for cross-cutting concerns like logging, metrics, authentication, and error handling.
+Interceptors are middleware functions that run before and after each client call. They enable cross-cutting concerns like logging, authentication, retry logic, and error normalization.
 
-> **Note**: Interceptors work identically in both the Cap model and legacy manifest format. They are kernel-level middleware and are register-independent.
+---
 
-## Overview
-
-Unlike hooks (which are action-specific), interceptors run for **every** action call. They form a chain around the action execution:
-
-```
-Request → Interceptor 1 → Interceptor 2 → ... → Pre-hooks → Handler → Post-hooks → Response
-```
-
-## Basic Interceptor
-
-An interceptor is a function that receives the action name, input, context, and a `next()` function:
+## Interceptor Interface
 
 ```ts
-import { ActionInterceptor } from '@mobtakronio/capskit';
+interface ClientInterceptor {
+  name: string;
+  before?: (ctx: InterceptorContext) => Promise<InterceptorContext> | InterceptorContext;
+  after?: (ctx: InterceptorContext) => Promise<InterceptorContext> | InterceptorContext;
+}
+```
 
-const loggingInterceptor: ActionInterceptor = async (actionName, input, context, next) => {
-  console.log(`[Call] ${actionName}`);
-  
-  // Call next() to continue the chain
-  const result = await next();
-  
-  console.log(`[Result] ${actionName}`, result);
-  
-  return result;
+### InterceptorContext
+
+```ts
+interface InterceptorContext {
+  actionPath: string;
+  payload: unknown;
+  result?: unknown;
+  error?: unknown;
+  durationMs?: number;
+  metadata: Record<string, unknown>;
+}
+```
+
+| Field | Phase | Description |
+|---|---|---|
+| `actionPath` | before/after | The action being called (e.g., `orders.sum`) |
+| `payload` | before | The request payload |
+| `result` | after | The response from the server |
+| `error` | after | Any error that occurred |
+| `durationMs` | after | Time taken for the call |
+| `metadata` | before/after | Shared state between interceptors |
+
+---
+
+## Execution Order
+
+```
+before[0] → before[1] → ... → HTTP Call → after[0] → after[1] → ...
+```
+
+Interceptors run in the order they are registered. All `before` hooks execute before the call, then the call executes, then all `after` hooks execute.
+
+### Short-Circuiting
+
+If a `before` hook sets `ctx.result`, the pipeline short-circuits and returns that result without making the actual call:
+
+```ts
+const cacheInterceptor: ClientInterceptor = {
+  name: 'cache',
+  before: (ctx) => {
+    const cached = cache.get(ctx.actionPath);
+    if (cached) {
+      ctx.result = cached;
+    }
+    return ctx;
+  },
 };
 ```
 
-## Registering Interceptors
+---
 
-Add interceptors to the CapsKit instance before calling actions:
+## buildInterceptorPipeline()
+
+The core pipeline builder function. Used internally by the client, but available for custom use cases.
 
 ```ts
-import { CapsKit } from '@mobtakronio/capskit';
+import { buildInterceptorPipeline } from '@mobtakronio/capskit-client';
 
-const capskit = new CapsKit({
-  capsules: [
-    { type: 'directory', path: './src/capsules' }
-  ]
+const result = await buildInterceptorPipeline(
+  interceptors,   // ClientInterceptor[]
+  executor,       // (actionPath, payload) => Promise<unknown>
+  'orders.sum',   // actionPath
+  { a: 1, b: 2 }, // payload
+);
+```
+
+---
+
+## Built-in Interceptors
+
+### loggingInterceptor
+
+Logs action calls with duration.
+
+```ts
+import { loggingInterceptor } from '@mobtakronio/capskit-client';
+
+const client = createCapsKitClient({
+  baseUrl: 'http://localhost:3000',
+  interceptors: {
+    after: [loggingInterceptor({ level: 'info' })],
+  },
 });
-
-// Register interceptors
-capskit.addInterceptor(loggingInterceptor);
-capskit.addInterceptor(metricsInterceptor);
-
-await capskit.start();
 ```
 
-## Interceptor Chain
+**Options:**
 
-Interceptors run in registration order. Each must call `next()` exactly once:
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `logger` | `(msg: string) => void` | `console.log` | Custom logging function |
+| `level` | `'info' \| 'debug' \| 'warn'` | `'info'` | Log verbosity |
 
-```ts
-const timerInterceptor: ActionInterceptor = async (actionName, input, context, next) => {
-  const start = Date.now();
-  
-  const result = await next();
-  
-  const duration = Date.now() - start;
-  console.log(`${actionName} took ${duration}ms`);
-  
-  return result;
-};
-
-const authInterceptor: ActionInterceptor = async (actionName, input, context, next) => {
-  // Check authentication before proceeding
-  if (!context.deps.user) {
-    throw new AuthorizationError('Not authenticated');
-  }
-  
-  return next();
-};
-
-// Order matters: timer runs first, then auth
-capskit.addInterceptor(timerInterceptor);
-capskit.addInterceptor(authInterceptor);
+**Output:**
+```
+[CapsKit] ✓ orders.sum — 42ms
+[CapsKit] ✗ orders.delete — 120ms
 ```
 
-## Common Patterns
+In `debug` mode, also logs the payload and error details.
 
-### Logging Interceptor
+### authInterceptor
+
+Injects an authentication token into the request.
 
 ```ts
-const loggingInterceptor: ActionInterceptor = async (actionName, input, context, next) => {
-  const logger = context.deps.logger;
-  
-  logger.info(`Calling ${actionName}`, { 
-    body: input.body,
-    params: input.params,
-    query: input.query
-  });
-  
-  try {
-    const result = await next();
-    logger.info(`Completed ${actionName}`, { result });
-    return result;
-  } catch (error) {
-    logger.error(`Failed ${actionName}`, { error });
-    throw error;
-  }
-};
+import { authInterceptor } from '@mobtakronio/capskit-client';
+
+const client = createCapsKitClient({
+  baseUrl: 'http://localhost:3000',
+  interceptors: {
+    before: [
+      authInterceptor({
+        getToken: () => localStorage.getItem('token') ?? '',
+        headerName: 'Authorization',
+        headerPrefix: 'Bearer ',
+      }),
+    ],
+  },
+});
 ```
 
-### Metrics Interceptor
+**Options:**
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `getToken` | `() => string \| Promise<string>` | **required** | Function that returns the auth token |
+| `headerName` | `string` | `'Authorization'` | HTTP header name |
+| `headerPrefix` | `string` | `'Bearer '` | Token prefix |
+
+### errorNormalizationInterceptor
+
+Normalizes raw errors into `CapsKitClientError` instances.
 
 ```ts
-const metricsInterceptor: ActionInterceptor = async (actionName, input, context, next) => {
-  const metrics = context.deps.metrics;
-  const start = Date.now();
-  
-  try {
-    const result = await next();
-    
-    metrics.timing('action.duration', Date.now() - start, {
-      action: actionName,
-      status: 'success'
-    });
-    
-    metrics.increment('action.calls', 1, {
-      action: actionName,
-      status: 'success'
-    });
-    
-    return result;
-  } catch (error) {
-    metrics.increment('action.calls', 1, {
-      action: actionName,
-      status: 'error'
-    });
-    
-    throw error;
-  }
-};
+import { errorNormalizationInterceptor } from '@mobtakronio/capskit-client';
+
+const client = createCapsKitClient({
+  baseUrl: 'http://localhost:3000',
+  interceptors: {
+    after: [errorNormalizationInterceptor()],
+  },
+});
 ```
 
-### Error Handling Interceptor
+Converts:
+- `Error` instances → `ActionExecutionError`
+- Plain strings → `CapsKitClientError`
+- Error objects → `CapsKitClientError` with details
+
+### retryInterceptor
+
+Retries failed calls with configurable backoff.
 
 ```ts
-const errorInterceptor: ActionInterceptor = async (actionName, input, context, next) => {
-  try {
-    return await next();
-  } catch (error) {
-    // Transform errors to standard format
-    if (error instanceof ValidationError) {
-      throw { code: 'VALIDATION_ERROR', message: error.message };
-    }
-    if (error instanceof NotFoundError) {
-      throw { code: 'NOT_FOUND', message: error.message };
-    }
-    
-    // Log unexpected errors
-    console.error(`[Error] ${actionName}:`, error);
-    
-    // Re-throw with generic message
-    throw { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' };
-  }
+import { retryInterceptor } from '@mobtakronio/capskit-client';
+
+const client = createCapsKitClient({
+  baseUrl: 'http://localhost:3000',
+  interceptors: {
+    after: [
+      retryInterceptor({
+        maxRetries: 3,
+        backoff: 'exponential',
+        retryOn: [429, 500, 502, 503, 504],
+      }),
+    ],
+  },
+});
+```
+
+**Options:**
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `maxRetries` | `number` | `3` | Maximum retry attempts |
+| `backoff` | `'linear' \| 'exponential' \| 'none'` | `'exponential'` | Delay strategy |
+| `retryOn` | `number[]` | `[429, 500, 502, 503, 504]` | HTTP status codes to retry |
+
+**Backoff delays:**
+- `exponential`: `1000 * 2^attempt` ms (capped at 30s)
+- `linear`: `1000 * (attempt + 1)` ms
+- `none`: 0ms delay
+
+---
+
+## Writing Custom Interceptors
+
+### Timing Interceptor
+
+```ts
+import { ClientInterceptor } from '@mobtakronio/capskit-client';
+
+const timingInterceptor: ClientInterceptor = {
+  name: 'timing',
+  before: (ctx) => {
+    ctx.metadata.startTime = Date.now();
+    return ctx;
+  },
+  after: (ctx) => {
+    const duration = Date.now() - (ctx.metadata.startTime as number);
+    console.log(`${ctx.actionPath} took ${duration}ms`);
+    return ctx;
+  },
 };
 ```
 
 ### Caching Interceptor
 
 ```ts
-const cacheInterceptor: ActionInterceptor = async (actionName, input, context, next) => {
-  const cache = context.deps.cache;
-  
-  // Only cache GET-like actions
-  if (!actionName.includes('.get') && !actionName.includes('.list')) {
-    return next();
-  }
-  
-  const cacheKey = `${actionName}:${JSON.stringify(input.body)}`;
-  const cached = await cache.get(cacheKey);
-  
-  if (cached) {
-    console.log(`[Cache] Hit for ${actionName}`);
-    return cached;
-  }
-  
-  const result = await next();
-  
-  // Cache for 5 minutes
-  await cache.set(cacheKey, result, { ttl: 300 });
-  
-  return result;
+const cache = new Map<string, unknown>();
+
+const cacheInterceptor: ClientInterceptor = {
+  name: 'cache',
+  before: (ctx) => {
+    const key = `${ctx.actionPath}:${JSON.stringify(ctx.payload)}`;
+    if (cache.has(key)) {
+      ctx.result = cache.get(key);
+    }
+    return ctx;
+  },
+  after: (ctx) => {
+    if (ctx.result && !ctx.error) {
+      const key = `${ctx.actionPath}:${JSON.stringify(ctx.payload)}`;
+      cache.set(key, ctx.result);
+    }
+    return ctx;
+  },
 };
 ```
 
-### Rate Limiting Interceptor
+---
+
+## Interceptor Ordering
+
+The order of interceptors matters. Common patterns:
+
+### Recommended Stack
 
 ```ts
-const rateLimitInterceptor: ActionInterceptor = async (actionName, input, context, next) => {
-  const limiter = context.deps.rateLimiter;
-  const userId = context.deps.user?.id || 'anonymous';
-  
-  const key = `rate:${userId}:${actionName}`;
-  const allowed = await limiter.check(key, { 
-    maxRequests: 100, 
-    windowMs: 60000 
-  });
-  
-  if (!allowed) {
-    throw new Error('Rate limit exceeded');
-  }
-  
-  return next();
-};
+const client = createCapsKitClient({
+  baseUrl: 'http://localhost:3000',
+  interceptors: {
+    before: [
+      authInterceptor({ getToken }),    // 1. Auth first
+      cacheInterceptor,                  // 2. Then check cache
+    ],
+    after: [
+      retryInterceptor(),                // 1. Retry on failure
+      errorNormalizationInterceptor(),   // 2. Normalize errors
+      loggingInterceptor(),              // 3. Log last (sees final state)
+    ],
+  },
+});
 ```
 
-## Interceptor vs Hooks
+**Why this order:**
+- Auth runs before everything — no point checking cache for unauthorized requests
+- Cache check before the call — avoid unnecessary network requests
+- Retry before error normalization — retry needs raw error to check status codes
+- Logging last — sees the final result/error after all transformations
 
-| Interceptors | Hooks |
-|--------------|-------|
-| Global scope | Action-specific scope |
-| Registered on CapsKit | Defined in manifest |
-| Run for all actions | Run for specific actions |
-| Can short-circuit chain | Cannot prevent handler |
-| Good for: logging, metrics, auth | Good for: validation, transformation |
+---
 
-## Execution Order
+## Next Steps
 
-The complete execution flow:
-
-1. **Interceptors** (in registration order)
-2. **Pre-hooks** (in definition order)
-3. **Handler**
-4. **Post-hooks** (in definition order)
-5. **Interceptors** (unwinding, in reverse order)
-
-```ts
-// Example execution trace:
-// 1. metricsInterceptor.before()
-// 2. loggingInterceptor.before()
-// 3. preHook1()
-// 4. preHook2()
-// 5. handler()
-// 6. postHook1()
-// 7. postHook2()
-// 8. loggingInterceptor.after()
-// 9. metricsInterceptor.after()
-```
-
-## Best Practices
-
-### 1. Keep Interceptors Focused
-
-Each interceptor should handle one concern:
-
-```ts
-// Good: Single responsibility
-capskit.addInterceptor(loggingInterceptor);
-capskit.addInterceptor(metricsInterceptor);
-capskit.addInterceptor(authInterceptor);
-
-// Bad: Multiple concerns in one
-capskit.addInterceptor(loggingAndMetricsAndAuthInterceptor);
-```
-
-### 2. Always Call next()
-
-Interceptors must call `next()` exactly once:
-
-```ts
-// Good: Always calls next
-const goodInterceptor: ActionInterceptor = async (name, input, ctx, next) => {
-  try {
-    return await next();
-  } catch (error) {
-    // Handle error, but next() was already called
-    throw error;
-  }
-};
-
-// Bad: Forgets to call next
-const badInterceptor: ActionInterceptor = async (name, input, ctx, next) => {
-  if (someCondition) {
-    return { blocked: true }; // next() never called!
-  }
-  return next();
-};
-```
-
-### 3. Use Dependencies
-
-Access shared services via `context.deps`:
-
-```ts
-const dbInterceptor: ActionInterceptor = async (name, input, context, next) => {
-  const db = context.deps.database;
-  
-  // Start transaction
-  const tx = await db.startTransaction();
-  context.deps.tx = tx;
-  
-  try {
-    const result = await next();
-    await tx.commit();
-    return result;
-  } catch (error) {
-    await tx.rollback();
-    throw error;
-  }
-};
-```
-
-### 4. Handle Errors Gracefully
-
-Don't swallow errors unless intentional:
-
-```ts
-const errorInterceptor: ActionInterceptor = async (name, input, context, next) => {
-  try {
-    return await next();
-  } catch (error) {
-    // Log but re-throw
-    console.error(`Error in ${name}:`, error);
-    throw error;
-  }
-};
-```
-
-## Related
-
-- [Hooks](/guide/hooks) - Action-specific middleware
-- [Errors](/guide/errors) - Error handling patterns
-- [Architecture](/guide/architecture) - System overview
+- [Client SDK](./client.md) — Full client package documentation
+- [Offline](./offline.md) — Offline-first queue for disconnected operations
+- [WebSocket](./websocket.md) — WebSocket protocol details

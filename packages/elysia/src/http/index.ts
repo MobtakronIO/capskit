@@ -1,5 +1,5 @@
 import { Elysia } from 'elysia';
-import type { ICapsKit, CapsuleManifest, RouteDefinition } from '@mobtakronio/capskit';
+import type { ICapsKit, CapsuleManifest, RouteManifest } from '@mobtakronio/capskit';
 import { mapToHttpResponse } from '../shared';
 import type { HttpOptions, TraitHandler } from '../shared';
 
@@ -17,7 +17,7 @@ export function createRouter(capskit: ICapsKit, options: HttpAdapterOptions = {}
 
   manifests.forEach(manifest => {
     if (manifest.routes) {
-      manifest.routes.forEach((route: RouteDefinition & { traits?: Record<string, unknown> }) => {
+      manifest.routes.forEach((route: RouteManifest & { traits?: Record<string, unknown> }) => {
         const path = route.path;
         
         let hooks: Record<string, unknown> = {};

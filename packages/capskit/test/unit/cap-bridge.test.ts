@@ -29,8 +29,6 @@ import type {
   CapDefinition,
   CapsuleRegistry,
   CapsuleManifest,
-  ActionContext,
-  ActionInput,
   CapContext,
 } from '../../src/types';
 
@@ -711,7 +709,7 @@ describe('CapContext Adapter', () => {
     const mockCall = async (action: string, payload: any) => ({ result: 'ok' });
     const mockUse = (capsuleName: string) => ({});
 
-    const platformContext: ActionContext = {
+    const platformContext: CapContext = {
       body: { key: 'value' },
       params: { id: '123' },
       query: { sort: 'asc' },
@@ -738,7 +736,7 @@ describe('CapContext Adapter', () => {
       return { ok: true };
     };
 
-    const platformContext: ActionContext = {
+    const platformContext: CapContext = {
       body: {},
       deps: {},
       emit: () => {},
@@ -762,7 +760,7 @@ describe('CapContext Adapter', () => {
       return { ok: true };
     };
 
-    const platformContext: ActionContext = {
+    const platformContext: CapContext = {
       body: {},
       deps: {},
       emit: () => {},
@@ -778,14 +776,14 @@ describe('CapContext Adapter', () => {
     expect(callLog[0].action).toBe('analytics.track');
   });
 
-  test('wrapCapHandler adapts ActionContext to CapContext', async () => {
-    const capMethod = async (input: ActionInput, ctx: CapContext): Promise<any> => {
+  test('wrapCapHandler adapts CapContext to CapContext', async () => {
+    const capMethod = async (input: CapInput, ctx: CapContext): Promise<any> => {
       const result = await ctx.invoke('other.action', { body: { nested: true } });
       return { input: input.body, invoked: result };
     };
 
     const callLog: any[] = [];
-    const platformContext: ActionContext = {
+    const platformContext: CapContext = {
       body: { original: 'data' },
       params: {},
       deps: {},
@@ -809,11 +807,11 @@ describe('CapContext Adapter', () => {
   });
 
   test('wrapCapHandler passes query through to CapContext', async () => {
-    const capMethod = async (input: ActionInput, ctx: CapContext): Promise<any> => {
+    const capMethod = async (input: CapInput, ctx: CapContext): Promise<any> => {
       return { query: ctx.query };
     };
 
-    const platformContext: ActionContext = {
+    const platformContext: CapContext = {
       body: {},
       query: { page: '1', limit: '10' },
       deps: {},
@@ -829,11 +827,11 @@ describe('CapContext Adapter', () => {
   });
 
   test('wrapCapHandler provides default empty query object', async () => {
-    const capMethod = async (input: ActionInput, ctx: CapContext): Promise<any> => {
+    const capMethod = async (input: CapInput, ctx: CapContext): Promise<any> => {
       return { query: ctx.query };
     };
 
-    const platformContext: ActionContext = {
+    const platformContext: CapContext = {
       body: {},
       deps: {},
       emit: () => {},
@@ -848,7 +846,7 @@ describe('CapContext Adapter', () => {
   });
 
   test('createCapContext provides query as empty object when undefined', () => {
-    const platformContext: ActionContext = {
+    const platformContext: CapContext = {
       body: {},
       deps: {},
       emit: () => {},

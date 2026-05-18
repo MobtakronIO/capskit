@@ -11,7 +11,7 @@ layout: home
 **The Universal Capability Kernel.** Package your business logic into pure, swappable capsules that run identically via HTTP, WebSocket, CLI, or internal routines.
 
 <div class="hero-actions">
-  <a href="/guide/introduction" class="VPButton brand">Get Started</a>
+  <a href="/guide/quick-start" class="VPButton brand">Get Started</a>
   <a href="https://github.com/MobtakronIO/capskit" class="VPButton alt">GitHub</a>
 </div>
 
@@ -51,10 +51,9 @@ layout: home
     </div>
   </div>
   <div class="hero-flow">
-    <span>Interceptors</span>
-    <span>Pre Hooks</span>
-    <span>Action</span>
-    <span>Post Hooks</span>
+    <span>Hook Caps</span>
+    <span>Cap</span>
+    <span>Result</span>
   </div>
   <div class="hero-meta">
     <div class="hero-meta-card">
@@ -82,22 +81,22 @@ layout: home
   <div class="why-card">
     <div class="why-icon">🧩</div>
     <h3>Declarative by Design</h3>
-    <p>Define capabilities as Caps with `cap.ts` + `cap.meta.ts`, compose them via `caps.ts`, and let the kernel auto-discover everything. No more scattering routing logic across controllers, middleware, and config files.</p>
+    <p>Define capabilities as `.cap.ts` files with `meta` + default export, group them into capsules, and let the kernel auto-discover everything. No more scattering routing logic across controllers, middleware, and config files.</p>
   </div>
   <div class="why-card">
     <div class="why-icon">🔒</div>
     <h3>Type-Safe Contracts</h3>
-    <p>TypeScript-first from the ground up. Action schemas, dependency injection, and manifest validation catch errors at build time, not runtime.</p>
+    <p>TypeScript-first from the ground up. Cap schemas, dependency injection, and capsule validation catch errors at build time, not runtime.</p>
   </div>
   <div class="why-card">
     <div class="why-icon">🧬</div>
     <h3>Universal Pipelines</h3>
-    <p>Kernel Interceptors wrap every action with cross-cutting concerns: logging, metrics, transactions, auth. Same pipeline for HTTP, WebSocket, or internal calls.</p>
+    <p>Hook caps wrap every action with cross-cutting concerns: logging, metrics, transactions, auth. Same pipeline for HTTP, WebSocket, or internal calls.</p>
   </div>
   <div class="why-card">
     <div class="why-icon">🧱</div>
     <h3>True Plug & Play</h3>
-    <p>Capsules are self-contained modules. Drop a capsule into your project and the kernel automatically discovers, validates, and wires it into the system.</p>
+    <p>Capsules are self-contained modules. Drop a capsule directory into your project and the kernel automatically discovers, validates, and wires it into the system.</p>
   </div>
 </div>
 
@@ -114,7 +113,7 @@ layout: home
 <div class="feature-card">
   <div class="feature-icon">🔌</div>
   <h3>Dynamic Adapters</h3>
-  <p>Generate complete routers or wire events automatically from manifest metadata. Adapters translate your declarative config into real middleware.</p>
+  <p>Generate complete routers or wire events automatically from cap metadata. Adapters translate declarative cap definitions into real framework middleware.</p>
 </div>
 
 <div class="feature-card">
@@ -131,66 +130,34 @@ layout: home
 
 <div class="feature-card">
   <div class="feature-icon">🔧</div>
-  <h3>Interceptor Chains</h3>
-  <p>Global or per-action interceptors for cross-cutting concerns. Composable, async-aware, and fully controllable.</p>
+<h3>Hook Chains</h3>
+<p>Global or per-action hook caps for cross-cutting concerns. Composable, async-aware, and fully controllable.</p>
 </div>
 
 <div class="feature-card">
   <div class="feature-icon">📦</div>
   <h3>Modular Discovery</h3>
-  <p>Load capsules from directories, inline manifests, or npm packages. precedence order is explicit and configurable.</p>
+  <p>Load capsules from directories with automatic dependency resolution and cycle detection. One format, zero ambiguity.</p>
 </div>
 
+<div class="feature-card">
+  <div class="feature-icon">🔗</div>
+  <h3>Typed Client SDK</h3>
+  <p>Auto-generated TypeScript types from server manifest. Typed <code>call()</code> and <code>use()</code> with full IDE autocomplete.</p>
 </div>
 
-## Quick Comparison
+<div class="feature-card">
+  <div class="feature-icon">⚛️</div>
+  <h3>React &amp; Vue Integration</h3>
+  <p>First-party hooks: <code>useAction</code>, <code>useSubscription</code>, <code>useCapsule</code>. Drop-in providers for both frameworks.</p>
+</div>
 
-<div class="comparison-shell">
-  <div class="comparison-head">
-    <span class="comparison-kicker">Architecture Shift</span>
-    <h3>From transport-bound code to reusable capabilities</h3>
-    <p>CapsKit reorganizes application logic around capsules, so the same capability can power HTTP, WebSocket, CLI, and internal execution without being rewritten for each transport.</p>
-  </div>
-  <div class="comparison-grid">
-    <div class="comparison-column comparison-column-muted">
-      <div class="comparison-column-label">Traditional Framework</div>
-      <div class="comparison-item">
-        <strong>Controllers own the flow</strong>
-        <p>Business logic is usually tied to HTTP entry points and framework-specific conventions.</p>
-      </div>
-      <div class="comparison-item">
-        <strong>Middleware is scattered</strong>
-        <p>Routing, auth, validation, and transport rules often live in different files and layers.</p>
-      </div>
-      <div class="comparison-item">
-        <strong>Dependencies are hand-wired</strong>
-        <p>Services and runtime concerns are manually stitched together across the app surface.</p>
-      </div>
-      <div class="comparison-item">
-        <strong>Testing follows the framework</strong>
-        <p>Tests often require mocks, app bootstrapping, or transport-specific setup to exercise logic.</p>
-      </div>
-    </div>
-    <div class="comparison-column comparison-column-brand">
-      <div class="comparison-column-label">CapsKit</div>
-      <div class="comparison-item">
-        <strong>Actions stay transport-agnostic</strong>
-        <p>Capabilities are written once and invoked consistently through adapters, events, or internal calls.</p>
-      </div>
-      <div class="comparison-item">
-        <strong>Caps drive the system</strong>
-        <p>Contracts, routes, traits, hooks, and dependencies are declared on each Cap and composed into a CapsuleRegistry via <code>caps.ts</code>.</p>
-      </div>
-      <div class="comparison-item">
-        <strong>Kernel handles composition</strong>
-        <p>Validation, injection, interceptors, and loading are enforced at the kernel boundary.</p>
-      </div>
-      <div class="comparison-item">
-        <strong>Logic is easy to test directly</strong>
-        <p>Run actions as plain capability units instead of reconstructing the full framework lifecycle.</p>
-      </div>
-    </div>
-  </div>
+<div class="feature-card">
+  <div class="feature-icon">📴</div>
+  <h3>Offline-First Support</h3>
+  <p>IndexedDB-backed operation queue. Auto-flush on reconnect. Works in browser and Node.js with memory fallback.</p>
+</div>
+
 </div>
 
 ## Ready to break free?
@@ -585,114 +552,6 @@ layout: home
   margin: 0;
   color: var(--vp-c-text-2);
   line-height: 1.6;
-}
-
-.comparison-shell {
-  margin: 2rem 0 3rem 0;
-  padding: 1.4rem;
-  border-radius: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background:
-    radial-gradient(circle at top left, rgba(93, 211, 158, 0.12), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(60, 115, 245, 0.1), transparent 30%),
-    linear-gradient(145deg, rgba(15, 23, 42, 0.98), rgba(24, 32, 48, 0.94));
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
-}
-
-.comparison-head {
-  margin-bottom: 1.25rem;
-}
-
-.comparison-kicker {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.35rem 0.7rem;
-  border-radius: 999px;
-  font-size: 0.74rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #d7f6e5;
-  background: rgba(93, 211, 158, 0.12);
-  border: 1px solid rgba(93, 211, 158, 0.2);
-}
-
-.comparison-head h3 {
-  margin: 0.9rem 0 0.5rem 0;
-  font-size: 1.65rem;
-  color: #f8fbff;
-}
-
-.comparison-head p {
-  margin: 0;
-  max-width: 780px;
-  color: #b8c4d6;
-  line-height: 1.7;
-}
-
-.comparison-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-}
-
-.comparison-column {
-  padding: 1rem;
-  border-radius: 22px;
-}
-
-.comparison-column-muted {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-.comparison-column-brand {
-  background:
-    linear-gradient(180deg, rgba(93, 211, 158, 0.12), rgba(93, 211, 158, 0.04)),
-    rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(93, 211, 158, 0.18);
-}
-
-.comparison-column-label {
-  margin-bottom: 0.9rem;
-  font-size: 0.82rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #dfe8f4;
-}
-
-.comparison-item {
-  padding: 0.95rem 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.comparison-item:first-of-type {
-  border-top: 0;
-  padding-top: 0.15rem;
-}
-
-.comparison-item strong {
-  display: block;
-  margin-bottom: 0.35rem;
-  color: #f8fbff;
-  font-size: 1rem;
-}
-
-.comparison-item p {
-  margin: 0;
-  color: #b8c4d6;
-  line-height: 1.6;
-}
-
-@media (max-width: 768px) {
-  .comparison-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .comparison-shell {
-    padding: 1rem;
-  }
 }
 
 .cta-section {

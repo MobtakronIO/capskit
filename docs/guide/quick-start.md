@@ -1,132 +1,222 @@
 # Quick Start
 
-Initialize a completely pure business engine in under a minute.
+Initialize a CapsKit application in under a minute.
+
+---
 
 ## Installation
-
-Currently, CapsKit is managed internally. Install the core package (assuming NPM publishing is configured!):
 
 ```bash
 npm install @mobtakronio/capskit elysia
 ```
 
-## 1. Create Your First Cap
+---
 
-CapsKit applications are composed of **Caps** — classes whose methods are pure business logic — and grouped into **Capsules** via a registry. Start by creating a simple calculator cap:
+## 1. Create Your Capsule Directory
 
 ```bash
-mkdir -p src/capsules/math-capsule/.cap/calculator
+mkdir -p capsules/orders/caps
+mkdir -p capsules/orders/types
+mkdir -p capsules/orders/helpers
 ```
 
-Create the business logic in `cap.ts`:
+---
+
+## 2. Write the capsule.ts
 
 ```ts
-// src/capsules/math-capsule/.cap/calculator/cap.ts
-import { ActionInput, CapContext } from '@mobtakronio/capskit';
+// capsules/orders/capsule.ts
+import { CapsuleDefinition } from '@mobtakronio/capskit';
 
-export default class CalculatorCap {
-  // Index signature required for dynamic dispatch
-  [action: string]: any;
+export default {
+  name: 'orders',
+  dependencies: [],
+} satisfies CapsuleDefinition;
+```
 
-  async sum(input: ActionInput, _ctx: CapContext): Promise<{ result: number }> {
-    const { a, b } = input.body;
-    return { result: a + b };
-  }
+---
+
+## 3. Create Your First Cap
+
+```ts
+// capsules/orders/caps/sum.cap.ts
+import { CapInput, CapContext, CapMeta } from '@mobtakronio/capskit';
+
+export const meta: CapMeta = {
+  name: 'sum',
+  kind: 'action',
+  routes: [{ method: 'POST', path: '/sum', cap: 'sum' }],
+  inputSchema: {
+    type: 'object',
+    properties: {
+      a: { type: 'number' },
+      b: { type: 'number' },
+    },
+    required: ['a', 'b'],
+  },
+};
+
+export default async function sum(input: CapInput, _ctx: CapContext) {
+  const { a, b } = input.body;
+  return { result: a + b };
 }
 ```
 
-Create the metadata contract in `cap.meta.ts`:
+Every `.cap.ts` file exports two things:
+- `meta` — the CapMeta (name, kind, routes, schemas)
+- `default` — the async handler function
+
+The kernel auto-discovers `.cap.ts` files from the `caps/` directory. No manual registration needed.
+
+---
+
+## 4. Run the App
 
 ```ts
-// src/capsules/math-capsule/.cap/calculator/cap.meta.ts
-import { CapMeta } from '@mobtakronio/capskit';
-
-export const meta: CapMeta = {
-  name: 'calculator',
-  routes: [
-    { method: 'POST', path: '/sum', action: 'sum' },
-  ],
-  actions: {
-    sum: {
-      description: 'Adds two numbers together',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          a: { type: 'number' },
-          b: { type: 'number' },
-        },
-        required: ['a', 'b'],
-      },
-    },
-  },
-};
-```
-
-Compose the cap into a capsule via `caps.ts`:
-
-```ts
-// src/capsules/math-capsule/caps.ts
-import { CapsuleRegistry } from '@mobtakronio/capskit';
-import CalculatorCap from './.cap/calculator/cap';
-import { meta as calcMeta } from './.cap/calculator/cap.meta';
-
-const mathCapsule: CapsuleRegistry = {
-  name: 'math-capsule',
-  caps: [
-    { class: CalculatorCap, meta: calcMeta },
-  ],
-};
-
-export default mathCapsule;
-```
-
-## 2. Boot the Platform
-
-In your host application (`index.ts`), initialize the system Kernel and inject external dependencies. Pass your `CapsuleRegistry` directly:
-
-```ts
-import { createCapsKit } from '@mobtakronio/capskit';
+// index.ts
+import { createCapsKitPlatform } from '@mobtakronio/capskit';
 import { Elysia } from 'elysia';
 
 async function bootstrap() {
-  const { capskit } = await createCapsKit({
-    capsules: [
-      { type: 'caps-registry', path: 'src/capsules/math-capsule' },
-      // Or load an entire directory:
-      // { type: 'directory', path: 'src/capsules' },
-    ],
-    dependencies: { database: {} },
+  const platform = await createCapsKitPlatform({
+    capsuleDirs: ['./caps'],
   });
 
-  // 1. Generate an Elysia router automatically!
-  const { router } = await capskit.use('http').buildRouter({ adapter: 'elysia' });
+  // Use the HTTP capsule to compile routes
+  const http = platform.use('http');
+  const { routes } = await http.buildRouter();
 
-  // 2. Start specific framework listeners
-  new Elysia()
-    .use(router)
-    .listen(3000);
+  // Plug into any adapter
+  const { createServer } = await import('@mobtakronio/capskit-http-elysia');
+  await createServer(routes, { port: 3000 });
 }
 
 bootstrap();
 ```
 
-Done! You now have a framework-agnostic capability system wrapped gracefully in an Elysia server. The HTTP route `POST /sum` is automatically bound from your cap's `cap.meta.ts` route definition.
+That's it. `POST /sum` is live.
 
-## 3. Invoke Capabilities Internally
+---
 
-If you need to call a capability explicitly from code (e.g., inside an automated CRON job or a terminal tool), never write framework logic. Simply instantiate a **Capsule Client**:
+## 5. Invoke Capabilities Internally
 
 ```ts
-const math = capskit.use('math-capsule');
-
-// Look! It acts just like a native Javascript module!
-const { result } = await math.sum({ a: 15, b: 30 });
-console.log('Result:', result);
+const orders = platform.use('orders');
+const { result } = await orders.sum({ a: 15, b: 30 });
+console.log('Result:', result); // 45
 ```
+
+---
+
+## createCapsKitPlatform Config
+
+```ts
+interface CapsKitPlatformConfig {
+  capsuleDirs?: string[];          // Directories to scan for capsule.ts
+  dependencies?: Record<string, unknown>;
+  disableBuiltins?: string[];     // e.g., ['websocket'] for CRON-only apps
+}
+```
+
+---
+
+## Client-Side Quick Start
+
+Once your server is running, connect to it from the frontend using the typed client SDK.
+
+### Install the Client Package
+
+```bash
+npm install @mobtakronio/capskit-client
+```
+
+### Create a Typed Client
+
+```ts
+import { createCapsKitClient } from '@mobtakronio/capskit-client';
+
+const client = createCapsKitClient({
+  baseUrl: 'http://localhost:3000',
+  transport: 'auto', // HTTP for calls, WebSocket for subscriptions
+});
+```
+
+### Call a Cap
+
+```ts
+const result = await client.call<{ result: number }>('orders.sum', { a: 15, b: 30 });
+console.log(result.result); // 45
+```
+
+Or use the typed capsule proxy:
+
+```ts
+const orders = client.use('orders');
+const result = await orders.sum({ a: 15, b: 30 });
+```
+
+### Subscribe to Events
+
+```ts
+const unsub = client.subscribe('order.*', (data, event) => {
+  console.log(`Event ${event}:`, data);
+});
+
+// Later:
+unsub();
+```
+
+### Generate Types from the Server
+
+```bash
+npx capskit generate --url http://localhost:3000 --output src/capskit-types.ts
+```
+
+This generates typed `call()` and `use()` overloads from your server's manifest. See [Type Generator](./type-generator.md) for details.
+
+### React Integration
+
+```tsx
+import { CapsKitProvider, useAction, useSubscription } from '@mobtakronio/capskit-react';
+
+function App() {
+  return (
+    <CapsKitProvider client={client}>
+      <OrderList />
+    </CapsKitProvider>
+  );
+}
+
+function OrderList() {
+  const { data, loading, error } = useAction('orders.list');
+  const { latest } = useSubscription('order.created');
+
+  if (loading) return <p>Loading...</p>;
+  if (error) return <p>Error: {error.message}</p>;
+  return <div>{JSON.stringify(data)}</div>;
+}
+```
+
+### Vue Integration
+
+```ts
+// In your <script setup> block:
+import { provideCapsKit, useAction, useSubscription } from '@mobtakronio/capskit-vue';
+
+provideCapsKit(client);
+
+const { data, loading, error } = useAction('orders.list', undefined, { immediate: true });
+const { latest } = useSubscription('order.created');
+```
+
+---
 
 ## Next Steps
 
-- **Capsules & Caps**: Learn the full Cap model — [Capsules & Caps](./capsules.md)
-- **Architecture**: Understand the three-layer design — [Architecture Overview](./architecture.md)
-- **Adapters**: Configure HTTP, WebSocket, and more — [HTTP Adapters](./adapters/http.md)
-- **Testing**: Write tests for your caps — [Testing](./testing.md)
+- [Capsules](./capsules.md) — Full capsule structure and file conventions
+- [Dependencies](./dependencies.md) — CapsuleDefinition and auto-discovery
+- [Built-in Capsules](./built-in-capsules.md) — All 5 built-in capsules documented
+- [Hooks](./hooks.md) — Cross-cutting concerns as caps
+- [Client SDK](./client.md) — Full client package documentation
+- [React](./react.md) — React hooks and provider
+- [Vue](./vue.md) — Vue composables

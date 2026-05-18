@@ -1,7 +1,27 @@
-import type { CapsuleManifest, ActionHandler, ActionContext, ActionInput } from '@mobtakronio/capskit';
+import type { CapHandler, CapInput, CapContext, CapsuleManifest, CapsuleCapManifest } from '@mobtakronio/capskit';
 import { createMockDeps } from './mockDeps';
 import { EventCapture } from './captureEvents';
-import type { TestCapsKitHarness, ActionResult } from './types';
+import type { TestCapsKitHarness, ActionResult, TestCapsuleManifest } from './types';
+
+/**
+ * Converts a TestCapsuleManifest into a runtime CapsuleManifest.
+ */
+function toRuntimeManifest(config: TestCapsuleManifest): CapsuleManifest {
+  const caps: CapsuleCapManifest[] = Object.entries(config.actions).map(([actionKey]) => ({
+    name: actionKey,
+    kind: 'action' as const,
+    capPath: `${config.name}.${actionKey}`,
+    actionPath: `${config.name}.${actionKey}`,
+    description: undefined,
+  }));
+
+  return {
+    name: config.name,
+    dependencies: config.dependencies,
+    description: config.description,
+    caps,
+  };
+}
 
 /**
  * Creates a minimal test harness for capskit capsules
@@ -46,11 +66,20 @@ import type { TestCapsKitHarness, ActionResult } from './types';
  * ```
  */
 export function createTestCapsKit(config: {
-  manifest: CapsuleManifest | CapsuleManifest[];
+  manifest: TestCapsuleManifest | TestCapsuleManifest[];
   deps?: Record<string, unknown>;
 }): TestCapsKitHarness {
-  const manifests = Array.isArray(config.manifest) ? config.manifest : [config.manifest];
+  const configs = Array.isArray(config.manifest) ? config.manifest : [config.manifest];
   const eventCapture = new EventCapture();
+  
+  // Build a lookup map: capsuleName -> actions
+  const actionMap = new Map<string, TestCapsuleManifest['actions']>();
+  for (const cfg of configs) {
+    actionMap.set(cfg.name, cfg.actions);
+  }
+  
+  // Create runtime manifests for getManifests()
+  const runtimeManifests = configs.map(toRuntimeManifest);
   
   // Create mock dependencies with spy support
   const mockDeps = createMockDeps({ spyOnMethods: true });
@@ -65,31 +94,29 @@ export function createTestCapsKit(config: {
    * Executes an action with the given payload
    */
   async function callAction(actionName: string, payload: unknown): Promise<ActionResult> {
-    // Find the manifest and action
-    let actionDef: { handler: ActionHandler; pre?: Array<(input: ActionInput, context: ActionContext) => Promise<void> | void>; post?: Array<(input: ActionInput, result: unknown, context: ActionContext) => Promise<unknown> | unknown> } | undefined;
-    let manifest: CapsuleManifest | undefined;
+    let actionDef: { handler: CapHandler; pre?: Array<(input: CapInput, context: CapContext) => Promise<void> | void>; post?: Array<(input: CapInput, result: unknown, context: CapContext) => Promise<unknown> | unknown> } | undefined;
+    let capsuleName: string | undefined;
     
-    for (const m of manifests) {
-      // If actionName contains '.', parse as capsule.action
-      if (actionName.includes('.')) {
-        const parts = actionName.split('.');
-        const [capsuleName, actionKey] = parts;
-        if (capsuleName === m.name && m.actions[actionKey]) {
-          actionDef = m.actions[actionKey] as typeof actionDef;
-          manifest = m;
-          break;
-        }
-      } else {
-        // Match by action name only across all capsules
-        if (m.actions[actionName]) {
-          actionDef = m.actions[actionName] as typeof actionDef;
-          manifest = m;
+    if (actionName.includes('.')) {
+      const parts = actionName.split('.');
+      const [capName, actionKey] = parts;
+      const actions = actionMap.get(capName);
+      if (actions && actions[actionKey]) {
+        actionDef = actions[actionKey];
+        capsuleName = capName;
+      }
+    } else {
+      // Match by action name only across all capsules
+      for (const [capName, actions] of actionMap) {
+        if (actions[actionName]) {
+          actionDef = actions[actionName];
+          capsuleName = capName;
           break;
         }
       }
     }
     
-    if (!actionDef || !manifest) {
+    if (!actionDef || !capsuleName) {
       throw new Error(`Action "${actionName}" not found in any manifest`);
     }
     
@@ -100,8 +127,8 @@ export function createTestCapsKit(config: {
        (payload as Record<string, unknown>).query !== undefined);
     
     const normalizedPayload = isStructured 
-      ? payload as ActionInput
-      : { body: payload, params: undefined, query: {} };
+      ? payload as CapInput
+      : { body: payload as Record<string, unknown>, params: undefined, query: {} };
     
     // Build context with all deps and event capture
     const allDeps: Record<string, unknown> = {};
@@ -109,15 +136,15 @@ export function createTestCapsKit(config: {
       allDeps[name] = mockDep.value;
     }
     
-    const context: ActionContext = {
-      params: normalizedPayload.params,
-      body: normalizedPayload.body,
-      query: normalizedPayload.query || {},
+    const context: CapContext = {
       deps: allDeps,
       emit: (name: string, data: unknown) => eventCapture.emit(name, data),
-      call: async (action: string, payload: unknown) => {
+      invoke: async (action: string, payload: unknown) => {
         const result = await callAction(action, payload);
         return result.result;
+      },
+      tell: (_action: string, _payload: unknown) => {
+        throw new Error('tell() is not available in test mode');
       },
       use: () => {
         throw new Error('use() is not available in test mode');
@@ -155,7 +182,7 @@ export function createTestCapsKit(config: {
       call: callAction,
       getEvents: () => eventCapture.getEvents(),
       clearEvents: () => eventCapture.clear(),
-      getManifests: () => manifests
+      getManifests: () => runtimeManifests
     },
     deps: depsMap,
     events: eventCapture.events
@@ -185,7 +212,7 @@ export function createTestCapsKit(config: {
  */
 export function createTestAction(
   actionName: string,
-  handler: ActionHandler,
+  handler: CapHandler,
   capsuleName = 'test'
 ): TestCapsKitHarness {
   return createTestCapsKit({
