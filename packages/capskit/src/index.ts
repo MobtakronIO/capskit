@@ -8,5 +8,9 @@ export type { CapsKitInstance } from './capsule/kernel/types/platform.types';
 // WebSocket protocol types
 export * from './capsule/websocket';
 
+// EventBus factory
+export { createEventBus } from './capsule/events';
+export type { EventBus, EventSubscriber } from './types';
+
 // ESLint rules
 export * from './lint';

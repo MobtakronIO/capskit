@@ -27,3 +27,30 @@ export { meta as emitCapMeta } from './caps/emit.cap';
 export { meta as subscribeCapMeta } from './caps/subscribe.cap';
 export { meta as unsubscribeCapMeta } from './caps/unsubscribe.cap';
 export { meta as listSubscriptionsCapMeta } from './caps/list-subscriptions.cap';
+
+// EventBus factory
+import type { EventBus, EventSubscriber } from '../../types';
+import { matchEventPattern } from './helpers/match-event-pattern.helper';
+
+export function createEventBus(): EventBus {
+  const subscribers = new Map<string, EventSubscriber>();
+
+  return {
+    emit(event: string, data: unknown) {
+      for (const sub of subscribers.values()) {
+        for (const pattern of sub.patterns) {
+          if (matchEventPattern(pattern, event)) {
+            sub.onEvent(event, data, pattern);
+            break;
+          }
+        }
+      }
+    },
+    subscribe(sub: EventSubscriber, patterns: string[]) {
+      subscribers.set(sub.id, { ...sub, patterns });
+    },
+    unsubscribe(id: string) {
+      subscribers.delete(id);
+    },
+  };
+}
