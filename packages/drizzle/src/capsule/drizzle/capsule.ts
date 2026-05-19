@@ -1,6 +1,6 @@
 import type { CapsuleDefinition, KernelDeps } from '@mobtakronio/capskit';
 
-export type DrizzleDialect = 'sqlite' | 'postgres';
+export type DrizzleDialect = 'sqlite' | 'bun-sqlite' | 'postgres';
 
 export interface DrizzleCapsuleConfig {
   dialect: DrizzleDialect;
@@ -30,6 +30,15 @@ export function createDrizzleCapsule(config: DrizzleCapsuleConfig): CapsuleDefin
             : config.connection;
           db = drizzle(dbInstance, { schema: config.schema });
           deps.dependencies.drizzleInstance = dbInstance;
+        } else if (config.dialect === 'bun-sqlite') {
+          // @ts-expect-error peer dependency
+          const { drizzle } = await import('drizzle-orm/bun-sqlite');
+          const { Database } = await import('bun:sqlite' as string);
+          const dbInstance = typeof config.connection === 'string'
+            ? new Database(config.connection)
+            : config.connection;
+          db = drizzle(dbInstance, { schema: config.schema });
+          deps.dependencies.drizzleInstance = dbInstance;
         } else {
           // @ts-expect-error peer dependency
           const { drizzle } = await import('drizzle-orm/node-postgres');
@@ -53,7 +62,7 @@ export function createDrizzleCapsule(config: DrizzleCapsuleConfig): CapsuleDefin
         const rawDb = deps.dependencies.drizzleInstance as any;
         if (!rawDb) return;
 
-        if (config.dialect === 'sqlite') {
+        if (config.dialect === 'sqlite' || config.dialect === 'bun-sqlite') {
           rawDb?.close?.();
         } else {
           await rawDb?.end?.();
