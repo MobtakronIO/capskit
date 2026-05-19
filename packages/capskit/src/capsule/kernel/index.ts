@@ -40,7 +40,7 @@ export { default as rpcCap, meta as rpcCapMeta } from './caps/rpc.cap';
 
 // Platform
 export { createCapsKitPlatform, createCapsKitAdapter } from './caps/platform.cap';
-export type { PreBuiltCap } from './caps/platform.cap';
+export type { PreBuiltCap, CapsKitPlatform } from './caps/platform.cap';
 export type { CapsKitInstance, InternalState } from './types/platform.types';
 
 // Error mapping (for adapters)
