@@ -52,14 +52,14 @@ export interface CapContext {
 export interface KernelDeps { capskit?: ICapsKit; [key: string]: unknown; }
 
 export interface CapDefinition {
-  class: new () => unknown;
+  class: new (deps?: Record<string, unknown>) => unknown;
   meta: CapMeta;
   dependencies?: string[];
 }
 
 export interface CapsuleRegistry {
   name: string;
-  caps: Array<{ class: new () => unknown; meta: CapMeta }>;
+  caps: Array<{ class: new (deps?: Record<string, unknown>) => unknown; meta: CapMeta }>;
   dependencies?: string[];
 }
 

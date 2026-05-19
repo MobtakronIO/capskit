@@ -68,12 +68,12 @@ export interface CapsuleManifest {
 
 export interface CapsuleRegistry {
   name: string;
-  caps: Array<{ class: new () => unknown; meta: CapMeta }>;
+  caps: Array<{ class: new (deps?: Record<string, unknown>) => unknown; meta: CapMeta }>;
   dependencies?: string[];
 }
 
 export interface CapDefinition {
-  class: new () => unknown;
+  class: new (deps?: Record<string, unknown>) => unknown;
   meta: CapMeta;
   dependencies?: string[];
 }
@@ -283,7 +283,7 @@ export function convertCapToManifest(def: CapDefinition, capsuleName?: string, d
 
   const actions: CapsuleManifest['actions'] = {};
   for (const method of methods) {
-    const instance = new def.class();
+    const instance = deps ? new def.class(deps) : new def.class();
     const handler = async (...args: unknown[]) => {
       const fn = (instance as any)[method];
       return typeof fn === 'function' ? fn.call(instance, ...args) : undefined;
@@ -351,7 +351,7 @@ export function convertRegistryToManifest(registry: CapsuleRegistry, deps?: Reco
         console.warn(`Duplicate action "${method}" in capsule "${registry.name}" - defined in multiple caps (${origin}, ${cap.meta.name})`);
       }
       actionOrigins.set(method, cap.meta.name);
-      const instance = new cap.class();
+      const instance = deps ? new cap.class(deps) : new cap.class();
       const handler = async (...args: unknown[]) => {
         const fn = (instance as any)[method];
         return typeof fn === 'function' ? fn.call(instance, ...args) : undefined;
