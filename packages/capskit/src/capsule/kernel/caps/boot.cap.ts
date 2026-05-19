@@ -9,9 +9,9 @@ export const meta: CapMeta = {
 };
 
 export default async function boot(input: CapInput, ctx: CapContext) {
-  const { state, capsuleDirs, disableBuiltins } = parseAndBuildState(input);
+  const { state, capsuleDirs, disableBuiltins, preRegisteredCapsules } = parseAndBuildState(input);
 
-  await loadAllCapsules(disableBuiltins, capsuleDirs, state);
+  await loadAllCapsules(disableBuiltins, capsuleDirs, state, preRegisteredCapsules);
 
   const sorted = validateAndOrder(state.capsules);
 

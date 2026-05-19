@@ -38,13 +38,26 @@ function buildKernelDeps(state: BootState): KernelDeps {
   };
 }
 
-export function parseAndBuildState(input: CapInput): { state: BootState; capsuleDirs: string[]; disableBuiltins: string[] } {
+/**
+ * Resolve disableBuiltins to an array of names to exclude.
+ * - `true` or `'*'` → disable all builtins
+ * - `string[]` → disable only the named builtins
+ * - `undefined`/`false` → disable none
+ */
+function resolveDisableBuiltins(raw: unknown): string[] {
+  if (raw === true || raw === '*') return [...BUILTIN_CAPSULES];
+  if (Array.isArray(raw)) return raw as string[];
+  return [];
+}
+
+export function parseAndBuildState(input: CapInput): { state: BootState; capsuleDirs: string[]; disableBuiltins: string[]; preRegisteredCapsules: CapsuleDefinition[] } {
   const body = (input.body || {}) as {
     capsuleDirs?: string[];
     dependencies?: Record<string, unknown>;
-    disableBuiltins?: string[];
+    disableBuiltins?: string[] | boolean | '*';
+    preRegisteredCapsules?: CapsuleDefinition[];
   };
-  const { capsuleDirs = [], dependencies = {}, disableBuiltins = [] } = body;
+  const { capsuleDirs = [], dependencies = {}, disableBuiltins: rawDisable = [], preRegisteredCapsules = [] } = body;
   return {
     state: {
       capsules: new Map(),
@@ -52,11 +65,21 @@ export function parseAndBuildState(input: CapInput): { state: BootState; capsule
       dependencies: dependencies as Record<string, unknown>,
     },
     capsuleDirs,
-    disableBuiltins,
+    disableBuiltins: resolveDisableBuiltins(rawDisable),
+    preRegisteredCapsules,
   };
 }
 
-export async function loadAllCapsules(disableBuiltins: string[], capsuleDirs: string[], state: BootState): Promise<void> {
+export async function loadAllCapsules(disableBuiltins: string[], capsuleDirs: string[], state: BootState, preRegisteredCapsules: CapsuleDefinition[] = []): Promise<void> {
+  // Register pre-built capsules first (e.g. @mobtakronio/capskit-drizzle)
+  for (const capsuleDef of preRegisteredCapsules) {
+    if (state.capsules.has(capsuleDef.name)) continue;
+    state.capsules.set(capsuleDef.name, { def: capsuleDef, dir: `virtual://${capsuleDef.name}` });
+    if (capsuleDef.boot?.init) {
+      // Will be called later in runBootLifecycles; skip here to avoid double-init
+    }
+  }
+
   await loadBuiltinCapsules(disableBuiltins, state);
   await scanUserCapsules(capsuleDirs, state);
 }
