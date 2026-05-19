@@ -1,5 +1,3 @@
-import { drizzleRepository } from '../repository/drizzle.repository';
-
 export const meta = {
   name: 'migrate',
   kind: 'action',
@@ -7,7 +5,29 @@ export const meta = {
 
 export default async function migrate(input: any, ctx: any) {
   const db = ctx.deps.drizzle;
+  const rawDb = ctx.deps.drizzleInstance;
+  const config = ctx.deps.drizzleConfig;
   if (!db) throw new Error('Drizzle ORM not injected');
-  const result = await drizzleRepository.migrate(db, input.body.path);
-  return result;
+  if (!rawDb) throw new Error('Drizzle instance not available');
+  if (!config) throw new Error('Drizzle config not available');
+
+  const folder = input.body?.path || config.migrationsFolder || './drizzle';
+
+  if (config.dialect === 'sqlite') {
+    try {
+      const { migrate } = await import('drizzle-orm/better-sqlite3');
+      await migrate(rawDb, { migrationsFolder: folder });
+      return { migrated: true, dialect: 'sqlite', path: folder };
+    } catch (err) {
+      return { migrated: false, dialect: 'sqlite', path: folder, error: (err as Error).message };
+    }
+  }
+
+  try {
+    const { migrate } = await import('drizzle-orm/node-postgres');
+    await migrate(rawDb, { migrationsFolder: folder });
+    return { migrated: true, dialect: 'postgres', path: folder };
+  } catch (err) {
+    return { migrated: false, dialect: 'postgres', path: folder, error: (err as Error).message };
+  }
 }

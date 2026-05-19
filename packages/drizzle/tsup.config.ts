@@ -10,5 +10,5 @@ export default defineConfig({
   minify: true,
   outDir: 'dist',
   target: 'node20',
-  external: ['@mobtakronio/capskit']
+  external: ['@mobtakronio/capskit', 'drizzle-orm', 'better-sqlite3', 'pg', 'drizzle-orm/better-sqlite3', 'drizzle-orm/node-postgres']
 });
