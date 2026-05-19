@@ -262,7 +262,7 @@ function getActionMethods(capClass: new () => unknown): string[] {
 }
 
 function mergeActionMeta(method: string, capMeta: CapMeta, defaults: Record<string, unknown>): Record<string, unknown> {
-  const actionMeta = (capMeta as Record<string, unknown>).actions as Record<string, Record<string, unknown>> | undefined;
+  const actionMeta = (capMeta as unknown as Record<string, unknown>).actions as Record<string, Record<string, unknown>> | undefined;
   if (!actionMeta || !actionMeta[method]) return defaults;
   const m = actionMeta[method];
   const result = { ...defaults };
@@ -283,9 +283,10 @@ export function convertCapToManifest(def: CapDefinition, capsuleName?: string, d
 
   const actions: CapsuleManifest['actions'] = {};
   for (const method of methods) {
-    const instance = deps ? new def.class(deps) : new def.class();
+    const instance = new def.class();
     const handler = async (...args: unknown[]) => {
-      return (instance as Record<string, unknown>)[method](...args);
+      const fn = (instance as any)[method];
+      return typeof fn === 'function' ? fn.call(instance, ...args) : undefined;
     };
     const merged = mergeActionMeta(method, def.meta, {
       description: `Cap "${def.meta.name}" action: ${method}`,
@@ -310,13 +311,13 @@ export function convertCapToManifest(def: CapDefinition, capsuleName?: string, d
   }
 
   if (def.meta.routes && def.meta.routes.length > 0) {
-    (manifest as Record<string, unknown>).routes = def.meta.routes.map(r => ({
+    (manifest as unknown as Record<string, unknown>).routes = def.meta.routes.map(r => ({
       method: r.method, path: r.path, action: r.action || r.cap,
     }));
   }
 
-  if ((def.meta as Record<string, unknown>).boot) {
-    manifest.boot = (def.meta as Record<string, unknown>).boot as CapsuleManifest['boot'];
+  if ((def.meta as unknown as Record<string, unknown>).boot) {
+    manifest.boot = (def.meta as unknown as Record<string, unknown>).boot as CapsuleManifest['boot'];
   }
 
   return manifest;
@@ -350,9 +351,10 @@ export function convertRegistryToManifest(registry: CapsuleRegistry, deps?: Reco
         console.warn(`Duplicate action "${method}" in capsule "${registry.name}" - defined in multiple caps (${origin}, ${cap.meta.name})`);
       }
       actionOrigins.set(method, cap.meta.name);
-      const instance = deps ? new cap.class(deps) : new cap.class();
+      const instance = new cap.class();
       const handler = async (...args: unknown[]) => {
-        return (instance as Record<string, unknown>)[method](...args);
+        const fn = (instance as any)[method];
+        return typeof fn === 'function' ? fn.call(instance, ...args) : undefined;
       };
       const merged = mergeActionMeta(method, cap.meta, {
         description: `Cap "${cap.meta.name}" action: ${method}`,
@@ -384,8 +386,8 @@ export function convertRegistryToManifest(registry: CapsuleRegistry, deps?: Reco
       }
     }
 
-    if (!boot && (cap.meta as Record<string, unknown>).boot) {
-      boot = (cap.meta as Record<string, unknown>).boot as CapsuleManifest['boot'];
+    if (!boot && (cap.meta as unknown as Record<string, unknown>).boot) {
+      boot = (cap.meta as unknown as Record<string, unknown>).boot as CapsuleManifest['boot'];
     }
   }
 
@@ -397,7 +399,7 @@ export function convertRegistryToManifest(registry: CapsuleRegistry, deps?: Reco
     if (allPublishes.size > 0) manifest.events.publishes = [...allPublishes];
     if (allSubscribes.length > 0) manifest.events.subscribes = allSubscribes;
   }
-  if (hasRoutes) (manifest as Record<string, unknown>).routes = routes;
+  if (hasRoutes) (manifest as unknown as Record<string, unknown>).routes = routes;
   if (boot) manifest.boot = boot;
 
   return manifest;

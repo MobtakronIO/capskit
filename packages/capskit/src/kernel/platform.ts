@@ -209,7 +209,7 @@ interface CapsuleSource {
   registry?: CapsuleRegistry;
 }
 
-interface CreateCapsKitOptions {
+export interface CreateCapsKitOptions {
   capsules?: CapsuleSource[];
   capsuleDirs?: string[];
   boot?: { action: string; payload?: Record<string, unknown> };
@@ -241,23 +241,24 @@ function createRouter(manifests: CapsuleManifest[], capskit: CapsKitInstance, ex
     if (!manifest.actions) continue;
     for (const [actionName, actionDef] of Object.entries(manifest.actions)) {
       const routeKey = `${manifest.name}.${actionName}`;
-      routeMap.set(routeKey, { method: 'POST', handler: actionDef.handler });
+      routeMap.set(routeKey, { method: 'POST', handler: async (...args: unknown[]) => actionDef.handler(...args) });
     }
   }
 
   // Build path-to-action mapping from routes
   const pathMap = new Map<string, { method: string; action: string; manifestName: string; handler: (...args: unknown[]) => Promise<unknown> }>();
   for (const manifest of manifests) {
-    const routes = (manifest as Record<string, unknown>).routes as Array<{ method: string; path: string; action: string }> | undefined;
+    const routes = (manifest as unknown as Record<string, unknown>).routes as Array<{ method: string; path: string; action: string }> | undefined;
     if (routes) {
       for (const route of routes) {
-        const handler = manifest.actions[route.action]?.handler;
-        if (handler) {
+        const actionDef = manifest.actions[route.action];
+        if (actionDef?.handler) {
+          const handler = actionDef.handler;
           pathMap.set(`${route.method}:${route.path}`, {
             method: route.method,
             action: route.action,
             manifestName: manifest.name,
-            handler,
+            handler: async (...args: unknown[]) => handler(...args),
           });
         }
       }
@@ -861,7 +862,7 @@ export async function createCapsKit(options?: CreateCapsKitOptions): Promise<{ r
         const result = await manifest.actions[bootAction].handler(
           { body: options.boot.payload },
           { deps: { ...mergedDeps, allCaps: state.allCaps } },
-        );
+        ) as { router?: { handle: (request: Request) => Promise<Response> } };
         if (result?.router) {
           router = result.router;
         }

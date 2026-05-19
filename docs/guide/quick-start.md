@@ -74,48 +74,66 @@ The kernel auto-discovers `.cap.ts` files from the `caps/` directory. No manual 
 
 ```ts
 // index.ts
-import { createCapsKitPlatform } from '@mobtakronio/capskit';
-import { Elysia } from 'elysia';
+import { createCapsKit } from '@mobtakronio/capskit';
+import { createElysiaAdapter } from '@mobtakronio/capskit-elysia';
 
 async function bootstrap() {
-  const platform = await createCapsKitPlatform({
-    capsuleDirs: ['./caps'],
+  const { capskit } = await createCapsKit({
+    capsuleDirs: ['./capsules'],
+    dependencies: {
+      logger: console,
+    },
   });
 
-  // Use the HTTP capsule to compile routes
-  const http = platform.use('http');
-  const { routes } = await http.buildRouter();
+  const { app, sockets } = await createElysiaAdapter(capskit, {
+    http: true,
+    websocket: true,
+  });
 
-  // Plug into any adapter
-  const { createServer } = await import('@mobtakronio/capskit-http-elysia');
-  await createServer(routes, { port: 3000 });
+  app.ws(sockets).listen(3000);
+  console.log('Server running at http://localhost:3000');
 }
 
 bootstrap();
 ```
 
-That's it. `POST /sum` is live.
+That's it. `POST /sum` is live, and WebSocket is available at `/ws/capskit`.
 
 ---
 
 ## 5. Invoke Capabilities Internally
 
 ```ts
-const orders = platform.use('orders');
-const { result } = await orders.sum({ a: 15, b: 30 });
+const { capskit } = await createCapsKit({ capsuleDirs: ['./capsules'] });
+
+const orders = capskit.use('orders');
+const { result } = await orders.sum({ body: { a: 15, b: 30 } });
 console.log('Result:', result); // 45
 ```
 
 ---
 
-## createCapsKitPlatform Config
+## API Reference
+
+### `createCapsKit(options)` — High-level (recommended)
+
+Returns `{ capskit, router }` — a full CapsKit instance with a built-in HTTP router.
 
 ```ts
-interface CapsKitPlatformConfig {
+interface CreateCapsKitOptions {
   capsuleDirs?: string[];          // Directories to scan for capsule.ts
   dependencies?: Record<string, unknown>;
-  disableBuiltins?: string[];     // e.g., ['websocket'] for CRON-only apps
+  warnOnDirectCall?: boolean;      // Warn when capskit.call() is used directly
 }
+```
+
+### `createCapsKitPlatform()` — Low-level
+
+Returns raw handlers: `{ state, boot, call, use, register, shutdown, describe, rpc }`. Use when you need fine-grained control over the boot lifecycle or are building a custom adapter.
+
+```ts
+const platform = await createCapsKitPlatform();
+await platform.boot({ body: { capsuleDirs: ['./capsules'] } }, ctx);
 ```
 
 ---

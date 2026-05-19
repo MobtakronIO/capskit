@@ -27,6 +27,7 @@ export { discoverCaps } from './helpers/discover-caps.helper';
 export { parseCapPath } from './helpers/parse-cap-path.helper';
 export { topologicalSort } from './helpers/topological-sort.helper';
 export { buildHooksPipeline, resolveHooks } from './helpers/build-hooks-pipeline.helper';
+export { buildContext } from './helpers/build-context.helper';
 
 // Caps
 export { default as bootCap, meta as bootCapMeta } from './caps/boot.cap';
