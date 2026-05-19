@@ -34,6 +34,7 @@ export default defineConfig({
           { text: 'Client', link: '/guide/client' },
           { text: 'Interceptors', link: '/guide/interceptors' },
           { text: 'Offline Queue', link: '/guide/offline' },
+          { text: 'HTTP Protocol', link: '/guide/http' },
           { text: 'WebSocket Protocol', link: '/guide/websocket' },
           { text: 'Type Generator', link: '/guide/type-generator' }
         ]

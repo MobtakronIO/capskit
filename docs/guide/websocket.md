@@ -1,6 +1,186 @@
 # WebSocket Protocol
 
-CapsKit supports real-time communication via WebSocket. This document describes the wire protocol for clients implementing WebSocket connections.
+CapsKit supports real-time communication via WebSocket through the built-in `websocket` capsule. This document describes the capsule interface, how to write an adapter for any framework, and the wire protocol for clients.
+
+---
+
+## Built-in WebSocket Capsule
+
+CapsKit ships with a built-in `websocket` capsule that provides the `buildSocket` action. This action returns a socket configuration that any framework adapter can consume.
+
+### Using the built-in capsule
+
+```ts
+import { createCapsKit } from '@mobtakronio/capskit';
+
+const capskit = await createCapsKit({ /* ... */ });
+
+const config = await capskit.call('websocket.buildSocket', {
+  body: { adapter: 'elysia' },
+});
+// config.sockets.default = { adapter: 'elysia', path: '/ws' }
+```
+
+The capsule returns a configuration object. Your framework adapter is responsible for:
+1. Creating the WebSocket server
+2. Handling the CapsKit wire protocol (call, emit, subscribe, etc.)
+3. Managing client connections and subscriptions
+
+---
+
+## Writing a Framework Adapter
+
+The adapter is responsible for receiving WebSocket frames, routing them to CapsKit (`call`, `emit`, `subscribe`, `tell`, `describe`), and sending responses back.
+
+### Express + ws example
+
+```ts
+import { WebSocketServer } from 'ws';
+import { createCapsKit } from '@mobtakronio/capskit';
+
+const capskit = await createCapsKit({ /* ... */ });
+
+const wss = new WebSocketServer({ path: '/ws/capskit', port: 3000 });
+
+wss.on('connection', (ws) => {
+  const clientId = `ws-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const subscriptions = new Map();
+
+  ws.on('message', async (raw) => {
+    let frame;
+    try {
+      frame = JSON.parse(raw.toString());
+    } catch {
+      ws.send(JSON.stringify({ type: 'error', error: { code: 'PARSE_ERROR', message: 'Invalid JSON' } }));
+      return;
+    }
+
+    try {
+      switch (frame.type) {
+        case 'call': {
+          const result = await capskit.call(frame.actionPath, frame.payload);
+          ws.send(JSON.stringify({ type: 'response', id: frame.id, ok: true, result }));
+          break;
+        }
+        case 'emit': {
+          capskit.emit(frame.event, frame.data);
+          break;
+        }
+        case 'subscribe': {
+          subscriptions.set(frame.id, frame.patterns);
+          // Register with your event bus to push events to this client
+          break;
+        }
+        case 'unsubscribe': {
+          subscriptions.delete(frame.id);
+          break;
+        }
+        case 'describe': {
+          const manifests = capskit.getManifests();
+          ws.send(JSON.stringify({ type: 'manifest', id: frame.id, data: manifests }));
+          break;
+        }
+        default:
+          ws.send(JSON.stringify({ type: 'error', error: { code: 'UNKNOWN_FRAME', message: `Unknown frame type: ${frame.type}` } }));
+      }
+    } catch (err) {
+      ws.send(JSON.stringify({ type: 'error', id: frame.id, error: { code: 'ACTION_ERROR', message: err.message } }));
+    }
+  });
+
+  ws.on('close', () => {
+    // Clean up subscriptions
+  });
+});
+```
+
+### Fastify + @fastify/websocket example
+
+```ts
+import Fastify from 'fastify';
+import websocket from '@fastify/websocket';
+
+const app = Fastify();
+app.register(websocket);
+
+app.register(async (fastify) => {
+  fastify.get('/ws/capskit', { websocket: true }, (socket, req) => {
+    const clientId = `ws-${Date.now()}`;
+    const subscriptions = new Map();
+
+    socket.on('message', async (raw) => {
+      const frame = JSON.parse(raw.toString());
+      // Same frame routing as Express example above
+      const result = await capskit.call(frame.actionPath, frame.payload);
+      socket.send(JSON.stringify({ type: 'response', id: frame.id, ok: true, result }));
+    });
+  });
+});
+```
+
+### Hono + WebSocket example
+
+```ts
+import { Hono } from 'hono';
+import { createBunWebSocket } from 'hono/bun';
+
+const { upgradeWebSocket, websocket } = createBunWebSocket();
+
+const app = new Hono();
+
+app.get('/ws/capskit', upgradeWebSocket((c) => ({
+  onOpen: (_evt, ws) => {
+    // Initialize client state
+  },
+  onMessage: async (evt, ws) => {
+    const frame = JSON.parse(evt.data);
+    const result = await capskit.call(frame.actionPath, frame.payload);
+    ws.send(JSON.stringify({ type: 'response', id: frame.id, ok: true, result }));
+  },
+  onClose: () => {
+    // Clean up
+  },
+})));
+```
+
+---
+
+## Using the Elysia Adapter
+
+The `@mobtakronio/capskit-elysia` package provides a ready-made WebSocket adapter:
+
+```ts
+import { createSocket } from '@mobtakronio/capskit-elysia/websocket';
+import { capskit } from './capskit';
+
+const sockets = createSocket(capskit, {
+  path: '/ws/capskit', // default
+});
+
+const app = new Elysia().ws(sockets).listen(3000);
+```
+
+Or use the unified adapter for combined HTTP + WebSocket:
+
+```ts
+import { createElysiaAdapter } from '@mobtakronio/capskit-elysia';
+
+const { app, sockets, shutdown } = await createElysiaAdapter(capskit, {
+  http: true,
+  websocket: true,
+});
+
+app.ws(sockets).listen(3000);
+```
+
+### Helper functions
+
+```ts
+import { getEventBus, getConnectedClients } from '@mobtakronio/capskit-elysia/websocket';
+
+const bus = getEventBus();        // Access the shared EventBus instance
+const count = getConnectedClients(); // Number of active WebSocket connections
+```
 
 ---
 
@@ -9,165 +189,114 @@ CapsKit supports real-time communication via WebSocket. This document describes 
 Connect to the WebSocket endpoint at:
 
 ```
-ws://<host>:<port>/ws
+ws://<host>:<port>/ws/capskit
 ```
 
-The URL path may vary depending on your adapter configuration.
+The URL path depends on your adapter configuration.
 
 ---
 
 ## Frame Format
 
-All frames are JSON objects with a `command` field and optional `payload` and `id` fields:
+All frames are JSON objects sent over the WebSocket connection.
 
-```json
-{
-  "command": "call",
-  "id": "req-1",
-  "payload": {
-    "actionPath": "orders.sum",
-    "body": { "a": 15, "b": 30 }
-  }
-}
-```
+### Client-to-Server Frames
 
-### Fields
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `command` | `string` | Yes | The operation type |
-| `id` | `string` | Yes | Unique request ID for correlating responses |
-| `payload` | `object` | Yes | Command-specific data |
-
----
-
-## Commands
-
-### call
+#### call
 
 Invoke a server-side action.
 
 **Request:**
 ```json
 {
-  "command": "call",
+  "type": "call",
   "id": "req-1",
-  "payload": {
-    "actionPath": "orders.sum",
-    "body": { "a": 15, "b": 30 }
-  }
+  "actionPath": "orders.sum",
+  "payload": { "body": { "a": 15, "b": 30 } }
 }
 ```
 
 **Response (success):**
 ```json
 {
-  "id": "req-1",
   "type": "response",
-  "data": { "result": 45 }
+  "id": "req-1",
+  "ok": true,
+  "result": 45,
+  "durationMs": 12
 }
 ```
 
 **Response (error):**
 ```json
 {
+  "type": "response",
   "id": "req-1",
-  "type": "error",
-  "error": {
-    "code": "VALIDATION",
-    "message": "Missing required field: b"
-  }
+  "ok": false,
+  "error": { "code": "VALIDATION", "message": "Missing required field: b" },
+  "durationMs": 3
 }
 ```
 
-### emit
+#### emit
 
 Publish an event.
 
 **Request:**
 ```json
 {
-  "command": "emit",
-  "id": "req-2",
-  "payload": {
-    "event": "order.created",
-    "data": { "orderId": "123" }
-  }
+  "type": "emit",
+  "event": "order.created",
+  "data": { "orderId": "123" }
 }
 ```
 
-**Response:**
-```json
-{
-  "id": "req-2",
-  "type": "response",
-  "data": { "emitted": true, "event": "order.created" }
-}
-```
-
-### tell
+#### tell
 
 Fire-and-forget dispatch (no response expected).
 
 **Request:**
 ```json
 {
-  "command": "tell",
-  "id": "req-3",
-  "payload": {
-    "actionPath": "notifications.send",
-    "body": { "to": "user@example.com" }
-  }
+  "type": "tell",
+  "actionPath": "notifications.send",
+  "payload": { "body": { "to": "user@example.com" } }
 }
 ```
 
-### subscribe
+#### subscribe
 
 Subscribe to event patterns.
 
 **Request:**
 ```json
 {
-  "command": "subscribe",
+  "type": "subscribe",
   "id": "sub-1",
-  "payload": {
-    "patterns": ["order.*", "user.created"]
-  }
+  "patterns": ["order.*", "user.created"]
 }
 ```
 
-**Response:**
-```json
-{
-  "id": "sub-1",
-  "type": "response",
-  "data": { "subscribed": true }
-}
-```
-
-### unsubscribe
+#### unsubscribe
 
 Unsubscribe from event patterns.
 
 **Request:**
 ```json
 {
-  "command": "unsubscribe",
-  "id": "unsub-1",
-  "payload": {
-    "subscriptionId": "sub-1"
-  }
+  "type": "unsubscribe",
+  "id": "sub-1"
 }
 ```
 
-### describe
+#### describe
 
 Fetch the server manifest.
 
 **Request:**
 ```json
 {
-  "command": "describe",
+  "type": "describe",
   "id": "req-4"
 }
 ```
@@ -175,19 +304,18 @@ Fetch the server manifest.
 **Response:**
 ```json
 {
+  "type": "manifest",
   "id": "req-4",
-  "type": "response",
-  "data": {
-    "capsules": [...],
-    "capsuleCount": 5,
-    "capCount": 23
-  }
+  "data": [
+    { "name": "orders", "actions": { ... }, "routes": [...] },
+    { "name": "users", "actions": { ... }, "routes": [...] }
+  ]
 }
 ```
 
----
+### Server-Pushed Frames
 
-## Server-Pushed Events
+#### event
 
 When subscribed, the server pushes events as frames:
 
@@ -195,44 +323,24 @@ When subscribed, the server pushes events as frames:
 {
   "type": "event",
   "event": "order.created",
-  "data": { "orderId": "123", "userId": "456" }
+  "data": { "orderId": "123", "userId": "456" },
+  "pattern": "order.*"
 }
 ```
 
-Note: Event frames do not have a `command` or `id` field — they are server-initiated.
+Event frames do not have an `id` field — they are server-initiated.
 
----
+#### error
 
-## Ping/Pong
-
-The server sends periodic `ping` frames. Clients should respond with `pong`:
-
-**Server ping:**
-```json
-{ "command": "ping" }
-```
-
-**Client pong:**
-```json
-{ "command": "pong" }
-```
-
----
-
-## Error Frames
-
-When a command fails, the server sends an error frame:
+When a frame fails, the server sends an error frame:
 
 ```json
 {
-  "id": "req-1",
   "type": "error",
+  "id": "req-1",
   "error": {
     "code": "ACTION_NOT_FOUND",
-    "message": "Action 'orders.nonexistent' not found",
-    "details": {
-      "actionPath": "orders.nonexistent"
-    }
+    "message": "Action 'orders.nonexistent' not found"
   }
 }
 ```
@@ -241,10 +349,11 @@ When a command fails, the server sends an error frame:
 
 | Code | Description |
 |---|---|
+| `PARSE_ERROR` | Invalid JSON frame |
 | `ACTION_NOT_FOUND` | The requested action does not exist |
 | `VALIDATION` | Input failed schema validation |
-| `AUTHORIZATION` | Caller lacks required permissions |
-| `INTERNAL_ERROR` | Unexpected server error |
+| `ACTION_ERROR` | Action execution failed |
+| `UNKNOWN_FRAME` | Unrecognized frame type |
 
 ---
 
@@ -291,6 +400,6 @@ function connectWithRetry(url: string, maxAttempts: number) {
 
 ## Next Steps
 
+- [HTTP Protocol](./http.md) — RESTful HTTP route exposure
 - [Client SDK](./client.md) — Full client package documentation
 - [Interceptors](./interceptors.md) — Request/response middleware pipeline
-- [Offline](./offline.md) — Offline-first queue for disconnected operations
