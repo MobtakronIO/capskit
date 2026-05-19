@@ -41,7 +41,7 @@ export function createRouter(capskit: ICapsKit, options: HttpAdapterOptions = {}
 
         const handler = async ({ body, params, query, set }: any) => {
           try {
-            return await capskit.call(`${manifest.name}.${route.action}`, {
+            return await capskit.call(route.cap, {
               body,
               params,
               query
