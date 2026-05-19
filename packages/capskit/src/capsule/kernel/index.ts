@@ -39,7 +39,7 @@ export { default as describeCap, meta as describeCapMeta } from './caps/describe
 export { default as rpcCap, meta as rpcCapMeta } from './caps/rpc.cap';
 
 // Platform
-export { createCapsKitPlatform } from './caps/platform.cap';
+export { createCapsKitPlatform, createCapsKitAdapter } from './caps/platform.cap';
 export type { PreBuiltCap } from './caps/platform.cap';
 export type { CapsKitInstance, InternalState } from './types/platform.types';
 
