@@ -75,6 +75,21 @@ export async function loadAllCapsules(disableBuiltins: string[], capsuleDirs: st
   for (const capsuleDef of preRegisteredCapsules) {
     if (state.capsules.has(capsuleDef.name)) continue;
     state.capsules.set(capsuleDef.name, { def: capsuleDef, dir: `virtual://${capsuleDef.name}` });
+
+    // Register inline caps if present (factory-created capsules without filesystem dirs)
+    if (capsuleDef.caps) {
+      for (const cap of capsuleDef.caps) {
+        const capPath = `${capsuleDef.name}.${cap.meta.name}`;
+        state.caps.set(capPath, {
+          meta: cap.meta,
+          handler: cap.handler,
+          capsuleName: capsuleDef.name,
+          filePath: `virtual://${capsuleDef.name}/${cap.meta.name}`,
+          capsuleDef,
+        });
+      }
+    }
+
     if (capsuleDef.boot?.init) {
       // Will be called later in runBootLifecycles; skip here to avoid double-init
     }

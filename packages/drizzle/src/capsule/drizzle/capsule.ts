@@ -1,4 +1,5 @@
-import type { CapsuleDefinition, KernelDeps } from '@mobtakronio/capskit';
+import type { CapsuleDefinition, CapsuleCap, KernelDeps } from '@mobtakronio/capskit';
+import { drizzleRepository } from './repository/drizzle.repository';
 
 export type DrizzleDialect = 'sqlite' | 'bun-sqlite' | 'postgres';
 
@@ -13,10 +14,100 @@ export interface DrizzleCapsuleConfig {
   };
 }
 
+function requireDb(ctx: any) {
+  const db = ctx.deps.drizzle;
+  if (!db) throw new Error('Drizzle ORM not initialized — use createDrizzleCapsule(config) and register as a pre-registered capsule');
+  return db;
+}
+
+const drizzleCaps: CapsuleCap[] = [
+  {
+    meta: { name: 'query', kind: 'action' },
+    handler: async (input: any, ctx: any) => {
+      const db = requireDb(ctx);
+      const result = await drizzleRepository.query(db, input.body);
+      return { data: result };
+    },
+  },
+  {
+    meta: { name: 'execute', kind: 'action' },
+    handler: async (input: any, ctx: any) => {
+      const db = requireDb(ctx);
+      const result = await drizzleRepository.execute(db, input.body);
+      return { result };
+    },
+  },
+  {
+    meta: { name: 'transaction', kind: 'action' },
+    handler: async (input: any, ctx: any) => {
+      const db = requireDb(ctx);
+      const results = await drizzleRepository.transaction(db, input.body?.operations);
+      return { results };
+    },
+  },
+  {
+    meta: { name: 'migrate', kind: 'action' },
+    handler: async (input: any, ctx: any) => {
+      const rawDb = ctx.deps.drizzleInstance;
+      const config = ctx.deps.drizzleConfig;
+      if (!rawDb) throw new Error('Drizzle instance not available');
+      if (!config) throw new Error('Drizzle config not available');
+
+      const folder = input.body?.path || config.migrationsFolder || './drizzle';
+
+      if (config.dialect === 'sqlite') {
+        try {
+          // @ts-expect-error peer dependency
+          const { migrate } = await import('drizzle-orm/better-sqlite3');
+          await migrate(rawDb, { migrationsFolder: folder });
+          return { migrated: true, dialect: 'sqlite', path: folder };
+        } catch (err) {
+          return { migrated: false, dialect: 'sqlite', path: folder, error: (err as Error).message };
+        }
+      }
+
+      if (config.dialect === 'bun-sqlite') {
+        try {
+          // @ts-expect-error peer dependency
+          const { migrate } = await import('drizzle-orm/bun-sqlite');
+          await migrate(rawDb, { migrationsFolder: folder });
+          return { migrated: true, dialect: 'bun-sqlite', path: folder };
+        } catch (err) {
+          return { migrated: false, dialect: 'bun-sqlite', path: folder, error: (err as Error).message };
+        }
+      }
+
+      try {
+        // @ts-expect-error peer dependency
+        const { migrate } = await import('drizzle-orm/node-postgres');
+        await migrate(rawDb, { migrationsFolder: folder });
+        return { migrated: true, dialect: 'postgres', path: folder };
+      } catch (err) {
+        return { migrated: false, dialect: 'postgres', path: folder, error: (err as Error).message };
+      }
+    },
+  },
+  {
+    meta: { name: 'health', kind: 'action' },
+    handler: async (input: any, ctx: any) => {
+      const db = requireDb(ctx);
+      return drizzleRepository.health(db);
+    },
+  },
+  {
+    meta: { name: 'close', kind: 'action' },
+    handler: async (input: any, ctx: any) => {
+      const db = requireDb(ctx);
+      return drizzleRepository.close(db);
+    },
+  },
+];
+
 export function createDrizzleCapsule(config: DrizzleCapsuleConfig): CapsuleDefinition {
   return {
     name: 'drizzle',
     dependencies: [],
+    caps: drizzleCaps,
     boot: {
       init: async ({ deps }: { deps: KernelDeps }) => {
         let db: unknown;

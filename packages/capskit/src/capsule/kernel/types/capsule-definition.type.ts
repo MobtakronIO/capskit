@@ -11,6 +11,11 @@ export interface CapsuleHook {
   caps?: string | string[];
 }
 
+export interface CapsuleCap {
+  meta: CapMeta;
+  handler: CapHandler;
+}
+
 export interface CapsuleDefinition {
   name: string;
   dependencies?: string[];
@@ -23,6 +28,8 @@ export interface CapsuleDefinition {
     init?: (context: { deps: KernelDeps }) => Promise<void>;
     shutdown?: (context: { deps: KernelDeps }) => Promise<void>;
   };
+  /** Inline caps for factory-created capsules (no filesystem directory). */
+  caps?: CapsuleCap[];
 }
 
 export interface CapFile {
