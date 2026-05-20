@@ -5,7 +5,6 @@ import { isValidEventName } from '../rules/is-valid-event.rule';
 
 export const meta: CapMeta = {
   name: 'emit',
-  kind: 'action',
 };
 
 export default async function emit(input: CapInput, ctx: CapContext) {

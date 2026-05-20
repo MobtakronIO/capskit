@@ -2,7 +2,6 @@ import { drizzleRepository } from '../repository/drizzle.repository';
 
 export const meta = {
   name: 'query',
-  kind: 'action',
 };
 
 export default async function query(input: any, ctx: any) {

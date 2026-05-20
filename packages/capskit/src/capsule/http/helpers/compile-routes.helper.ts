@@ -11,7 +11,7 @@ export function compileRoutes(
   const capsulesWithRoutes = new Set<string>();
 
   for (const cap of allCaps) {
-    if (cap.meta.kind !== 'action' || !cap.meta.routes) continue;
+    if (!cap.meta.routes) continue;
 
     capsulesWithRoutes.add(cap.capsuleName);
 

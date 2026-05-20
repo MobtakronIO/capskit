@@ -12,8 +12,6 @@ export function compileEndpoints(
   const capsulesWithEndpoints = new Set<string>();
 
   for (const cap of allCaps) {
-    if (cap.meta.kind !== 'action') continue;
-
     const hooks = cap.meta.hooks || [];
     const hookConfig = Array.isArray(hooks)
       ? { pre: hooks as string[], post: [] as string[] }

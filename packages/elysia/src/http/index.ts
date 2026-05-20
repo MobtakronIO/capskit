@@ -169,7 +169,6 @@ export async function createRouter(capskit: ICapsKit, options: HttpAdapterOption
             name: m.name,
             caps: (m.caps || []).map(c => ({
               name: c.name,
-              kind: c.kind,
               capPath: c.capPath,
               actionPath: c.actionPath,
               description: c.description,

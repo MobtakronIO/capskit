@@ -36,7 +36,6 @@ export class CapCycleError extends CapLoadError {
 
 export interface CapMeta {
   name: string;
-  kind?: 'action' | 'hook';
   routes?: Array<{ method: string; path: string; cap: string; action: string }>;
   events?: { publishes?: string[]; subscribes?: Array<{ event: string; action: string }> };
   dependencies?: string[];
@@ -110,9 +109,6 @@ export function validateCapMeta(meta: unknown, filePath?: string): CapMeta {
   if (!VALID_NAME_RE.test(m.name as string)) throw new CapLoadError(`Cap name "${m.name}" contains invalid characters`, filePath);
 
   const result: CapMeta = { name: m.name as string };
-
-  // Kind
-  if ('kind' in m && m.kind) result.kind = m.kind as 'action' | 'hook';
 
   // Routes
   if ('routes' in m && m.routes !== undefined) {

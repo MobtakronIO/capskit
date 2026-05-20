@@ -2,7 +2,6 @@ import { drizzleRepository } from '../repository/drizzle.repository';
 
 export const meta = {
   name: 'transaction',
-  kind: 'action',
 };
 
 export default async function transaction(input: any, ctx: any) {

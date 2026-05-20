@@ -2,7 +2,6 @@ import { drizzleRepository } from '../repository/drizzle.repository';
 
 export const meta = {
   name: 'execute',
-  kind: 'action',
 };
 
 export default async function execute(input: any, ctx: any) {

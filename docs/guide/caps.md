@@ -58,7 +58,6 @@ import { calculateTotal } from '../helpers/calculate-total.helper';
 // 1. Meta export — declarative metadata
 export const meta: CapMeta = {
   name: 'create-order',
-  kind: 'action',
   routes: [{ method: 'POST', path: '/orders', cap: 'create-order' }],
   inputSchema: {
     type: 'object',
@@ -93,7 +92,6 @@ export default async function createOrder(input: CapInput, ctx: CapContext) {
 ```ts
 interface CapMeta {
   name: string;                        // Unique cap name within the capsule
-  kind: 'action' | 'hook';                // Cap type
   routes?: CapRoute[];                 // HTTP routes
   events?: {
     publishes?: string[];              // Events this cap emits
@@ -134,7 +132,6 @@ Schemas are JSON Schema objects used for runtime validation:
 ```ts
 export const meta: CapMeta = {
   name: 'create-order',
-  kind: 'action',
   inputSchema: {
     type: 'object',
     properties: {

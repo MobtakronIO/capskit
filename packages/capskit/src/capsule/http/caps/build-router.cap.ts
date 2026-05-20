@@ -4,7 +4,6 @@ import { compileRoutes } from '../helpers/compile-routes.helper';
 
 export const meta: CapMeta = {
   name: 'build-router',
-  kind: 'action',
 };
 
 export default async function buildRouter(input: CapInput, ctx: CapContext) {

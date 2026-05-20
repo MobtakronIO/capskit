@@ -16,7 +16,6 @@ export class WebSocketCap {
 
 const wsMeta: CapMeta = {
   name: 'buildSocket',
-  kind: 'action',
   dependencies: ['capskit'],
   actions: {
     buildSocket: { description: 'Builds WebSocket configuration for the specified adapter' },

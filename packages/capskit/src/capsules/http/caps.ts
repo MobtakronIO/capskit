@@ -14,7 +14,6 @@ export class BuildRouterCap {
 
 const buildRouterMeta: CapMeta = {
   name: 'buildRouter',
-  kind: 'action',
   dependencies: ['capskit'],
   actions: {
     buildRouter: {

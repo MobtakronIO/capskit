@@ -5,7 +5,6 @@ import { CapsuleManifest, CapsuleCapManifest, RouteManifest } from '../types/cap
 
 export const meta: CapMeta = {
   name: 'describe',
-  kind: 'action',
   description: 'Returns the full runtime manifest for all registered capsules',
 };
 
@@ -32,7 +31,6 @@ export default async function describeCaps(_input: CapInput, ctx: CapContext): P
 
       capsuleCaps.push({
         name: capMeta.name,
-        kind: capMeta.kind,
         capPath,
         description: capMeta.description,
         inputSchema: capMeta.inputSchema,

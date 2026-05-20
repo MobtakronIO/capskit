@@ -11,7 +11,6 @@ export interface CapEventSubscription {
 
 export interface CapMeta {
   name: string;
-  kind: 'action' | 'hook';
   routes?: CapRoute[];
   events?: {
     publishes?: string[];

@@ -4,7 +4,6 @@ import { compileEndpoints } from '../helpers/compile-endpoints.helper';
 
 export const meta: CapMeta = {
   name: 'build-websocket',
-  kind: 'action',
 };
 
 export default async function buildWebSocket(input: CapInput, ctx: CapContext) {

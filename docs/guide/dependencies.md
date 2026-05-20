@@ -72,7 +72,7 @@ import { CapsuleDefinition, CapsuleCap } from '@mobtakronio/capskit';
 
 const myCaps: CapsuleCap[] = [
   {
-    meta: { name: 'query', kind: 'action' },
+    meta: { name: 'query' },
     handler: async (input, ctx) => {
       const repo = ctx.deps.dependencies.myRepo;
       return repo.query(input.body);
@@ -135,7 +135,7 @@ For each `capsule.ts` found, the kernel:
 1. **Loads the capsule definition** — reads `name`, `dependencies`, `boot`.
 2. **Scans the `caps/` directory** — auto-discovers all `.cap.ts` files.
 3. **Imports each cap** — reads `meta` and `default` exports.
-4. **Validates the cap meta** — checks name, kind, required fields.
+4. **Validates the cap meta** — checks name, required fields.
 
 No manual cap listing. Just directories and files.
 

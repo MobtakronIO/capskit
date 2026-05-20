@@ -4,7 +4,6 @@ import { KERNEL_VERSION } from '../../kernel/constants';
 
 export const meta: CapMeta = {
   name: 'health',
-  kind: 'action',
   routes: [{ method: 'GET', path: '/health', cap: 'health', action: 'health' }],
 };
 

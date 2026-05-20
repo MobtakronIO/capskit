@@ -3,7 +3,6 @@ import { CapMeta } from '../../kernel/types/cap-meta.type';
 
 export const meta: CapMeta = {
   name: 'subscribe',
-  kind: 'action',
 };
 
 export default async function subscribe(input: CapInput, ctx: CapContext) {

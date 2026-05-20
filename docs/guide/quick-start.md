@@ -44,7 +44,6 @@ import { CapInput, CapContext, CapMeta } from '@mobtakronio/capskit';
 
 export const meta: CapMeta = {
   name: 'sum',
-  kind: 'action',
   routes: [{ method: 'POST', path: '/sum', cap: 'sum' }],
   inputSchema: {
     type: 'object',
@@ -63,7 +62,7 @@ export default async function sum(input: CapInput, _ctx: CapContext) {
 ```
 
 Every `.cap.ts` file exports two things:
-- `meta` — the CapMeta (name, kind, routes, schemas)
+- `meta` — the CapMeta (name, routes, schemas)
 - `default` — the async handler function
 
 The kernel auto-discovers `.cap.ts` files from the `caps/` directory. No manual registration needed.

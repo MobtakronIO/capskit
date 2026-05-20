@@ -24,7 +24,6 @@ export interface CapsuleManifest {
  */
 export interface CapsuleCapManifest {
   name: string;
-  kind: 'action' | 'hook';
   capPath: string;
   actionPath?: string;
   description?: string;

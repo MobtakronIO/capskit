@@ -3,7 +3,6 @@ import { CapMeta } from '../types/cap-meta.type';
 
 export const meta: CapMeta = {
   name: 'use',
-  kind: 'action',
 };
 
 /**

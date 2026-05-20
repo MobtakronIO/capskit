@@ -1,6 +1,5 @@
 export const meta = {
   name: 'migrate',
-  kind: 'action',
 };
 
 export default async function migrate(input: any, ctx: any) {

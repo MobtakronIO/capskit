@@ -9,7 +9,6 @@ import type { TestCapsKitHarness, ActionResult, TestCapsuleManifest } from './ty
 function toRuntimeManifest(config: TestCapsuleManifest): CapsuleManifest {
   const caps: CapsuleCapManifest[] = Object.entries(config.actions).map(([actionKey]) => ({
     name: actionKey,
-    kind: 'action' as const,
     capPath: `${config.name}.${actionKey}`,
     actionPath: `${config.name}.${actionKey}`,
     description: undefined,

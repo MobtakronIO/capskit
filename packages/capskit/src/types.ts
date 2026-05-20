@@ -14,7 +14,6 @@ export interface ICapsKit {
 
 export interface CapMeta {
   name: string;
-  kind?: 'action' | 'hook';
   routes?: CapRoute[];
   events?: { publishes?: string[]; subscribes?: CapEventSubscription[] };
   dependencies?: string[];

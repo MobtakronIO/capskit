@@ -149,7 +149,6 @@ import { calculateTotal } from '../helpers/calculate-total.helper';
 
 export const meta: CapMeta = {
   name: 'create-order',
-  kind: 'action',
   routes: [
     { method: 'POST', path: '/orders', cap: 'create-order' },
   ],
@@ -189,7 +188,6 @@ import { isTokenExpired } from '../rules/is-token-expired.rule';
 
 export const meta: CapMeta = {
   name: 'require-auth',
-  kind: 'hook',
 };
 
 export default async function requireAuth(input: CapInput, ctx: CapContext) {

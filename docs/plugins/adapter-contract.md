@@ -40,7 +40,7 @@ export async function createMyAdapter(
   // Build routes from cap manifests
   for (const manifest of manifests) {
     for (const cap of manifest.caps || []) {
-      if (cap.kind === 'action' && cap.routes) {
+      if (cap.routes) {
         for (const route of cap.routes) {
           // Register route with the framework
         }

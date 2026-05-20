@@ -98,7 +98,6 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
         const capMeta = capFile.meta;
         caps.push({
           name: capMeta.name,
-          kind: capMeta.kind,
           capPath,
           description: capMeta.description,
           inputSchema: capMeta.inputSchema,

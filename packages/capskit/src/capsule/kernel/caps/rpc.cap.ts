@@ -3,7 +3,6 @@ import { CapMeta } from '../types/cap-meta.type';
 
 export const meta: CapMeta = {
   name: 'rpc',
-  kind: 'action',
   description: 'Unified RPC Endpoint for call, emit, and tell operations',
 };
 

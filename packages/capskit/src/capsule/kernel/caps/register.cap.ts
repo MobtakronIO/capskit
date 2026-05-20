@@ -6,7 +6,6 @@ import { CapsuleDefinition, CapFile } from '../types/capsule-definition.type';
 
 export const meta: CapMeta = {
   name: 'register',
-  kind: 'action',
 };
 
 export default async function registerCapsule(input: CapInput, ctx: CapContext) {
@@ -30,7 +29,7 @@ export default async function registerCapsule(input: CapInput, ctx: CapContext) 
     throw new Error(`Capsule "${capsuleDef.name}" is already registered`);
   }
 
-  if (!validateCapMeta({ name: capsuleDef.name, kind: 'action' })) {
+  if (!validateCapMeta({ name: capsuleDef.name })) {
     throw new Error(`Invalid capsule name: "${capsuleDef.name}"`);
   }
 

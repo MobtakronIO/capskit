@@ -62,7 +62,6 @@ import { CapInput, CapContext, CapMeta } from '@mobtakronio/capskit';
 
 export const meta: CapMeta = {
   name: 'create-order',
-  kind: 'action',
   routes: [{ method: 'POST', path: '/orders', cap: 'create-order' }],
   inputSchema: { type: 'object', properties: { items: { type: 'array' } }, required: ['items'] },
   events: { publishes: ['order.created'] },
@@ -113,7 +112,7 @@ throw new InternalError('Unexpected')     // 500
 ## ✅ Pre-Ship (12 checks)
 
 - `capsule.ts` exists with `name` and `satisfies CapsuleDefinition`
-- Every `.cap.ts` exports `meta` (with `name`, `kind`) AND `default` handler
+- Every `.cap.ts` exports `meta` (with `name`) AND `default` handler
 - No `.cap.ts` imports another `.cap.ts`
 - No `.cap.ts` exceeds 200 lines
 - No pyramid violations

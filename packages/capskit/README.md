@@ -48,7 +48,6 @@ import { CapInput, CapContext, CapMeta } from '@mobtakronio/capskit';
 
 export const meta: CapMeta = {
   name: 'list-orders',
-  kind: 'action',
   routes: [{ method: 'GET', path: '/orders', action: 'list-orders' }],
 };
 
@@ -109,7 +108,7 @@ For programmatic capsules (databases, cache, etc.), include caps inline:
 ```ts
 const myCaps: CapsuleCap[] = [
   {
-    meta: { name: 'query', kind: 'action' },
+    meta: { name: 'query' },
     handler: async (input, ctx) => ctx.deps.dependencies.myRepo.query(input.body),
   },
 ];

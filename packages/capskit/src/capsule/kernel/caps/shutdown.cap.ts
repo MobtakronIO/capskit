@@ -3,7 +3,6 @@ import { CapMeta } from '../types/cap-meta.type';
 
 export const meta: CapMeta = {
   name: 'shutdown',
-  kind: 'action',
 };
 
 export default async function shutdown(input: CapInput, ctx: CapContext) {

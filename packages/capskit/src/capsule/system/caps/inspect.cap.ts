@@ -3,7 +3,6 @@ import { CapMeta } from '../../kernel/types/cap-meta.type';
 
 export const meta: CapMeta = {
   name: 'inspect',
-  kind: 'action',
   routes: [{ method: 'GET', path: '/inspect', cap: 'inspect', action: 'inspect' }],
 };
 
@@ -20,12 +19,11 @@ export default async function inspect(input: CapInput, ctx: CapContext) {
     });
   }
 
-  const capList: { capPath: string; capsule: string; kind: string; hooks: { pre: string[]; post: string[] } }[] = [];
+  const capList: { capPath: string; capsule: string; hooks: { pre: string[]; post: string[] } }[] = [];
   for (const [path, value] of caps) {
     capList.push({
       capPath: path,
       capsule: value.capsuleName,
-      kind: value.meta.kind,
       hooks: Array.isArray(value.meta.hooks) 
         ? { pre: value.meta.hooks, post: [] } 
         : { pre: value.meta.hooks?.pre || [], post: value.meta.hooks?.post || [] },
@@ -33,7 +31,7 @@ export default async function inspect(input: CapInput, ctx: CapContext) {
   }
 
   const hooks = Array.from(allCaps.values())
-    .filter(c => c.meta.kind === 'hook')
+    .filter(c => c.meta.hooks && Object.keys(c.meta.hooks).length > 0)
     .map(c => c.meta.name);
 
   return {

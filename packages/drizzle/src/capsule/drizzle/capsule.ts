@@ -44,7 +44,7 @@ function requireRepo(ctx: any): DrizzleRepository {
 
 const drizzleCaps: CapsuleCap[] = [
   {
-    meta: { name: 'query', kind: 'action' },
+    meta: { name: 'query' },
     handler: async (input: any, ctx: any) => {
       const repo = requireRepo(ctx);
       const result = await repo.query(input.body);
@@ -52,7 +52,7 @@ const drizzleCaps: CapsuleCap[] = [
     },
   },
   {
-    meta: { name: 'execute', kind: 'action' },
+    meta: { name: 'execute' },
     handler: async (input: any, ctx: any) => {
       const repo = requireRepo(ctx);
       const result = await repo.execute(input.body);
@@ -60,7 +60,7 @@ const drizzleCaps: CapsuleCap[] = [
     },
   },
   {
-    meta: { name: 'transaction', kind: 'action' },
+    meta: { name: 'transaction' },
     handler: async (input: any, ctx: any) => {
       const repo = requireRepo(ctx);
       const results = await repo.transaction(input.body?.operations);
@@ -68,7 +68,7 @@ const drizzleCaps: CapsuleCap[] = [
     },
   },
   {
-    meta: { name: 'migrate', kind: 'action' },
+    meta: { name: 'migrate' },
     handler: async (input: any, ctx: any) => {
       const rawDb = ctx.deps.drizzleInstance;
       const config = ctx.deps.drizzleConfig;
@@ -110,14 +110,14 @@ const drizzleCaps: CapsuleCap[] = [
     },
   },
   {
-    meta: { name: 'health', kind: 'action' },
+    meta: { name: 'health' },
     handler: async (input: any, ctx: any) => {
       const repo = requireRepo(ctx);
       return repo.health();
     },
   },
   {
-    meta: { name: 'close', kind: 'action' },
+    meta: { name: 'close' },
     handler: async (input: any, ctx: any) => {
       const repo = requireRepo(ctx);
       return repo.close();

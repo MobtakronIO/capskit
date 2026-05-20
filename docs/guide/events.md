@@ -38,7 +38,6 @@ Caps declare event subscriptions in their `meta.events.subscribes` array:
 // capsules/notifications/caps/send-welcome-email.cap.ts
 export const meta: CapMeta = {
   name: 'send-welcome-email',
-  kind: 'action',
   events: {
     subscribes: [
       { event: 'user.created', cap: 'send-welcome-email' },
@@ -156,7 +155,6 @@ export default async function createOrder(input: CapInput, ctx: CapContext) {
 // capsules/notifications/caps/send-order-confirmation.cap.ts
 export const meta: CapMeta = {
   name: 'send-order-confirmation',
-  kind: 'action',
   events: {
     subscribes: [
       { event: 'order.created', cap: 'send-order-confirmation' },

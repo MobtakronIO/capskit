@@ -102,14 +102,14 @@ import { CapsuleDefinition, CapsuleCap } from '@mobtakronio/capskit';
 
 const drizzleCaps: CapsuleCap[] = [
   {
-    meta: { name: 'query', kind: 'action' },
+    meta: { name: 'query' },
     handler: async (input, ctx) => {
       const repo = ctx.deps.dependencies.drizzleRepo;
       return repo.query(input.body);
     },
   },
   {
-    meta: { name: 'health', kind: 'action' },
+    meta: { name: 'health' },
     handler: async (_input, ctx) => {
       const repo = ctx.deps.dependencies.drizzleRepo;
       return repo.health();
@@ -287,7 +287,6 @@ import { calculateTotal } from '../helpers/calculate-total.helper';
 
 export const meta: CapMeta = {
   name: 'create-order',
-  kind: 'action',
   routes: [{ method: 'POST', path: '/orders', cap: 'create-order' }],
   inputSchema: {
     type: 'object',

@@ -5,7 +5,6 @@ import { validateAndOrder } from '../helpers/validate-and-order.helper';
 
 export const meta: CapMeta = {
   name: 'boot',
-  kind: 'action',
 };
 
 export default async function boot(input: CapInput, ctx: CapContext) {

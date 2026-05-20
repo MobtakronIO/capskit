@@ -2,7 +2,6 @@ import { drizzleRepository } from '../repository/drizzle.repository';
 
 export const meta = {
   name: 'close',
-  kind: 'action',
 };
 
 export default async function close(input: any, ctx: any) {

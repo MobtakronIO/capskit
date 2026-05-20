@@ -1,12 +1,12 @@
 # Hooks
 
-Hooks are caps with `kind: 'hook'` that wrap cap handlers in a middleware pipeline. They replace the legacy trait and hook systems with a transport-agnostic, declarative approach.
+Hooks are regular caps that wrap other cap handlers in a middleware pipeline. A cap becomes a hook when it is referenced in a `capsuleDef.hooks` list or another cap's `meta.hooks` array. They replace the legacy trait and hook systems with a transport-agnostic, declarative approach.
 
 ---
 
 ## What Are Hooks?
 
-A hook is a `.cap.ts` file with `kind: 'hook'` in its meta. Hooks run in two phases:
+A hook is a standard `.cap.ts` file. It becomes a hook when another cap or capsule declares it as one. Hooks run in two phases:
 
 - **Pre hooks** — run before the cap handler (auth, validation, logging)
 - **Post hooks** — run after the cap handler (response transformation, audit logging)
@@ -17,7 +17,7 @@ Hooks are **transport-agnostic** — they work for HTTP, WebSocket, events, and 
 
 ## Writing a Hook Cap
 
-A hook cap follows the same `.cap.ts` format as an action cap, but with `kind: 'hook'`:
+A hook cap follows the same `.cap.ts` format as any other cap. It is identified as a hook by being referenced in hook declarations elsewhere:
 
 ```ts
 // capsules/security/caps/require-auth.cap.ts
@@ -27,7 +27,6 @@ import { isTokenExpired } from '../rules/is-token-expired.rule';
 
 export const meta: CapMeta = {
   name: 'require-auth',
-  kind: 'hook',
 };
 
 export default async function requireAuth(input: CapInput, ctx: CapContext) {
@@ -39,12 +38,14 @@ export default async function requireAuth(input: CapInput, ctx: CapContext) {
 }
 ```
 
-### Hook Meta Fields
+### Hook Identification
 
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `name` | `string` | Yes | Unique hook name |
-| `kind` | `'hook'` | Yes | Identifies this as a hook cap |
+A cap becomes a hook when referenced in any of these places:
+
+| Location | Field | Description |
+|---|---|---|
+| `capsuleDef.hooks.pre/post` | `name` | Capsule-level hooks applied to all caps in the capsule |
+| `cap.meta.hooks.pre` / `cap.meta.hooks.post` | `string[]` | Per-cap hooks declared in the cap's own meta |
 
 ---
 
@@ -86,7 +87,6 @@ Capsule-level hooks merge with per-cap hooks. Capsule hooks run **first**, then 
 // capsules/orders/caps/delete-order.cap.ts
 export const meta: CapMeta = {
   name: 'delete-order',
-  kind: 'action',
   hooks: {
     post: ['notify-admin'],  // additional to capsule-level hooks
   },
@@ -109,7 +109,6 @@ import { CapInput, CapContext, CapMeta } from '@mobtakronio/capskit';
 
 export const meta: CapMeta = {
   name: 'delete-order',
-  kind: 'action',
   hooks: {
     pre: ['require-auth', 'require-admin-role'],
   },
@@ -135,10 +134,21 @@ The kernel resolves hook names at boot time and chains them before the cap handl
 ```ts
 export const meta: CapMeta = {
   name: 'create-order',
-  kind: 'action',
   hooks: {
     pre: ['require-auth', 'validate-input'],
   },
+};
+
+### Post Hooks
+
+Post hooks run after the cap handler and receive the result via `ctx.result`:
+
+```ts
+// capsules/observability/caps/audit-log.cap.ts
+import { CapInput, CapContext, CapMeta } from '@mobtakronio/capskit';
+
+export const meta: CapMeta = {
+  name: 'audit-log',
 };
 ```
 
@@ -152,7 +162,6 @@ import { CapInput, CapContext, CapMeta } from '@mobtakronio/capskit';
 
 export const meta: CapMeta = {
   name: 'audit-log',
-  kind: 'hook',
 };
 
 export default async function auditLog(input: CapInput, ctx: CapContext) {
@@ -169,11 +178,31 @@ export default async function auditLog(input: CapInput, ctx: CapContext) {
 // Cap cap using post hooks
 export const meta: CapMeta = {
   name: 'delete-order',
-  kind: 'action',
   hooks: {
     pre: ['require-auth'],
     post: ['audit-log'],
   },
+};
+
+### Both Phases
+
+```ts
+export const meta: CapMeta = {
+  name: 'delete-order',
+  hooks: {
+    pre: ['require-auth', 'rate-limit'],
+    post: ['audit-log', 'notify-admin'],
+  },
+};
+
+### Backward Compat (Array Format)
+
+A plain array is treated as pre hooks only:
+
+```ts
+export const meta: CapMeta = {
+  name: 'create-order',
+  hooks: ['require-auth', 'validate-input'], // treated as pre hooks
 };
 ```
 
@@ -182,7 +211,6 @@ export const meta: CapMeta = {
 ```ts
 export const meta: CapMeta = {
   name: 'delete-order',
-  kind: 'action',
   hooks: {
     pre: ['require-auth', 'rate-limit'],
     post: ['audit-log', 'notify-admin'],
@@ -197,7 +225,6 @@ A plain array is treated as pre hooks only:
 ```ts
 export const meta: CapMeta = {
   name: 'create-order',
-  kind: 'action',
   hooks: ['require-auth', 'validate-input'], // treated as pre hooks
 };
 ```
@@ -237,7 +264,6 @@ import { decodeJWT } from '../helpers/decode-jwt.helper';
 
 export const meta: CapMeta = {
   name: 'require-auth',
-  kind: 'hook',
 };
 
 export default async function requireAuth(input: CapInput, ctx: CapContext) {
@@ -256,7 +282,6 @@ import { CapInput, CapContext, CapMeta } from '@mobtakronio/capskit';
 
 export const meta: CapMeta = {
   name: 'log-request',
-  kind: 'hook',
 };
 
 export default async function logRequest(input: CapInput, ctx: CapContext) {
@@ -280,7 +305,6 @@ import { CapInput, CapContext, CapMeta, AuthorizationError } from '@mobtakronio/
 
 export const meta: CapMeta = {
   name: 'require-admin-role',
-  kind: 'hook',
 };
 
 export default async function requireAdminRole(input: CapInput, ctx: CapContext) {

@@ -4,7 +4,6 @@ import { buildHooksPipeline, resolveHooks } from '../helpers/build-hooks-pipelin
 
 export const meta: CapMeta = {
   name: 'call',
-  kind: 'action',
 };
 
 export default async function call(input: CapInput, ctx: CapContext) {

@@ -25,7 +25,6 @@ export class CalculatorCap {
 
 const calcMeta: CapMeta = {
   name: 'calculator',
-  kind: 'action',
   dependencies: [],
   actions: {
     sum: { description: 'Adds two numbers' },
