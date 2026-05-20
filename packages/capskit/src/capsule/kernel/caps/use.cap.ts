@@ -24,7 +24,12 @@ export default async function use(input: CapInput, ctx: CapContext) {
     get(_target, prop: string) {
       return async (payload: unknown) => {
         const capPath = `${capsuleName}.${prop}`;
-        return invoke(capPath, payload);
+        // Normalize payload to { body, params, query } format
+        const hasBody = payload && typeof payload === 'object' && 'body' in payload;
+        const normalizedPayload = hasBody
+            ? (payload as Record<string, unknown>)
+            : { body: payload, params: {}, query: {} };
+        return invoke(capPath, normalizedPayload);
       };
     },
   });

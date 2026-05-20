@@ -23,7 +23,13 @@ export default async function rpc(input: CapInput, ctx: CapContext) {
       if (!capPath) {
         throw new Error('capPath is required for call');
       }
-      const result = await ctx.invoke(capPath, body.payload);
+      // Normalize payload to { body, params, query } format
+      const rawPayload = body.payload;
+      const hasBody = rawPayload && typeof rawPayload === 'object' && 'body' in rawPayload;
+      const normalizedPayload = hasBody
+          ? (rawPayload as Record<string, unknown>)
+          : { body: rawPayload, params: {}, query: {} };
+      const result = await ctx.invoke(capPath, normalizedPayload);
       return {
         ok: true,
         result,

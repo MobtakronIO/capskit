@@ -42,8 +42,14 @@ export default async function call(input: CapInput, ctx: CapContext) {
     use: ctx.use,
   };
 
+  // Normalize payload to { body, params, query } format
+  const hasBody = payload && typeof payload === 'object' && 'body' in payload;
+  const normalizedPayload = hasBody
+      ? (payload as Record<string, unknown>)
+      : { body: payload, params: {}, query: {} };
+
   const mergedInput: CapInput = {
-    ...(payload as Record<string, unknown>),
+      ...normalizedPayload,
   };
 
   const startTime = Date.now();

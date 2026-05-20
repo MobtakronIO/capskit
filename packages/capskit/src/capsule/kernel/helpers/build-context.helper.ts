@@ -2,6 +2,16 @@ import { CapInput, CapContext, CapHandler, KernelDeps } from '../types/cap-input
 import { InternalState } from '../types/platform.types';
 
 /**
+ * Normalizes a raw payload to { body, params, query } format for consistent handler input.
+ */
+function normalizePayload(payload: unknown): CapInput {
+  if (payload && typeof payload === 'object' && 'body' in payload) {
+    return payload as CapInput;
+  }
+  return { body: payload as Record<string, unknown>, params: {}, query: {} };
+}
+
+/**
  * Builds a CapContext from the current platform state.
  * The emit() delegates to the events capsule (canonical event system).
  */
@@ -24,12 +34,12 @@ export function buildContext(state: InternalState): CapContext {
     invoke: async (capPath: string, payload: unknown) => {
       const cap = state.caps.get(capPath);
       if (!cap) throw new Error(`Cap "${capPath}" not found`);
-      return cap.handler(payload as CapInput, buildContext(state));
+      return cap.handler(normalizePayload(payload), buildContext(state));
     },
     tell: async (capPath: string, payload: unknown) => {
       const cap = state.caps.get(capPath);
       if (cap) {
-        cap.handler(payload as CapInput, buildContext(state)).catch(() => {});
+        cap.handler(normalizePayload(payload), buildContext(state)).catch(() => {});
       }
     },
     use: <T = unknown>(capsuleName: string): T => {
@@ -39,7 +49,7 @@ export function buildContext(state: InternalState): CapContext {
             const capPath = `${capsuleName}.${prop}`;
             const cap = state.caps.get(capPath);
             if (!cap) throw new Error(`Cap "${capPath}" not found`);
-            return cap.handler(payload as CapInput, buildContext(state));
+            return cap.handler(normalizePayload(payload), buildContext(state));
           };
         },
       }) as T;
