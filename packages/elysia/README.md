@@ -107,6 +107,30 @@ interface HttpOptions {
    * Merged with top-level `traitHandlers` (transport-specific takes precedence).
    */
   traitHandlers?: Record<string, TraitHandler>;
+
+  /**
+   * CORS configuration.
+   * - `true` - enable with default settings
+   * - `CorsOptions` - enable with custom settings (origin, methods, credentials, etc.)
+   * - `false` or `undefined` - disabled
+   *
+   * Requires `@elysia/cors` as a peer dependency.
+   */
+  cors?: boolean | CorsOptions;
+}
+```
+
+### `CorsOptions`
+
+```ts
+interface CorsOptions {
+  origin?: boolean | string | RegExp | Array<string | RegExp>;
+  methods?: string | string[];
+  allowedHeaders?: string | string[];
+  exposedHeaders?: string | string[];
+  credentials?: boolean;
+  maxAge?: number;
+  preflight?: boolean;
 }
 ```
 
@@ -217,6 +241,47 @@ const adapter = await createElysiaAdapter(capskit, {
   websocket: {
     // WebSocket-specific handlers (future)
   }
+});
+```
+
+### With CORS
+
+```ts
+// CORS with defaults
+const adapter = await createElysiaAdapter(capskit, {
+  http: { cors: true }
+});
+
+// CORS with custom options
+const adapter = await createElysiaAdapter(capskit, {
+  http: {
+    cors: {
+      origin: ['https://example.com', 'https://app.example.com'],
+      methods: ['GET', 'POST'],
+      credentials: true,
+    }
+  }
+});
+
+// Combined with trait handlers
+const adapter = await createElysiaAdapter(capskit, {
+  http: {
+    cors: true,
+    traitHandlers: {
+      'auth:role': async (role, ctx) => { /* ... */ }
+    }
+  }
+});
+```
+
+### With `createCapsKit` (high-level factory)
+
+```ts
+const { capskit, app, shutdown } = await createCapsKit({
+  capsuleDirs: ['./capsules'],
+  port: 3000,
+  cors: true, // or pass cors: { origin: 'https://example.com' }
+  wsPath: '/ws/capskit',
 });
 ```
 

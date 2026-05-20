@@ -75,38 +75,29 @@ export async function createCapsKit(options?: CreateCapsKitAppOptions): Promise<
   // 2. Create Elysia app
   const app = new Elysia();
 
-  // 3. CORS (requires @elysia/cors as optional peer dependency)
-  if (options?.cors) {
-    try {
-      const { cors: corsPlugin } = await import('@elysia/cors');
-      app.use(corsPlugin(options.cors === true ? {} : options.cors));
-    } catch {
-      console.warn('[capskit-elysia] @elysia/cors is not installed. CORS will not be enabled. Install it with: npm install @elysia/cors');
-    }
-  }
-
-  // 4. Mount capsule routes from meta.routes
+  // 3. Mount capsule routes from meta.routes (CORS applied inside createRouter before routes)
   const httpOptions: HttpOptions = {
     traitHandlers: options?.traitHandlers,
+    cors: options?.cors,
     ...options?.http,
   };
-  app.use(createRouter(capskit as unknown as ICapsKit, httpOptions));
+  app.use(await createRouter(capskit as unknown as ICapsKit, httpOptions));
 
-  // 5. WebSocket
+  // 4. WebSocket
   if (options?.wsPath) {
     const wsOptions: WebSocketOptions = options?.websocket || {};
     const sockets = createSocket(capskit as unknown as ICapsKit, wsOptions);
     app.ws(options.wsPath, sockets[options.wsPath] as any);
   }
 
-  // 6. Listen
+  // 5. Listen
   if (options?.port) {
     app.listen(options.port, () => {
       options?.onReady?.();
     });
   }
 
-  // 7. Combined shutdown
+  // 6. Combined shutdown
   async function shutdown() {
     options?.onClose?.();
     await capskit.shutdown();

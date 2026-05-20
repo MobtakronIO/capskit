@@ -38,6 +38,19 @@ export interface ElysiaAdapterOptions {
 }
 
 /**
+ * CORS configuration options compatible with @elysia/cors.
+ */
+export interface CorsOptions {
+  origin?: boolean | string | RegExp | Array<string | RegExp> | ((origin: string, callback: (err: Error | null, allow?: boolean) => void) => void);
+  methods?: string | string[];
+  allowedHeaders?: string | string[];
+  exposedHeaders?: string | string[];
+  credentials?: boolean;
+  maxAge?: number;
+  preflight?: boolean;
+}
+
+/**
  * Options for the HTTP transport.
  */
 export interface HttpOptions {
@@ -46,6 +59,12 @@ export interface HttpOptions {
    * These are merged with top-level traitHandlers (transport-specific handlers take precedence).
    */
   traitHandlers?: Record<string, TraitHandler>;
+
+  /**
+   * CORS configuration. Pass `true` for defaults or a `CorsOptions` object for customization.
+   * When set, CORS middleware is applied before route handlers.
+   */
+  cors?: boolean | CorsOptions;
 }
 
 /**

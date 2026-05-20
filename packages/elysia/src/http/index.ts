@@ -1,17 +1,40 @@
 import { Elysia } from 'elysia';
 import type { ICapsKit, CapsuleManifest, RouteManifest } from '@mobtakronio/capskit';
 import { mapToHttpResponse } from '../shared';
-import type { HttpOptions, TraitHandler } from '../shared';
+import type { HttpOptions, TraitHandler, CorsOptions } from '../shared';
 
-export { HttpOptions };
+export { HttpOptions, CorsOptions };
 
 export interface HttpAdapterOptions extends HttpOptions {
   traitHandlers?: Record<string, TraitHandler>;
 }
 
-export function createRouter(capskit: ICapsKit, options: HttpAdapterOptions = {}) {
-  const { traitHandlers = {} } = options;
+const DEFAULT_CORS: CorsOptions = {
+  origin: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+
+async function applyCors(app: Elysia, corsOption: boolean | CorsOptions): Promise<boolean> {
+  if (corsOption === false) return false;
+  try {
+    const { cors: corsPlugin } = await import('@elysia/cors');
+    const config: CorsOptions = corsOption === true ? DEFAULT_CORS : { ...DEFAULT_CORS, ...corsOption };
+    app.use(corsPlugin(config as any));
+    return true;
+  } catch {
+    console.warn('[capskit-elysia] @elysia/cors is not installed. CORS will not be enabled. Install it with: npm install @elysia/cors');
+    return false;
+  }
+}
+
+export async function createRouter(capskit: ICapsKit, options: HttpAdapterOptions = {}) {
+  const { traitHandlers = {}, cors } = options;
   const app = new Elysia();
+
+  if (cors) {
+    await applyCors(app, cors);
+  }
 
   const manifests: CapsuleManifest[] = capskit.getManifests();
 

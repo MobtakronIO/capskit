@@ -169,7 +169,7 @@ describe('Elysia Adapter', () => {
     test('creates Elysia router with routes', async () => {
       const { createRouter } = await import('../src/http');
       
-      const router = createRouter(mockCapskit, { traitHandlers: {} });
+      const router = await createRouter(mockCapskit, { traitHandlers: {} });
       
       expect(router).toBeDefined();
       expect(typeof router.get).toBe('function');

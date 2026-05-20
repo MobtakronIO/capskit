@@ -88,7 +88,7 @@ export async function createElysiaAdapter(capskit: ICapsKit, options: CreateElys
   let sockets: Record<string, any> = {};
 
   if (enableHttp && httpOptions) {
-    app = createRouter(capskit, httpOptions);
+    app = await createRouter(capskit, httpOptions);
   }
 
   if (enableWs && wsOptions) {

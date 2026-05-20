@@ -1,6 +1,6 @@
 {
   "name": "@mobtakronio/capskit-elysia",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "description": "Elysia adapter for CapsKit — HTTP and WebSocket transport in one package",
   "license": "MIT",
   "type": "module",
