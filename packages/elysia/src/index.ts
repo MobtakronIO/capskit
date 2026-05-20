@@ -93,6 +93,12 @@ export async function createElysiaAdapter(capskit: ICapsKit, options: CreateElys
 
   if (enableWs && wsOptions) {
     sockets = createSocket(capskit, wsOptions);
+
+    if (app) {
+      for (const [path, handler] of Object.entries(sockets)) {
+        app.ws(path, handler);
+      }
+    }
   }
 
   const handleError = async (error: unknown) => {
