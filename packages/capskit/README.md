@@ -13,6 +13,7 @@ CapsKit implements the **Capability Architecture** pattern:
 - **Zero Boundary Logic**: Capsules don't know about HTTP or Frameworks.
 - **Declarative Manifests**: Routing, Traits, and Events are defined in simple metadata.
 - **Universal Pipelines**: Global Interceptors and Action-level Hooks for tracing, auth, and more.
+- **Plugin Architecture**: Any capsule is a plugin — just populate `caps` and register.
 
 ## 📦 Installation
 
@@ -27,52 +28,103 @@ bun add @mobtakronio/capskit elysia
 ### 1. Define a Capsule
 
 ```typescript
-// src/capsules/math/manifest.ts
-import { CapsuleManifest } from '@mobtakronio/capskit';
+// src/capsules/orders/capsule.ts
+import { CapsuleDefinition } from '@mobtakronio/capskit';
 
-export const service: CapsuleManifest = {
-  name: 'math-capsule',
-  actions: {
-    sum: {
-      handler: async (payload) => ({ result: payload.a + payload.b }),
-      description: 'Sums two integers'
-    }
+export default {
+  name: 'orders',
+  dependencies: ['database'],
+  boot: {
+    init: async ({ deps }) => {
+      // deps.database is available from platform dependencies
+    },
   },
-  routes: [
-    { method: 'POST', path: '/sum', action: 'sum' }
-  ]
+} satisfies CapsuleDefinition;
+```
+
+```typescript
+// src/capsules/orders/caps/list-orders.cap.ts
+import { CapInput, CapContext, CapMeta } from '@mobtakronio/capskit';
+
+export const meta: CapMeta = {
+  name: 'list-orders',
+  kind: 'action',
+  routes: [{ method: 'GET', path: '/orders', action: 'list-orders' }],
 };
+
+export default async function listOrders(_input: CapInput, ctx: CapContext) {
+  const repo = ctx.deps.dependencies.orderRepo;
+  const orders = await repo.findWithFilters({ status: 'pending' });
+  return { orders };
+}
 ```
 
 ### 2. Boot the Kernel
 
 ```typescript
-import { createCapsKit } from '@mobtakronio/capskit';
+import { createCapsKitPlatform } from '@mobtakronio/capskit';
+import { createElysiaAdapter } from '@mobtakronio/capskit-elysia';
 import { Elysia } from 'elysia';
-import * as path from 'path';
 
-// Initialize the platform, auto-load built-ins and custom capsules
-const { capskit } = await createCapsKit({
-  capsules: [
-    { type: 'directory', path: path.resolve('./src/capsules') }
-  ],
-  dependencies: { database: myDatabase }
-});
+// Create the platform
+const platform = await createCapsKitPlatform();
 
-// 1. Generate an Elysia router automatically from capsule metadata!
-const { router } = await capskit.use('http').buildRouter({ adapter: 'elysia' });
+// Register factory capsules (e.g., database)
+platform.registerCapsule(createDrizzleCapsule({
+  dialect: 'sqlite',
+  connection: './db.sqlite',
+}));
 
-// 2. Start the framework listener
-new Elysia()
-  .use(router)
-  .listen(3000);
+// Boot with user capsule directories
+await platform.boot({ body: { capsuleDirs: ['./src/capsules'] } });
+
+// Create the Elysia adapter
+const { app } = await createElysiaAdapter(platform, { http: true });
+
+// Start the server
+app.listen(3000);
 ```
 
-### 3. Native Invocation (Proxy Client)
+### 3. Invoke Capsules
 
 ```typescript
-const math = capskit.use('math-capsule');
-const { result } = await math.sum({ a: 10, b: 20 });
+// Via proxy (recommended)
+const orders = platform.use('orders');
+const { orders: list } = await orders['list-orders']({});
+
+// Via call
+const result = await platform.call('orders.list-orders', {});
+```
+
+## 🧱 Capsule Patterns
+
+### Filesystem Capsules
+
+Place `capsule.ts` at the root with `.cap.ts` files in `caps/`. The kernel auto-discovers all caps.
+
+### Factory Capsules
+
+For programmatic capsules (databases, cache, etc.), include caps inline:
+
+```ts
+const myCaps: CapsuleCap[] = [
+  {
+    meta: { name: 'query', kind: 'action' },
+    handler: async (input, ctx) => ctx.deps.dependencies.myRepo.query(input.body),
+  },
+];
+
+export function createMyCapsule(config: MyConfig): CapsuleDefinition {
+  return {
+    name: 'my-capsule',
+    caps: myCaps,
+    boot: {
+      init: async ({ deps }) => {
+        deps.dependencies.myRepo = createMyRepository(await connect(config));
+      },
+    },
+  };
+}
 ```
 
 ## 📖 Documentation

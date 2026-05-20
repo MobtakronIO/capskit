@@ -127,3 +127,6 @@ export async function createElysiaAdapter(capskit: ICapsKit, options: CreateElys
 }
 
 export default createElysiaAdapter;
+
+export { createCapsKit } from './create-capskit';
+export type { CreateCapsKitAppOptions, CreateCapsKitAppResult } from './create-capskit';

@@ -75,26 +75,28 @@ The kernel auto-discovers `.cap.ts` files from the `caps/` directory. No manual 
 ```ts
 // index.ts
 import { createCapsKit } from '@mobtakronio/capskit';
-import { createElysiaAdapter } from '@mobtakronio/capskit-elysia';
+import { createCapsKit as createCapsKitApp } from '@mobtakronio/capskit-elysia';
+import { createCapsule } from '@mobtakronio/capskit-drizzle';
 
-async function bootstrap() {
-  const { capskit } = await createCapsKit({
-    capsuleDirs: ['./capsules'],
-    dependencies: {
-      logger: console,
-    },
-  });
+// Option A: Core only (no HTTP)
+const { capskit, shutdown } = await createCapsKit({
+  capsuleDirs: ['./capsules'],
+  capsules: [createCapsule({ dialect: 'sqlite', connection: './db.sqlite' })],
+});
 
-  const { app, sockets } = await createElysiaAdapter(capskit, {
-    http: true,
-    websocket: true,
-  });
+// Option B: With Elysia HTTP/WebSocket
+const { capskit, app, shutdown } = await createCapsKitApp({
+  capsuleDirs: ['./capsules'],
+  capsules: [createCapsule({ dialect: 'sqlite', connection: './db.sqlite' })],
+  port: 3000,
+  cors: true,
+});
 
-  app.ws(sockets).listen(3000);
-  console.log('Server running at http://localhost:3000');
-}
+app.get('/health', () => 'OK'); // Extend with Elysia features
 
-bootstrap();
+// Use CapsKit
+const orders = capskit.use('orders');
+const result = await orders.sum({ a: 15, b: 30 });
 ```
 
 That's it. `POST /sum` is live, and WebSocket is available at `/ws/capskit`.
@@ -104,10 +106,12 @@ That's it. `POST /sum` is live, and WebSocket is available at `/ws/capskit`.
 ## 5. Invoke Capabilities Internally
 
 ```ts
-const { capskit } = await createCapsKit({ capsuleDirs: ['./capsules'] });
+const { capskit, shutdown } = await createCapsKit({
+  capsuleDirs: ['./capsules'],
+});
 
 const orders = capskit.use('orders');
-const { result } = await orders.sum({ body: { a: 15, b: 30 } });
+const { result } = await orders.sum({ a: 15, b: 30 });
 console.log('Result:', result); // 45
 ```
 
@@ -115,25 +119,62 @@ console.log('Result:', result); // 45
 
 ## API Reference
 
-### `createCapsKit(options)` — High-level (recommended)
-
-Returns `{ capskit, router }` — a full CapsKit instance with a built-in HTTP router.
+### `createCapsKit(options?)` — Core factory
 
 ```ts
-interface CreateCapsKitOptions {
-  capsuleDirs?: string[];          // Directories to scan for capsule.ts
-  dependencies?: Record<string, unknown>;
-  warnOnDirectCall?: boolean;      // Warn when capskit.call() is used directly
-}
+import { createCapsKit } from '@mobtakronio/capskit';
+
+const { capskit, shutdown } = await createCapsKit({
+  capsuleDirs: ['./capsules'],
+  capsules: [createCapsule({ dialect: 'sqlite', connection: './db.sqlite' })],
+  dependencies: { myService: createService() },
+});
+
+// Use
+capskit.use('orders');
+capskit.call('orders.sum', { a: 1, b: 2 });
+capskit.getManifests();
+
+// Shutdown
+await shutdown();
 ```
 
-### `createCapsKitPlatform()` — Low-level
-
-Returns raw handlers: `{ state, boot, call, use, register, shutdown, describe, rpc }`. Use when you need fine-grained control over the boot lifecycle or are building a custom adapter.
+### `createCapsKit(options?)` — Elysia app factory
 
 ```ts
-const platform = await createCapsKitPlatform();
-await platform.boot({ body: { capsuleDirs: ['./capsules'] } }, ctx);
+import { createCapsKit } from '@mobtakronio/capskit-elysia';
+
+const { capskit, app, shutdown } = await createCapsKit({
+  capsuleDirs: ['./capsules'],
+  port: 3000,
+  cors: true,
+  wsPath: '/ws/capskit',
+});
+
+// Extend with Elysia features
+app.get('/health', () => 'OK');
+```
+
+### `createCapsule(config)` — Drizzle capsule factory
+
+```ts
+import { createCapsule } from '@mobtakronio/capskit-drizzle';
+
+// Schema as object
+const db1 = createCapsule({
+  dialect: 'sqlite',
+  connection: './data/db.sqlite',
+  schema: { users: usersTable, orders: ordersTable },
+});
+
+// Schema as path
+const db2 = createCapsule({
+  dialect: 'sqlite',
+  connection: './data/db.sqlite',
+  schema: './src/schema.ts', // auto-imported
+});
+
+// DB directory auto-created if it doesn't exist
 ```
 
 ---

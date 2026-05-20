@@ -1,12 +1,16 @@
 import type { CapsuleDefinition, CapsuleCap, KernelDeps } from '@mobtakronio/capskit';
-import { drizzleRepository } from './repository/drizzle.repository';
+import { drizzleRepository, createDrizzleRepository } from './repository/drizzle.repository';
+import type { DrizzleRepository } from './types/drizzle.type';
+import * as fs from 'fs';
+import * as path from 'node:path';
 
 export type DrizzleDialect = 'sqlite' | 'bun-sqlite' | 'postgres';
 
 export interface DrizzleCapsuleConfig {
   dialect: DrizzleDialect;
   connection: string | unknown;
-  schema?: Record<string, unknown>;
+  /** Schema object OR path to schema file (e.g., './schema.ts') */
+  schema?: Record<string, unknown> | string;
   migrationsFolder?: string;
   poolConfig?: {
     max?: number;
@@ -14,34 +18,52 @@ export interface DrizzleCapsuleConfig {
   };
 }
 
-function requireDb(ctx: any) {
-  const db = ctx.deps.drizzle;
-  if (!db) throw new Error('Drizzle ORM not initialized — use createDrizzleCapsule(config) and register as a pre-registered capsule');
-  return db;
+// Helper: resolve schema from object or path
+async function resolveSchema(schema?: Record<string, unknown> | string): Promise<Record<string, unknown> | undefined> {
+  if (!schema) return undefined;
+  if (typeof schema === 'object') return schema;
+  // It's a path string — dynamically import
+  const resolvedPath = path.isAbsolute(schema) ? schema : path.resolve(process.cwd(), schema);
+  const mod = await import(resolvedPath);
+  return mod.default || mod.schema || Object.values(mod)[0];
+}
+
+// Helper: ensure parent directory exists (for SQLite file paths)
+function ensureDbDirExists(connection: string): void {
+  const dir = path.dirname(connection);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+}
+
+function requireRepo(ctx: any): DrizzleRepository {
+  const repo = ctx.deps.dependencies?.drizzleRepo;
+  if (!repo) throw new Error('Drizzle repository not initialized — use createDrizzleCapsule(config) and register as a pre-registered capsule');
+  return repo;
 }
 
 const drizzleCaps: CapsuleCap[] = [
   {
     meta: { name: 'query', kind: 'action' },
     handler: async (input: any, ctx: any) => {
-      const db = requireDb(ctx);
-      const result = await drizzleRepository.query(db, input.body);
+      const repo = requireRepo(ctx);
+      const result = await repo.query(input.body);
       return { data: result };
     },
   },
   {
     meta: { name: 'execute', kind: 'action' },
     handler: async (input: any, ctx: any) => {
-      const db = requireDb(ctx);
-      const result = await drizzleRepository.execute(db, input.body);
+      const repo = requireRepo(ctx);
+      const result = await repo.execute(input.body);
       return { result };
     },
   },
   {
     meta: { name: 'transaction', kind: 'action' },
     handler: async (input: any, ctx: any) => {
-      const db = requireDb(ctx);
-      const results = await drizzleRepository.transaction(db, input.body?.operations);
+      const repo = requireRepo(ctx);
+      const results = await repo.transaction(input.body?.operations);
       return { results };
     },
   },
@@ -90,26 +112,34 @@ const drizzleCaps: CapsuleCap[] = [
   {
     meta: { name: 'health', kind: 'action' },
     handler: async (input: any, ctx: any) => {
-      const db = requireDb(ctx);
-      return drizzleRepository.health(db);
+      const repo = requireRepo(ctx);
+      return repo.health();
     },
   },
   {
     meta: { name: 'close', kind: 'action' },
     handler: async (input: any, ctx: any) => {
-      const db = requireDb(ctx);
-      return drizzleRepository.close(db);
+      const repo = requireRepo(ctx);
+      return repo.close();
     },
   },
 ];
 
-export function createDrizzleCapsule(config: DrizzleCapsuleConfig): CapsuleDefinition {
+export async function createCapsule(config: DrizzleCapsuleConfig): Promise<CapsuleDefinition> {
+  const resolvedSchema = await resolveSchema(config.schema);
+
   return {
     name: 'drizzle',
     dependencies: [],
     caps: drizzleCaps,
     boot: {
       init: async ({ deps }: { deps: KernelDeps }) => {
+        // Auto-create DB directory for SQLite file paths
+        if (typeof config.connection === 'string' &&
+            (config.dialect === 'sqlite' || config.dialect === 'bun-sqlite')) {
+          ensureDbDirExists(config.connection);
+        }
+
         let db: unknown;
 
         if (config.dialect === 'sqlite') {
@@ -119,7 +149,7 @@ export function createDrizzleCapsule(config: DrizzleCapsuleConfig): CapsuleDefin
           const dbInstance = typeof config.connection === 'string'
             ? new Database(config.connection)
             : config.connection;
-          db = drizzle(dbInstance, { schema: config.schema });
+          db = drizzle(dbInstance, { schema: resolvedSchema });
           deps.dependencies.drizzleInstance = dbInstance;
         } else if (config.dialect === 'bun-sqlite') {
           // @ts-expect-error peer dependency
@@ -128,7 +158,7 @@ export function createDrizzleCapsule(config: DrizzleCapsuleConfig): CapsuleDefin
           const dbInstance = typeof config.connection === 'string'
             ? new Database(config.connection)
             : config.connection;
-          db = drizzle(dbInstance, { schema: config.schema });
+          db = drizzle(dbInstance, { schema: resolvedSchema });
           deps.dependencies.drizzleInstance = dbInstance;
         } else {
           // @ts-expect-error peer dependency
@@ -142,11 +172,12 @@ export function createDrizzleCapsule(config: DrizzleCapsuleConfig): CapsuleDefin
                 idleTimeoutMillis: config.poolConfig?.idleTimeoutMillis,
               })
             : config.connection;
-          db = drizzle(pool, { schema: config.schema });
+          db = drizzle(pool, { schema: resolvedSchema });
           deps.dependencies.drizzleInstance = pool;
         }
 
         deps.dependencies.drizzle = db;
+        deps.dependencies.drizzleRepo = createDrizzleRepository(db);
         deps.dependencies.drizzleConfig = config;
       },
       shutdown: async ({ deps }: { deps: KernelDeps }) => {
@@ -163,12 +194,16 @@ export function createDrizzleCapsule(config: DrizzleCapsuleConfig): CapsuleDefin
   };
 }
 
+// Deprecated alias — use createCapsule instead
+/** @deprecated Use `createCapsule` instead */
+export const createDrizzleCapsule = createCapsule;
+
 export default {
   name: 'drizzle',
   dependencies: [],
   boot: {
     init: async () => {
-      // Use createDrizzleCapsule(config) to initialize with a database connection
+      // Use createCapsule(config) to initialize with a database connection
     },
   },
 } satisfies CapsuleDefinition;

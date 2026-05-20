@@ -1,5 +1,5 @@
 import { CapHandler, KernelDeps, CapInput, CapContext, CapEntry } from '../types/cap-input.type';
-import { InternalState } from '../types/platform.types';
+import { InternalState, BootOptions } from '../types/platform.types';
 import { buildContext } from '../helpers/build-context.helper';
 import { CapsuleDefinition, CapFile } from '../types/capsule-definition.type';
 import { CapMeta } from '../types/cap-meta.type';
@@ -23,10 +23,10 @@ export interface PreBuiltCap {
  */
 export interface CapsKitPlatform extends ICapsKit {
   state: InternalState;
-  boot: CapHandler;
+  boot: (options?: BootOptions) => Promise<unknown>;
   register: CapHandler;
   rpc: CapHandler;
-  registerCapsule: (capsuleDef: CapsuleDefinition, caps: PreBuiltCap[]) => void;
+  registerCapsule: (capsuleDef: CapsuleDefinition, caps?: PreBuiltCap[]) => void;
 }
 
 export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
@@ -54,7 +54,7 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
    * Use this before calling boot() when you have capsules that don't live on
    * the filesystem (e.g. @mobtakronio/capskit-drizzle).
    */
-  function registerCapsule(capsuleDef: CapsuleDefinition, caps: PreBuiltCap[]): void {
+  function registerCapsule(capsuleDef: CapsuleDefinition, caps?: PreBuiltCap[]): void {
     if (state.capsules.has(capsuleDef.name)) {
       throw new Error(`Capsule "${capsuleDef.name}" is already registered`);
     }
@@ -62,7 +62,14 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
     preRegisteredCapsules.push(capsuleDef);
     state.capsules.set(capsuleDef.name, { def: capsuleDef, dir: `virtual://${capsuleDef.name}` });
 
-    for (const cap of caps) {
+    // Auto-derive caps from capsuleDef.caps when not explicitly provided
+    const resolvedCaps = caps || (capsuleDef.caps?.map(c => ({
+      meta: c.meta,
+      handler: c.handler,
+      filePath: `virtual://${capsuleDef.name}/${c.meta.name}`,
+    })) || []);
+
+    for (const cap of resolvedCaps) {
       const capPath = `${capsuleDef.name}.${cap.meta.name}`;
       const capFile: CapFile = {
         meta: cap.meta,
@@ -168,16 +175,21 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
   /**
    * Boot handler that wires discovered caps into platform.state.
    */
-  const boot: CapHandler = async (input: CapInput, ctx: CapContext) => {
+  const boot = async (options?: BootOptions): Promise<unknown> => {
     const { parseAndBuildState, loadAllCapsules, runBootLifecycles, shapeBootResponse } =
       await import('../helpers/boot-helpers.helper');
 
-    const bootState = parseAndBuildState(input);
-    for (const preReg of preRegisteredCapsules) {
-      if (!bootState.state.capsules.has(preReg.name)) {
-        bootState.state.capsules.set(preReg.name, { def: preReg, dir: `virtual://${preReg.name}` });
-      }
-    }
+    // Build a synthetic CapInput from BootOptions for compatibility with parseAndBuildState
+    const bootInput: CapInput = {
+      body: {
+        capsuleDirs: options?.capsuleDirs || [],
+        dependencies: options?.dependencies || {},
+        disableBuiltins: options?.disableBuiltins || [],
+        preRegisteredCapsules,
+      },
+    };
+
+    const bootState = parseAndBuildState(bootInput);
 
     await loadAllCapsules(bootState.disableBuiltins, bootState.capsuleDirs, bootState.state, bootState.preRegisteredCapsules);
     const sorted = (await import('../helpers/validate-and-order.helper')).validateAndOrder(

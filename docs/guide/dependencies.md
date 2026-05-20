@@ -1,6 +1,6 @@
 # Dependencies
 
-This guide covers the `CapsuleDefinition` format, auto-discovery, dependency declaration, and the boot order resolution.
+This guide covers the `CapsuleDefinition` format, auto-discovery, dependency declaration, factory capsules, and the boot order resolution.
 
 ---
 
@@ -29,8 +29,85 @@ export default {
 | `name` | `string` | Yes | Unique capsule identifier |
 | `dependencies` | `string[]` | No | Names of other capsules this capsule depends on |
 | `boot.init` | `(context) => Promise<void>` | No | Lifecycle hook run during boot |
+| `boot.shutdown` | `(context) => Promise<void>` | No | Lifecycle hook run during shutdown |
+| `caps` | `CapsuleCap[]` | No | Inline caps for factory-created capsules (no filesystem directory) |
+| `hooks` | `{ pre?, post? }` | No | Hooks applied to all caps in this capsule |
 
-**What does NOT go here:** cap references (auto-discovered from `caps/`), business logic, handlers.
+---
+
+## Two Capsule Patterns
+
+### 1. Filesystem Capsules (auto-discovered)
+
+For capsules that live on disk, place a `capsule.ts` at the root and `.cap.ts` files in a `caps/` subdirectory. The kernel auto-discovers all caps.
+
+```
+capsules/orders/
+├── capsule.ts          # name, dependencies, boot
+├── caps/
+│   ├── create-order.cap.ts
+│   ├── cancel-order.cap.ts
+│   └── list-orders.cap.ts
+├── repository/
+│   └── order.repository.ts
+└── types/
+    └── order.type.ts
+```
+
+```ts
+// capsules/orders/capsule.ts
+export default {
+  name: 'orders',
+  dependencies: ['database'],
+} satisfies CapsuleDefinition;
+// caps auto-discovered from caps/ directory
+```
+
+### 2. Factory Capsules (inline caps)
+
+For capsules created programmatically (e.g., database adapters, cache layers), include caps inline via the `caps` field. No filesystem needed.
+
+```ts
+import { CapsuleDefinition, CapsuleCap } from '@mobtakronio/capskit';
+
+const myCaps: CapsuleCap[] = [
+  {
+    meta: { name: 'query', kind: 'action' },
+    handler: async (input, ctx) => {
+      const repo = ctx.deps.dependencies.myRepo;
+      return repo.query(input.body);
+    },
+  },
+];
+
+export function createMyCapsule(config: MyConfig): CapsuleDefinition {
+  return {
+    name: 'my-capsule',
+    caps: myCaps,
+    boot: {
+      init: async ({ deps }) => {
+        // Create resources and store in deps
+        deps.dependencies.myResource = await createResource(config);
+        deps.dependencies.myRepo = createMyRepository(deps.dependencies.myResource);
+      },
+    },
+  };
+}
+```
+
+Register factory capsules before boot:
+
+```ts
+// Recommended: use createCapsKit() for one-call setup
+const { capskit, shutdown } = await createCapsKit({
+  capsules: [createMyCapsule({ /* config */ })],
+});
+
+// Or use the low-level platform API:
+const platform = await createCapsKitPlatform();
+platform.registerCapsule(createMyCapsule({ /* config */ }));
+await platform.boot({ capsuleDirs: [] });
+```
 
 ---
 
@@ -39,7 +116,16 @@ export default {
 The kernel scans directories specified in `capsuleDirs` for `capsule.ts` files:
 
 ```ts
-const platform = await createCapsKitPlatform({
+const { capskit, shutdown } = await createCapsKit({
+  capsuleDirs: ['./caps', './packages/shared-capsules'],
+});
+```
+
+Or using the low-level platform API:
+
+```ts
+const platform = await createCapsKitPlatform();
+await platform.boot({
   capsuleDirs: ['./caps', './packages/shared-capsules'],
 });
 ```
@@ -70,23 +156,79 @@ These are **capsule names**, not npm packages. The kernel resolves them by match
 
 ### External Dependencies
 
-External services (databases, Redis, etc.) are injected via the `dependencies` config:
+External services (databases, Redis, etc.) are injected via the `capsules` config:
 
 ```ts
-const platform = await createCapsKitPlatform({
+const { capskit, shutdown } = await createCapsKit({
   capsuleDirs: ['./caps'],
-  dependencies: {
-    database: createDatabaseConnection(),
-    'jwt-secret': process.env.JWT_SECRET,
-  },
+  capsules: [createCapsule({ dialect: 'sqlite', connection: './db.sqlite' })],
 });
 ```
 
-Access them in any cap via `ctx.deps`:
+Or using the low-level platform API:
 
 ```ts
-const order = await orderRepository.create(ctx.deps.database, input);
+const platform = await createCapsKitPlatform();
+platform.registerCapsule(createCapsule({ dialect: 'sqlite', connection: './db.sqlite' }));
+await platform.boot({ capsuleDirs: ['./caps'] });
 ```
+
+Access them in any cap via `ctx.deps.dependencies`:
+
+```ts
+const repo = ctx.deps.dependencies.drizzleRepo;
+const order = await repo.query({ table: 'orders', operation: 'select' });
+```
+
+---
+
+## The Repository Factory Pattern
+
+Instead of passing `db` as the first argument to every repository function, use the factory pattern:
+
+```ts
+// repository/order.repository.ts
+export function createOrderRepository(db: any) {
+  return {
+    async findById(id: string) {
+      return db.orders.findUnique({ where: { id } });
+    },
+    async create(input: OrderInput) {
+      return db.orders.create({ data: input });
+    },
+  };
+}
+```
+
+Create the factory once in `boot.init` and store it in `deps.dependencies`:
+
+```ts
+// capsule.ts
+boot: {
+  init: async ({ deps }) => {
+    const db = await connectDatabase();
+    deps.dependencies.db = db;
+    deps.dependencies.orderRepo = createOrderRepository(db);
+  },
+}
+```
+
+Then use it in caps without passing `db`:
+
+```ts
+// caps/list-orders.cap.ts
+export default async function listOrders(_input: CapInput, ctx: CapContext) {
+  const repo = ctx.deps.dependencies.orderRepo;
+  const orders = await repo.findWithFilters({ status: 'pending' });
+  return { orders };
+}
+```
+
+**Benefits:**
+- No `db: any` parameter on every function
+- Type-safe repository interface
+- Easy to mock in tests
+- Clear dependency lifecycle
 
 ---
 
@@ -137,7 +279,7 @@ interface MyDeps {
   logger: Logger;
 }
 
-const platform = await createCapsKitPlatform<MyDeps>({
+const { capskit, shutdown } = await createCapsKit<MyDeps>({
   capsuleDirs: ['./caps'],
   dependencies: {
     database: createDatabaseConnection(),

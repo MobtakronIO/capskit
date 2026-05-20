@@ -18,3 +18,9 @@ export interface InternalState {
   dependencies: Record<string, unknown>;
   booted: boolean;
 }
+
+export interface BootOptions {
+  capsuleDirs?: string[];
+  dependencies?: Record<string, unknown>;
+  disableBuiltins?: string[] | boolean | '*';
+}

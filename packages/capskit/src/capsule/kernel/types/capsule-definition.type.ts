@@ -11,12 +11,12 @@ export interface CapsuleHook {
   caps?: string | string[];
 }
 
-export interface CapsuleCap {
+export interface CapsuleCap<TDeps extends KernelDeps = KernelDeps> {
   meta: CapMeta;
-  handler: CapHandler;
+  handler: CapHandler<TDeps>;
 }
 
-export interface CapsuleDefinition {
+export interface CapsuleDefinition<TDeps extends KernelDeps = KernelDeps> {
   name: string;
   dependencies?: string[];
   /** Hooks applied to all caps in this capsule. Merged with per-cap hooks. */
@@ -25,11 +25,11 @@ export interface CapsuleDefinition {
     post?: CapsuleHook[];
   };
   boot?: {
-    init?: (context: { deps: KernelDeps }) => Promise<void>;
-    shutdown?: (context: { deps: KernelDeps }) => Promise<void>;
+    init?: (context: { deps: TDeps }) => Promise<void>;
+    shutdown?: (context: { deps: TDeps }) => Promise<void>;
   };
   /** Inline caps for factory-created capsules (no filesystem directory). */
-  caps?: CapsuleCap[];
+  caps?: CapsuleCap<TDeps>[];
 }
 
 export interface CapFile {

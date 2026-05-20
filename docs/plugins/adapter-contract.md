@@ -35,13 +35,15 @@ export async function createMyAdapter(
   const { port = 3000, prefix = '' } = options;
 
   // Read cap metadata from the platform
-  const caps = platform.getCaps();
+  const manifests = platform.getManifests();
 
-  // Build routes from cap meta.routes
-  for (const cap of caps) {
-    if (cap.meta.kind === 'action' && cap.meta.routes) {
-      for (const route of cap.meta.routes) {
-        // Register route with the framework
+  // Build routes from cap manifests
+  for (const manifest of manifests) {
+    for (const cap of manifest.caps || []) {
+      if (cap.kind === 'action' && cap.routes) {
+        for (const route of cap.routes) {
+          // Register route with the framework
+        }
       }
     }
   }
@@ -118,7 +120,7 @@ test('adapter builds routes from cap metadata', async () => {
 
 ## Best Practices
 
-1. **Read cap metadata, don't assume structure**: Use `platform.getCaps()` to discover caps at runtime.
+1. **Read cap metadata, don't assume structure**: Use `platform.getManifests()` to discover capsules and their caps at runtime.
 2. **Respect hook chains**: Apply hook caps in the order declared by `meta.hooks`.
 3. **Validate input schemas**: Use `meta.inputSchema` to validate incoming requests before calling caps.
 4. **Handle errors gracefully**: Wrap cap calls in try/catch and translate `FrameworkError` to appropriate HTTP status codes.

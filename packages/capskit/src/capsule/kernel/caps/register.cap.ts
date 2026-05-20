@@ -36,6 +36,8 @@ export default async function registerCapsule(input: CapInput, ctx: CapContext) 
 
   capsules.set(capsuleDef.name, { def: capsuleDef, dir: capsuleDir });
 
+  let capCount = 0;
+
   // Option A: caps provided directly (pre-built capsules like @mobtakronio/capskit-drizzle)
   if (caps && caps.length > 0) {
     for (const cap of caps) {
@@ -50,6 +52,7 @@ export default async function registerCapsule(input: CapInput, ctx: CapContext) 
       capsMap.set(capPath, capFile);
       allCaps.set(capPath, capFile);
     }
+    capCount += caps.length;
   }
 
   // Option B: discover caps from a filesystem directory
@@ -60,11 +63,28 @@ export default async function registerCapsule(input: CapInput, ctx: CapContext) 
       capsMap.set(capPath, cap);
       allCaps.set(capPath, cap);
     }
+    capCount += discovered.length;
+  }
+
+  // Option C: auto-derive from capsuleDef.caps (factory-created capsules)
+  if (!caps && !capsuleDir && capsuleDef.caps && capsuleDef.caps.length > 0) {
+    for (const cap of capsuleDef.caps) {
+      const capPath = `${capsuleDef.name}.${cap.meta.name}`;
+      const capFile: CapFile = {
+        meta: cap.meta,
+        handler: cap.handler,
+        capsuleName: capsuleDef.name,
+        filePath: `virtual://${capsuleDef.name}/${cap.meta.name}`,
+      };
+      capsMap.set(capPath, capFile);
+      allCaps.set(capPath, capFile);
+    }
+    capCount += capsuleDef.caps.length;
   }
 
   if (capsuleDef.boot?.init) {
     await capsuleDef.boot.init({ deps: ctx.deps });
   }
 
-  return { registered: capsuleDef.name, capCount: caps ? caps.length : 0 };
+  return { registered: capsuleDef.name, capCount };
 }

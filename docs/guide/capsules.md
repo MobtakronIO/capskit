@@ -72,7 +72,11 @@ Imports flow **down only**. No layer may import from a layer above it.
 
 ## capsule.ts — The Entry Point
 
-The `capsule.ts` file declares the capsule's name, its dependencies, and an optional boot lifecycle. The kernel auto-discovers `.cap.ts` files from the `caps/` directory — no manual cap listing needed.
+The `capsule.ts` file declares the capsule's name, its dependencies, and an optional boot lifecycle.
+
+### Filesystem Capsules (auto-discovered caps)
+
+For capsules that live on disk, the kernel auto-discovers `.cap.ts` files from the `caps/` directory — no manual cap listing needed.
 
 ```ts
 // capsules/orders/capsule.ts
@@ -89,8 +93,47 @@ export default {
 } satisfies CapsuleDefinition;
 ```
 
-**What goes here:** capsule name, dependency declarations, boot lifecycle.
-**What does NOT go here:** cap references (auto-discovered), business logic, handlers.
+### Factory Capsules (inline caps)
+
+For capsules created programmatically (e.g., `@mobtakronio/capskit-drizzle`), include caps inline via the `caps` field. No filesystem directory needed.
+
+```ts
+import { CapsuleDefinition, CapsuleCap } from '@mobtakronio/capskit';
+
+const drizzleCaps: CapsuleCap[] = [
+  {
+    meta: { name: 'query', kind: 'action' },
+    handler: async (input, ctx) => {
+      const repo = ctx.deps.dependencies.drizzleRepo;
+      return repo.query(input.body);
+    },
+  },
+  {
+    meta: { name: 'health', kind: 'action' },
+    handler: async (_input, ctx) => {
+      const repo = ctx.deps.dependencies.drizzleRepo;
+      return repo.health();
+    },
+  },
+];
+
+export function createCapsule(config: DrizzleConfig): CapsuleDefinition {
+  return {
+    name: 'drizzle',
+    caps: drizzleCaps,
+    boot: {
+      init: async ({ deps }) => {
+        const db = await createDatabase(config);
+        deps.dependencies.drizzle = db;
+        deps.dependencies.drizzleRepo = createDrizzleRepository(db);
+      },
+    },
+  };
+}
+```
+
+**What goes here:** capsule name, dependency declarations, boot lifecycle, inline caps (for factory capsules).
+**What does NOT go here:** business logic, handlers (except inline caps for factory capsules).
 
 ---
 
@@ -160,30 +203,40 @@ export const DEFAULT_PAGE_SIZE = 20;
 // capsules/orders/repository/order.repository.ts
 import { Order, OrderInput, OrderFilter } from '../types/order.type';
 
+export function createOrderRepository(db: any) {
+  return {
+    async create(input: OrderInput): Promise<Order> {
+      return db.orders.create({ data: input });
+    },
+
+    async findById(id: string): Promise<Order | null> {
+      return db.orders.findUnique({ where: { id } });
+    },
+
+    async updateStatus(id: string, status: string): Promise<Order> {
+      return db.orders.update({ where: { id }, data: { status } });
+    },
+
+    async findWithFilters(filter: OrderFilter): Promise<Order[]> {
+      return db.orders.findMany({
+        where: {
+          ...(filter.status && { status: filter.status }),
+        },
+      });
+    },
+  };
+}
+
+// Backward-compatible static export
 export const orderRepository = {
-  async create(db: any, input: OrderInput): Promise<Order> {
-    return db.orders.create({ data: input });
-  },
-
-  async findById(db: any, id: string): Promise<Order | null> {
-    return db.orders.findUnique({ where: { id } });
-  },
-
-  async updateStatus(db: any, id: string, status: string): Promise<Order> {
-    return db.orders.update({ where: { id }, data: { status } });
-  },
-
-  async findWithFilters(db: any, filter: OrderFilter): Promise<Order[]> {
-    return db.orders.findMany({
-      where: {
-        ...(filter.status && { status: filter.status }),
-      },
-    });
-  },
+  create: (db: any, input: OrderInput) => createOrderRepository(db).create(input),
+  findById: (db: any, id: string) => createOrderRepository(db).findById(id),
+  updateStatus: (db: any, id: string, status: string) => createOrderRepository(db).updateStatus(id, status),
+  findWithFilters: (db: any, filter: OrderFilter) => createOrderRepository(db).findWithFilters(filter),
 };
 ```
 
-**Rule:** All I/O goes through repository files. Each file groups queries/mutations for one entity or external service. Repository files can import from `.type.ts` and `.error.ts` only.
+**Rule:** All I/O goes through repository files. Use the **factory pattern** — `createXxxRepository(db)` returns a bound instance so callers don't pass `db` on every call. Keep a backward-compatible static export for existing code. Repository files can import from `.type.ts` and `.error.ts` only.
 
 ---
 
@@ -230,7 +283,6 @@ Each `.cap.ts` file exports **two things**: the `meta` (CapMeta) and the `defaul
 import { CapInput, CapContext, CapMeta } from '@mobtakronio/capskit';
 import { OrderInput } from '../types/order.type';
 import { ORDER_STATUS } from '../constants';
-import { orderRepository } from '../repository/order.repository';
 import { calculateTotal } from '../helpers/calculate-total.helper';
 
 export const meta: CapMeta = {
@@ -254,7 +306,8 @@ export const meta: CapMeta = {
 export default async function createOrder(input: CapInput, ctx: CapContext) {
   const items = input.body.items;
   const total = calculateTotal(items, input.body.discount);
-  const order = await orderRepository.create(ctx.deps.database, {
+  const repo = ctx.deps.dependencies.orderRepo;
+  const order = await repo.create({
     items, total, status: ORDER_STATUS.PENDING,
   });
   ctx.emit('order.created', { orderId: order.id });

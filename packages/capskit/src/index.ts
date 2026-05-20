@@ -1,10 +1,6 @@
 // ── New kernel type system and capsule loader (Phase 1 refactor) ──
 export * from './capsule/kernel';
 
-// High-level CapsKit factory (returns full ICapsKit + router)
-export { createCapsKit } from './kernel/platform';
-export type { CreateCapsKitOptions } from './kernel/platform';
-
 // WebSocket protocol types
 export * from './capsule/websocket';
 

@@ -1,6 +1,6 @@
 {
   "name": "@mobtakronio/capskit-drizzle",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "description": "Drizzle ORM capsule for CapsKit — injectable database access with Postgres and SQLite support",
   "license": "MIT",
   "type": "module",
@@ -36,7 +36,7 @@
     "capsule"
   ],
   "peerDependencies": {
-    "@mobtakronio/capskit": "^0.5.0",
+    "@mobtakronio/capskit": "^0.5.6",
     "drizzle-orm": ">=0.30.0",
     "better-sqlite3": ">=9.0.0",
     "pg": ">=8.0.0"
