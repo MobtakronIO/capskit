@@ -9,7 +9,8 @@ export function topologicalSort(capsules: CapsuleDefinition[]): CapsuleDefinitio
   const byName = new Map<string, CapsuleDefinition>();
 
   for (const c of capsules) {
-    inDegree.set(c.name, (c.dependencies || []).length);
+    const deps = (c.dependencies || []).filter(d => d !== 'capskit');
+    inDegree.set(c.name, deps.length);
     byName.set(c.name, c);
   }
 
@@ -25,7 +26,8 @@ export function topologicalSort(capsules: CapsuleDefinition[]): CapsuleDefinitio
 
     // Find all capsules that depend on this one
     for (const c of capsules) {
-      if ((c.dependencies || []).includes(name)) {
+      const deps = (c.dependencies || []).filter(d => d !== 'capskit');
+      if (deps.includes(name)) {
         const newDegree = inDegree.get(c.name)! - 1;
         inDegree.set(c.name, newDegree);
         if (newDegree === 0) queue.push(c.name);

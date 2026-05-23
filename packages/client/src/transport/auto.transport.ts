@@ -1,6 +1,6 @@
 import { HttpTransport } from './http.transport';
 import { WebSocketTransport } from './websocket.transport';
-import type { AuthConfig, CallOptions, DescribeResult, EmitResult, RetryConfig, TellResult, WebSocketConfig } from '../types/client.type';
+import type { AuthConfig, CallOptions, DescribeResult, EmitResult, RetryConfig, WebSocketConfig } from '../types/client.type';
 import { OfflineError, SubscriptionError } from '../errors/client-errors.error';
 
 export interface AutoTransportConfig {
@@ -15,7 +15,7 @@ export interface AutoTransportConfig {
  * Auto transport wraps HTTP and WebSocket transports.
  * - Starts with HTTP for one-off calls
  * - On first subscribe(), establishes WebSocket connection
- * - Routes call/emit/tell/describe to WS if connected, otherwise HTTP
+ * - Routes call/emit/describe to WS if connected, otherwise HTTP
  * - Routes subscribe/unsubscribe to WS only
  */
 export class AutoTransport {
@@ -72,13 +72,6 @@ export class AutoTransport {
       return this.ws.emit(event, data);
     }
     return this.http.emit(event, data);
-  }
-
-  async tell(actionPath: string, payload: unknown): Promise<TellResult> {
-    if (this.ws?.connectionState === 'connected') {
-      return this.ws.tell(actionPath, payload);
-    }
-    return this.http.tell(actionPath, payload);
   }
 
   async describe(): Promise<DescribeResult> {

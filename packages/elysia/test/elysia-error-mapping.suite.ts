@@ -17,13 +17,24 @@ import {
   DependencyError,
   UnauthorizedError,
   AuthorizationError,
-  TraitError,
-  HandlerError,
   InternalError,
   FrameworkError,
   ErrorEnvelope,
   toErrorEnvelope
-} from '../../src/kernel/errors';
+} from '../../capskit/src/capsule/kernel/errors';
+
+// Local test shims for deprecated kernel error classes
+class TraitError extends FrameworkError {
+  constructor(message: string, public trait?: string, details?: Record<string, unknown>) {
+    super(message, 'TRAIT_ERROR', 403, details);
+  }
+}
+
+class HandlerError extends FrameworkError {
+  constructor(message: string, public actionName?: string, details?: Record<string, unknown>) {
+    super(message, 'HANDLER_ERROR', 500, details);
+  }
+}
 
 export async function runElysiaErrorMappingTests() {
   console.log('\n=== Elysia Adapter Error Mapping Tests ===');
@@ -259,7 +270,7 @@ export async function runElysiaErrorMappingTests() {
 
   // Test 10: Error codes are consistent with ERROR_STATUS_MAP
   console.log('Test: Error codes are consistent with ERROR_STATUS_MAP');
-  const { ERROR_STATUS_MAP, getErrorClassByCode } = await import('../../src/kernel/error-mapping');
+  const { ERROR_STATUS_MAP, getErrorClassByCode } = await import('../../capskit/src/capsule/kernel/error-mapping');
   
   for (const error of testErrors) {
     const httpResponse = mapToHttpResponse(error, {});

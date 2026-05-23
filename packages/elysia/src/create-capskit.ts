@@ -23,7 +23,10 @@ export interface CreateCapsKitAppOptions {
   cors?: boolean | Record<string, unknown>;
   /** WebSocket path (e.g., '/ws/capskit'). If not set, WebSocket is disabled. */
   wsPath?: string;
-  /** Trait handlers for HTTP routes */
+  /**
+   * @deprecated Use hook caps instead. Trait handlers are legacy adapter-level middleware.
+   * Hooks are now handled by the kernel via meta.hooks and capsuleDef.hooks.
+   */
   traitHandlers?: Record<string, TraitHandler>;
   /** HTTP adapter options */
   http?: HttpOptions;

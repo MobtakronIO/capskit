@@ -84,7 +84,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const capsules = manifest?.capsules ?? manifest ?? [];
+  const capsules = manifest?.result?.capsules ?? manifest?.capsules ?? manifest ?? [];
   console.log(`Found ${capsules.length} capsule(s)`);
 
   const generated = generateTypes({ manifest: capsules });

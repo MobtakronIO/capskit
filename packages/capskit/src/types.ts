@@ -5,7 +5,6 @@ export interface ICapsKit {
   call(capPath: string, payload?: unknown): Promise<unknown>;
   use<TCapsule = unknown>(capsuleName: string): TCapsule;
   emit(event: string, data: unknown): void;
-  tell(capPath: string, payload: unknown): void;
   describe(capsuleName: string): CapsuleManifest | undefined;
   getManifests(): CapsuleManifest[];
   addHook(hook: { name: string; handler: CapHandler }): void;
@@ -46,7 +45,12 @@ export interface CapInput {
 }
 export interface CapContext {
   deps: Record<string, unknown>;
-  call: (path: string, payload?: unknown) => Promise<unknown>;
+  call: {
+    (path: string, payload?: unknown): Promise<unknown>;
+    [capsuleName: string]: {
+      [actionName: string]: (payload?: unknown) => Promise<unknown>;
+    };
+  };
 }
 export interface KernelDeps { capskit?: ICapsKit; [key: string]: unknown; }
 

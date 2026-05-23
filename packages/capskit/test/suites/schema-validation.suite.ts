@@ -5,8 +5,8 @@
  * Validates input/output schema contract enforcement at the kernel boundary.
  */
 
-import { createCapsKit } from '../../src/kernel/platform';
-import { ValidationError } from '../../src/kernel/errors';
+import { createCapsKit } from '../../src/capsule/kernel/create-capskit';
+import { ValidationError } from '../../src/capsule/kernel/errors';
 
 export async function runSchemaValidationTests(kitFactory = createCapsKit) {
   console.log('\n=== Schema Validation Tests ===');

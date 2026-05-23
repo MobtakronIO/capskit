@@ -6,7 +6,7 @@
 
 ## ⛔ 10 Hard Rules
 
-1. **Caps NEVER import other `.cap.ts` files** — use `ctx.invoke()`, `ctx.emit()`, `ctx.tell()`.
+1. **Caps NEVER import other `.cap.ts` files** — use `ctx.call()`, `ctx.emit()`.
 2. **No pyramid violations** — foundation (`.type`, `.error`, `.constant`) imports only each other.
 3. **No `utils.ts`, `shared.ts`, `common.ts`** — suffix convention: `.helper.ts`, `.rule.ts`, `.repository.ts`.
 4. **`.cap.ts` max 200 lines** — orchestrates, not implements. Extract when exceeding.
@@ -81,8 +81,7 @@ export default async function createOrder(input: CapInput, ctx: CapContext) {
 ```ts
 ctx.deps              // Injected dependencies
 ctx.emit(event, data)           // Fire-and-forget publish
-ctx.invoke('capsule.cap', payload)  // RPC, returns result
-ctx.tell('capsule.cap', payload)    // Fire-and-forget RPC
+ctx.call('capsule.cap', payload)  // RPC, returns result (fire-and-forget by not awaiting)
 ctx.use(capsuleName)  // Capsule proxy
 ctx.user              // Set by auth hooks
 ```
@@ -122,7 +121,7 @@ throw new InternalError('Unexpected')     // 500
 - Errors extend built-in classes
 - Constants use `as const`
 - Event names past-tense
-- Cross-cap calls use `ctx.invoke` / `ctx.emit` / `ctx.tell`
+- Cross-cap calls use `ctx.call` / `ctx.emit`
 
 ---
 
@@ -131,7 +130,7 @@ throw new InternalError('Unexpected')     // 500
 | Question | Answer |
 |---|---|
 | Extract helper/rule now? | No. Inline first. Graduate on second use. |
-| Cap call another cap directly? | No. Use `ctx.invoke` / `ctx.emit` / `ctx.tell`. |
+| Cap call another cap directly? | No. Use `ctx.call` / `ctx.emit`. |
 | DB query location? | `.repository.ts` only. |
 | Add `utils.ts`? | No. Use suffix convention. |
 | `.cap.ts` > 200 lines? | Extract to `.repository.ts`, `.rule.ts`, or `.helper.ts`. |
@@ -141,4 +140,4 @@ throw new InternalError('Unexpected')     // 500
 | Auth on all caps? | Capsule-level hooks in `capsule.ts`. |
 | Which error class? | `ValidationError`, `NotFoundError`, `AuthorizationError`, `InternalError`. Never raw `Error`. |
 | Business logic in `capsule.ts`? | No. Logic in `.cap.ts`, graduating to rules/helpers/repositories. |
-| Need data from another capsule? | `ctx.invoke('other-capsule.cap-name', payload)`. |
+| Need data from another capsule? | `ctx.call('other-capsule.cap-name', payload)`. |

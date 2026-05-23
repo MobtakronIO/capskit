@@ -5,10 +5,22 @@ export class BuildRouterCap {
     const { adapter = 'elysia', traitHandlers = {} } = payload?.body || payload || {};
     const capskit = context.deps.capskit;
 
-    if (typeof adapter === 'function') {
-      return { router: await adapter(capskit, { traitHandlers }) };
+    let adapterFn = adapter;
+    if (typeof adapter === 'string') {
+      if (adapter === 'elysia') {
+        try {
+          const mod = await import('@mobtakronio/elysia');
+          adapterFn = mod.createElysiaAdapter || mod.default || mod;
+        } catch (err: any) {
+          throw new Error(`Failed to load elysia adapter: ${err.message}`);
+        }
+      }
     }
-    throw new Error(`Unsupported HTTP adapter: ${typeof adapter}`);
+
+    if (typeof adapterFn === 'function') {
+      return { router: await adapterFn(capskit, { http: true, traitHandlers }) };
+    }
+    throw new Error(`Unsupported HTTP adapter: ${typeof adapterFn}`);
   }
 }
 

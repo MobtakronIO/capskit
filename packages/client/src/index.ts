@@ -21,7 +21,6 @@ export type {
   DescribeResult,
   EmitResult,
   EventHandler,
-  TellResult,
   TransportType,
   UnsubscribeFn,
   AuthConfig,

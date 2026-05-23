@@ -138,12 +138,9 @@ export function createTestCapsKit(config: {
     const context: CapContext = {
       deps: allDeps,
       emit: (name: string, data: unknown) => eventCapture.emit(name, data),
-      invoke: async (action: string, payload: unknown) => {
+      call: async (action: string, payload: unknown) => {
         const result = await callAction(action, payload);
         return result.result;
-      },
-      tell: (_action: string, _payload: unknown) => {
-        throw new Error('tell() is not available in test mode');
       },
       use: () => {
         throw new Error('use() is not available in test mode');

@@ -55,8 +55,11 @@ async function scanDir(dir: string, results: string[], depth = 0) {
       if (['node_modules', 'dist', '.git', 'test', 'tests', '__tests__'].includes(entry.name)) continue;
       // If this dir has a capsule.ts, record it and don't go deeper
       const capsuleFile = path.join(fullPath, 'capsule.ts');
+      const capsFile = path.join(fullPath, 'caps.ts');
       if (fs.existsSync(capsuleFile)) {
         results.push(capsuleFile);
+      } else if (fs.existsSync(capsFile)) {
+        results.push(capsFile);
       } else {
         await scanDir(fullPath, results, depth + 1);
       }
@@ -70,7 +73,7 @@ async function scanCapsDir(dir: string, files: string[]) {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       await scanCapsDir(fullPath, files);
-    } else if (entry.name.endsWith('.cap.ts')) {
+    } else if (entry.name.endsWith('.cap.ts') && entry.name !== 'platform.cap.ts') {
       files.push(fullPath);
     }
   }

@@ -6,6 +6,7 @@ export function validateDepGraph(capsules: CapsuleDefinition[]): { valid: boolea
 
   for (const capsule of capsules) {
     for (const dep of (capsule.dependencies || [])) {
+      if (dep === 'capskit') continue;
       if (!names.has(dep)) {
         errors.push(`Capsule "${capsule.name}" depends on "${dep}" which is not registered`);
       }

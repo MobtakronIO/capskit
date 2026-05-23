@@ -6,8 +6,8 @@ import { join } from 'path';
 export async function runLoaderEdgeCaseTests() {
   console.log('\n=== Loader Edge Cases & String-Handler Tests ===');
 
-  const { createCapsKit } = await import('../../src/kernel/platform');
-  const { ValidationError, NotFoundError } = await import('../../src/kernel/errors');
+  const { createCapsKit } = await import('../../src/capsule/kernel/create-capskit');
+  const { ValidationError, NotFoundError } = await import('../../src/capsule/kernel/errors');
 
   // Test 1: Manifest-based handler resolution (success)
   console.log('Test: manifest handler resolution succeeds');

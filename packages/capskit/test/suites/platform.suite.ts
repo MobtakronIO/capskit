@@ -1,6 +1,6 @@
 // @ts-nocheck
 
-import { ValidationError, NotFoundError, DependencyError, AuthorizationError, TraitError, HandlerError } from '../../src/kernel/errors';
+import { ValidationError, NotFoundError, DependencyError, AuthorizationError } from '../../src/capsule/kernel/errors';
 
 /**
  * Platform core tests - run via verify.test.ts

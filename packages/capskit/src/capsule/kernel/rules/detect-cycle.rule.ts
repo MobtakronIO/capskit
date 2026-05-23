@@ -4,7 +4,7 @@ import { CycleError } from '../errors';
 export function detectCycle(capsules: CapsuleDefinition[]): CycleError | null {
   const graph = new Map<string, string[]>();
   for (const c of capsules) {
-    graph.set(c.name, c.dependencies || []);
+    graph.set(c.name, (c.dependencies || []).filter(d => d !== 'capskit'));
   }
 
   const visited = new Set<string>();

@@ -13,7 +13,6 @@ import type {
   DescribeResult,
   EmitResult,
   EventHandler,
-  TellResult,
   UnsubscribeFn,
   ClientInterceptor,
   QueueStatus,
@@ -226,7 +225,6 @@ export function createCapsKitClient(options: CapsKitClientOptions): CapsKitClien
         if (queued !== null) return queued as Promise<EmitResult>;
         return http.emit(event, data);
       },
-      tell: (actionPath, payload) => http.tell(actionPath, payload),
       describe: async () => {
         const result = await http.describe();
         cachedManifest = result;
@@ -369,10 +367,6 @@ export function createCapsKitClient(options: CapsKitClientOptions): CapsKitClien
         await ensureConnected();
         return ws.emit(event, data);
       },
-      tell: async (actionPath, payload) => {
-        await ensureConnected();
-        return ws.tell(actionPath, payload);
-      },
       describe: async () => {
         await ensureConnected();
         const result = await ws.describe();
@@ -502,7 +496,6 @@ export function createCapsKitClient(options: CapsKitClientOptions): CapsKitClien
         if (queued !== null) return queued as Promise<EmitResult>;
         return auto.emit(event, data);
       },
-      tell: (actionPath, payload) => auto.tell(actionPath, payload),
       describe: async () => {
         const result = await auto.describe();
         cachedManifest = result;

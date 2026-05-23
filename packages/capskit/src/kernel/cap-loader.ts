@@ -633,8 +633,7 @@ export interface CapContextAdapter {
   deps: Record<string, unknown>;
   emit: (event: string, data: unknown) => void;
   use: (capsuleName: string) => unknown;
-  invoke: (action: string, payload?: unknown) => Promise<unknown>;
-  tell: (action: string, payload?: unknown) => void;
+  call: ((action: string, payload?: unknown) => Promise<unknown>);
 }
 
 export function createCapContext(platformCtx: PlatformContext): CapContextAdapter {
@@ -645,8 +644,7 @@ export function createCapContext(platformCtx: PlatformContext): CapContextAdapte
     deps: platformCtx.deps,
     emit: platformCtx.emit,
     use: platformCtx.use,
-    invoke: (action: string, payload?: unknown) => platformCtx.call(action, payload),
-    tell: (action: string, payload?: unknown) => { void platformCtx.call(action, payload); },
+    call: (action: string, payload?: unknown) => platformCtx.call(action, payload),
   };
 }
 

@@ -273,7 +273,7 @@ export async function runDualFormatBootTests(kitFactory: (config: any) => Promis
 
   // ============================================================
   // Test 6: Runtime cross-format communication
-  //        (new-style calls old-style via ctx.invoke)
+  //        (new-style calls old-style via ctx.call)
   // ============================================================
   console.log('Test: new-style capsule calls old-style capsule at runtime');
   {
@@ -292,7 +292,7 @@ export async function runDualFormatBootTests(kitFactory: (config: any) => Promis
 
     class UiRendererCap {
       async render(input: any, ctx: any) {
-        const config = await ctx.invoke('configProvider.getConfig', { body: {} });
+        const config = await ctx.call('configProvider.getConfig', { body: {} });
         return { rendered: true, theme: config.theme, from: 'uiRenderer' };
       }
     }
@@ -554,7 +554,7 @@ export async function runDualFormatBootTests(kitFactory: (config: any) => Promis
     // Cap directory style: middleware
     class MiddlewareCap {
       async process(input: any, ctx: any) {
-        const base = await ctx.invoke('baseService.init', { body: {} });
+        const base = await ctx.call('baseService.init', { body: {} });
         ctx.emit('middleware.processed', { result: base });
         return { processed: true, baseStatus: base.initialized };
       }

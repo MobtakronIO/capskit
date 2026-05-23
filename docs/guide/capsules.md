@@ -346,7 +346,7 @@ Use specific suffixes instead: `.helper.ts`, `.rule.ts`, `.repository.ts`.
 
 Caps within the same capsule or across different capsules communicate via:
 
-- **`ctx.invoke(capPath, payload)`** — RPC (request/response)
+- **`ctx.call(capPath, payload)`** — RPC (request/response). Fire-and-forget by not awaiting.
 - **`ctx.emit(event, data)`** — Event-driven (fire-and-forget)
 
 NEVER import from another `.cap.ts` file directly.

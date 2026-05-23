@@ -23,6 +23,10 @@ export interface CapMeta {
   actions?: Record<string, CapActionMeta>;
   dependencies?: string[];
   description?: string;
+  resiliency?: {
+    fallback?: { type: string; action?: string; cacheTtlMs?: number; chain?: string[] };
+    circuitBreaker?: { failureThreshold?: number; resetTimeoutMs?: number; successThreshold?: number };
+  };
 }
 
 export interface CapActionMeta {

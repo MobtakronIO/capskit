@@ -9,8 +9,8 @@ export async function runHttpAdapterTests() {
   console.log('\n=== HTTP Adapter Tests ===');
 
   // Import needed modules
-  const { createCapsKit } = await import('../../src/kernel/platform');
-  const { ValidationError, NotFoundError, DependencyError, AuthorizationError } = await import('../../src/kernel/errors');
+  const { createCapsKit } = await import('../../capskit/src/capsule/kernel/create-capskit');
+  const { ValidationError, NotFoundError, DependencyError, AuthorizationError } = await import('../../capskit/src/capsule/kernel/errors');
   const path = await import('node:path');
 
   const capsKitSrcDir = path.resolve(__dirname, '..', '..', 'src', 'capsules');

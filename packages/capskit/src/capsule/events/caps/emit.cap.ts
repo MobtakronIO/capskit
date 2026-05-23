@@ -39,18 +39,28 @@ export default async function emit(input: CapInput, ctx: CapContext) {
 
   for (const sub of allSubs) {
     try {
-      await ctx.invoke(sub.capPath, { body: data });
+      await ctx.call(sub.capPath, { body: data });
       results.push({ capPath: sub.capPath, success: true });
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       results.push({ capPath: sub.capPath, success: false, error: errorMsg });
       try {
-        await ctx.invoke('events.handle-dead-letter', {
+        await ctx.call('events.handle-dead-letter', {
           body: { event, data, capPath: sub.capPath, error: errorMsg },
         });
       } catch {
         console.error(`Dead letter handler failed for ${event} → ${sub.capPath}`);
       }
+    }
+  }
+
+  // Also dispatch to adapter eventBus (WebSocket clients)
+  const adapterEventBus = (ctx.deps as any).eventBus;
+  if (adapterEventBus) {
+    if (typeof adapterEventBus.emit === 'function') {
+      adapterEventBus.emit(event, data);
+    } else if (typeof adapterEventBus.dispatch === 'function') {
+      adapterEventBus.dispatch(event, data);
     }
   }
 

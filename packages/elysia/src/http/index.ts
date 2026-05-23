@@ -1,19 +1,36 @@
 import { Elysia } from 'elysia';
 import type { ICapsKit, CapsuleManifest, RouteManifest } from '@mobtakronio/capskit';
 import { mapToHttpResponse } from '../shared';
-import type { HttpOptions, TraitHandler, CorsOptions } from '../shared';
+import type { HttpOptions, CorsOptions } from '../shared';
 
 export { HttpOptions, CorsOptions };
 
 export interface HttpAdapterOptions extends HttpOptions {
+  /**
+   * @deprecated Use hook caps instead. Trait handlers are legacy adapter-level middleware.
+   * Hooks are now handled by the kernel via meta.hooks and capsuleDef.hooks.
+   * This field will be removed in a future version.
+   */
   traitHandlers?: Record<string, TraitHandler>;
 }
+
+/**
+ * @deprecated Use hook caps instead. See docs/guide/hooks.md
+ */
+type TraitHandler = (traitValue: unknown, context: unknown) => void | Promise<void>;
 
 const DEFAULT_CORS: CorsOptions = {
   origin: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
+
+/**
+ * Check if a route has legacy traits attached (backward compat).
+ */
+function routeHasTraits(route: RouteManifest): boolean {
+  return !!(route as any).traits && typeof (route as any).traits === 'object';
+}
 
 async function applyCors(app: Elysia, corsOption: boolean | CorsOptions): Promise<boolean> {
   if (corsOption === false) return false;
@@ -31,7 +48,17 @@ async function applyCors(app: Elysia, corsOption: boolean | CorsOptions): Promis
 }
 
 export async function createRouter(capskit: ICapsKit, options: HttpAdapterOptions = {}) {
-  const { traitHandlers = {}, cors } = options;
+  const { cors } = options;
+  const traitHandlers = options.traitHandlers;
+
+  // Warn if legacy trait handlers are provided
+  if (Object.keys(traitHandlers || {}).length > 0) {
+    console.warn(
+      '[capskit-elysia] traitHandlers is deprecated. Use hook caps instead. ' +
+      'See docs/guide/hooks.md. Trait handlers will continue to work for backward compatibility.'
+    );
+  }
+
   const app = new Elysia();
 
   if (cors) {
@@ -42,13 +69,14 @@ export async function createRouter(capskit: ICapsKit, options: HttpAdapterOption
 
   manifests.forEach(manifest => {
     if (manifest.routes) {
-      manifest.routes.forEach((route: RouteManifest & { traits?: Record<string, unknown> }) => {
+      manifest.routes.forEach((route: RouteManifest) => {
         const path = route.path;
-        
+
         let hooks: Record<string, unknown> = {};
-        if (route.traits) {
+        if (traitHandlers && routeHasTraits(route)) {
+          const traits = (route as any).traits;
           hooks.beforeHandle = [];
-          for (const [traitName, traitValue] of Object.entries(route.traits)) {
+          for (const [traitName, traitValue] of Object.entries(traits)) {
             if (traitHandlers[traitName]) {
               const wrappedTrait = async (c: any) => {
                 try {
@@ -105,7 +133,7 @@ export async function createRouter(capskit: ICapsKit, options: HttpAdapterOption
     }
   });
 
-  // POST /api/capskit/rpc — RPC for call/emit/tell
+  // POST /api/capskit/rpc — RPC for call/emit
   app.post('/api/capskit/rpc', async ({ body, set }: any) => {
     try {
       const { method, ...params } = body as { method: string; [key: string]: unknown };
@@ -137,18 +165,6 @@ export async function createRouter(capskit: ICapsKit, options: HttpAdapterOption
           }
           return { ok: false, error: 'emit not supported' };
         }
-        case 'tell': {
-          const { actionPath, payload } = params as { actionPath: string; payload?: unknown };
-          if (!actionPath) {
-            set.status = 400;
-            return { ok: false, error: 'actionPath is required' };
-          }
-          if (typeof (capskit as any).tell === 'function') {
-            (capskit as any).tell(actionPath, payload);
-            return { ok: true, result: { told: true, actionPath } };
-          }
-          return { ok: false, error: 'tell not supported' };
-        }
         default:
           set.status = 400;
           return { ok: false, error: `Unknown method: ${method}` };
@@ -165,16 +181,7 @@ export async function createRouter(capskit: ICapsKit, options: HttpAdapterOption
       return {
         ok: true,
         result: {
-          capsules: manifests.map(m => ({
-            name: m.name,
-            caps: (m.caps || []).map(c => ({
-              name: c.name,
-              capPath: c.capPath,
-              actionPath: c.actionPath,
-              description: c.description,
-            })),
-            routes: m.routes || [],
-          })),
+          capsules: manifests,
         },
       };
     } catch (error: any) {

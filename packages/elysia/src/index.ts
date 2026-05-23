@@ -17,6 +17,11 @@ export interface UnifiedElysiaAdapter {
 export interface CreateElysiaAdapterOptions extends LifecycleHooks {
   http?: boolean | HttpOptions;
   websocket?: boolean | WebSocketOptions;
+  /**
+   * @deprecated Use hook caps instead. Trait handlers are legacy adapter-level middleware.
+   * Hooks are now handled by the kernel via meta.hooks and capsuleDef.hooks.
+   * This field will be removed in a future version.
+   */
   traitHandlers?: Record<string, TraitHandler>;
 }
 

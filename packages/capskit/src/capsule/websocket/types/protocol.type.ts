@@ -13,6 +13,7 @@ export interface WSErrorEnvelope {
 
 export interface WSCallFrame {
   type: 'call';
+  clientId: string;
   id: string;
   capPath?: string;
   actionPath: string;
@@ -21,37 +22,33 @@ export interface WSCallFrame {
 
 export interface WSEmitFrame {
   type: 'emit';
+  clientId: string;
   event: string;
   data: unknown;
 }
 
-export interface WSTellFrame {
-  type: 'tell';
-  capPath?: string;
-  actionPath: string;
-  payload: unknown;
-}
-
 export interface WSSubscribeFrame {
   type: 'subscribe';
+  clientId: string;
   id: string;
   patterns: string[];
 }
 
 export interface WSUnsubscribeFrame {
   type: 'unsubscribe';
+  clientId: string;
   id: string;
 }
 
 export interface WSDescribeFrame {
   type: 'describe';
+  clientId: string;
   id: string;
 }
 
 export type WSClientFrame =
   | WSCallFrame
   | WSEmitFrame
-  | WSTellFrame
   | WSSubscribeFrame
   | WSUnsubscribeFrame
   | WSDescribeFrame;
@@ -86,11 +83,17 @@ export interface WSErrorFrame {
   error: WSErrorEnvelope;
 }
 
+export interface WSWelcomeFrame {
+  type: 'welcome';
+  clientId: string;
+}
+
 export type WSServerFrame =
   | WSResponseFrame
   | WSEventFrame
   | WSManifestFrame
-  | WSErrorFrame;
+  | WSErrorFrame
+  | WSWelcomeFrame;
 
 // ── Union of all frames ──
 

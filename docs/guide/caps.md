@@ -34,8 +34,7 @@ interface CapInput {
 interface CapContext {
   deps: Record<string, any>;                    // Injected dependencies
   emit: (event: string, data: any) => void;     // Publish event (delegates to events capsule)
-  invoke: (capPath: string, payload: any) => Promise<any>;  // RPC
-  tell: (capPath: string, payload: any) => void;            // Fire-and-forget
+  call: (capPath: string, payload: any) => Promise<any>;     // RPC or fire-and-forget (don't await)
   use: <T = any>(capsuleName: string) => T;     // Typed capsule proxy
   user?: any;                                   // Set by auth hooks
 }
@@ -167,7 +166,7 @@ Invalid input throws `ValidationError` before the handler runs.
 ## Best Practices
 
 1. **Keep caps under 200 lines** — extract to `.rule.ts`, `.helper.ts`, `.repository.ts`.
-2. **Never import from another `.cap.ts`** — use `ctx.invoke()` or `ctx.emit()`.
+2. **Never import from another `.cap.ts`** — use `ctx.call()` or `ctx.emit()`.
 3. **Declare schemas** — they power validation, documentation, and IDE support.
 4. **One cap = one capability** — if a cap does too much, split it.
 5. **Use hooks for cross-cutting concerns** — auth, logging, rate limiting.

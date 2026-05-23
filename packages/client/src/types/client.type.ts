@@ -87,11 +87,6 @@ export interface EmitResult {
   event: string;
 }
 
-export interface TellResult {
-  told: boolean;
-  actionPath: string;
-}
-
 export type UnsubscribeFn = () => void;
 
 export type EventHandler = (data: unknown, event: string) => void;
@@ -100,7 +95,6 @@ export interface CapsKitClient {
   call<T = unknown>(actionPath: string, payload?: unknown, options?: CallOptions): Promise<T>;
   use<TCapsule = CapsuleProxy>(capsuleName: string): TCapsule;
   emit(event: string, data: unknown): Promise<EmitResult>;
-  tell(actionPath: string, payload: unknown): Promise<TellResult>;
   describe(): Promise<DescribeResult>;
   subscribe(pattern: string, handler: EventHandler): UnsubscribeFn;
   disconnect(): Promise<void>;

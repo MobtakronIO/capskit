@@ -5,7 +5,8 @@ import {
   AuthError,
   CapsKitClientError,
 } from '../errors/client-errors.error';
-import type { CallOptions, AuthConfig, RetryConfig, DescribeResult, EmitResult, TellResult } from '../types/client.type';
+import type { CallOptions, AuthConfig, RetryConfig, DescribeResult, EmitResult } from '../types/client.type';
+import type { CapsuleManifest } from '@mobtakronio/capskit';
 
 interface HttpTransportConfig {
   baseUrl: string;
@@ -58,7 +59,7 @@ export class HttpTransport {
     return envelope.result as T;
   }
 
-  async rpc(method: 'call' | 'emit' | 'tell', params: Record<string, unknown>): Promise<Envelope> {
+  async rpc(method: 'call' | 'emit', params: Record<string, unknown>): Promise<Envelope> {
     const url = `${this.baseUrl}/api/capskit/rpc`;
     const body = { method, ...params };
 
@@ -86,11 +87,6 @@ export class HttpTransport {
     return (envelope.result as EmitResult) ?? { emitted: true, event };
   }
 
-  async tell(actionPath: string, payload: unknown): Promise<TellResult> {
-    const envelope = await this.rpc('tell', { actionPath, payload });
-    return (envelope.result as TellResult) ?? { told: true, actionPath };
-  }
-
   async describe(): Promise<DescribeResult> {
     const url = `${this.baseUrl}/api/capskit/describe`;
 
@@ -99,7 +95,22 @@ export class HttpTransport {
       headers: { 'Content-Type': 'application/json' },
     });
 
-    return (await response.json()) as DescribeResult;
+    const envelope = (await response.json()) as Envelope<{
+      capsules: CapsuleManifest[];
+    }>;
+
+    if (!envelope.ok || !envelope.result) {
+      throw new NetworkError('Describe endpoint returned error', {
+        details: envelope.error,
+      });
+    }
+
+    const capsules = envelope.result.capsules;
+    return {
+      capsules,
+      capsuleCount: capsules.length,
+      capCount: capsules.reduce((sum, c) => sum + (Array.isArray(c.caps) ? c.caps.length : 0), 0),
+    };
   }
 
   private async fetchWithAuth(url: string, init: RequestInit): Promise<Response> {

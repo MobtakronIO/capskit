@@ -1,30 +1,30 @@
 // @ts-nocheck
 
-import { createCapsKit } from '../../src/kernel/platform';
+import { createCapsKit } from '../../src/capsule/kernel/create-capskit';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
 /**
- * Invoke/Tell Proxy Tests
+ * Call Proxy Tests
  * 
  * Covers:
- * - ctx.invoke.serviceName.actionName(payload) => Promise<result>
- * - ctx.tell.serviceName.actionName(payload) => void (fire-and-forget)
+ * - ctx.call.serviceName.actionName(payload) => Promise<result>
+ * - ctx.call(capPath, payload) => Promise<result>
  * - Payload normalization (plain values vs structured {body, params, query})
- * - Error propagation (invoke) vs error swallowing (tell)
+ * - Error propagation
  * - Integration with tracing system
  * - Integration with interceptor pipeline
  * - Multiple service/action chains
  */
 
-export async function runInvokeTellTests(kitFactory: (config: any) => Promise<any>) {
-  console.log('\n=== Invoke/Tell Proxy Tests ===');
+export async function runCallProxyTests(kitFactory: (config: any) => Promise<any>) {
+  console.log('\n=== Call Proxy Tests ===');
 
   // ============================================================
-  // Test 1: Basic invoke - ctx.invoke.service.action(payload)
+  // Test 1: Basic call via proxy - ctx.call.service.action(payload)
   // ============================================================
-  console.log('Test: basic invoke via proxy chain');
+  console.log('Test: basic call via proxy chain');
   {
     const kit = await kitFactory({
       capsules: [{
@@ -51,8 +51,7 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
           actions: {
             proxy: {
               handler: async (input: any, ctx: any) => {
-                // Use the new invoke proxy
-                const result = await ctx.invoke.greeter.hello({ body: { name: 'World' } });
+                const result = await ctx.call.greeter.hello({ body: { name: 'World' } });
                 capturedResult = result;
                 return result;
               }
@@ -80,13 +79,13 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
     if (capturedResult?.greeting !== 'Hello, World!') {
       throw new Error(`Captured result incorrect: ${JSON.stringify(capturedResult)}`);
     }
-    console.log('✅ basic invoke via proxy chain works');
+    console.log('✅ basic call via proxy chain works');
   }
 
   // ============================================================
-  // Test 2: Invoke with plain value (non-structured payload)
+  // Test 2: Call with plain value (non-structured payload)
   // ============================================================
-  console.log('Test: invoke with plain value payload');
+  console.log('Test: call with plain value payload');
   {
     const kit = await kitFactory({
       capsules: [{
@@ -106,8 +105,7 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
           actions: {
             run: {
               handler: async (input: any, ctx: any) => {
-                // Pass plain number as payload
-                return ctx.invoke.math.double(5);
+                return ctx.call('math.double', 5);
               }
             }
           }
@@ -119,13 +117,13 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
     if (result.result !== 10) {
       throw new Error(`Expected 10, got ${JSON.stringify(result)}`);
     }
-    console.log('✅ invoke with plain value works');
+    console.log('✅ call with plain value works');
   }
 
   // ============================================================
-  // Test 3: Invoke propagates errors
+  // Test 3: Call propagates errors
   // ============================================================
-  console.log('Test: invoke propagates errors');
+  console.log('Test: call propagates errors');
   {
     const kit = await kitFactory({
       capsules: [{
@@ -145,7 +143,7 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
           actions: {
             callFail: {
               handler: async (input: any, ctx: any) => {
-                return ctx.invoke.failing.boom({ body: {} });
+                return ctx.call('failing.boom', { body: {} });
               }
             }
           }
@@ -166,13 +164,13 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
     if (!errorCaught.message.includes('BOOM!')) {
       throw new Error(`Expected error message to include 'BOOM!', got: ${errorCaught.message}`);
     }
-    console.log('✅ invoke propagates errors');
+    console.log('✅ call propagates errors');
   }
 
   // ============================================================
-  // Test 4: Basic tell - fire-and-forget
+  // Test 4: Fire-and-forget via void ctx.call(...).catch(...)
   // ============================================================
-  console.log('Test: basic tell (fire-and-forget)');
+  console.log('Test: fire-and-forget via void ctx.call');
   {
     let sideEffectExecuted = false;
 
@@ -197,8 +195,7 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
           actions: {
             send: {
               handler: async (input: any, ctx: any) => {
-                // Fire and forget - should not wait for result
-                ctx.tell.sidecar.notify({ body: { msg: 'hello' } });
+                void ctx.call('sidecar.notify', { body: { msg: 'hello' } }).catch(() => {});
                 return { dispatched: true };
               }
             }
@@ -213,85 +210,66 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
       throw new Error('Expected dispatched: true');
     }
 
-    // Give the async tell a moment to execute
     await new Promise(resolve => setTimeout(resolve, 100));
 
     if (!sideEffectExecuted) {
-      throw new Error('Expected side effect to be executed via tell');
+      throw new Error('Expected side effect to be executed via call');
     }
-    console.log('✅ basic tell works');
+    console.log('✅ fire-and-forget works');
   }
 
   // ============================================================
-  // Test 5: Tell does not propagate errors
+  // Test 5: Fire-and-forget does not propagate errors
   // ============================================================
-  console.log('Test: tell does not propagate errors');
+  console.log('Test: fire-and-forget does not propagate errors');
   {
-    // Capture console.error to verify error is logged but not thrown
-    const originalError = console.error;
-    let loggedError: string | null = null;
-    console.error = (msg: string) => { loggedError = msg; };
-
-    try {
-      const kit = await kitFactory({
-        capsules: [{
-          type: 'manifest',
-          manifest: {
-            name: 'faulty',
-            actions: {
-              crash: {
-                handler: async () => { throw new Error('Silent crash'); }
+    const kit = await kitFactory({
+      capsules: [{
+        type: 'manifest',
+        manifest: {
+          name: 'faulty',
+          actions: {
+            crash: {
+              handler: async () => { throw new Error('Silent crash'); }
+            }
+          }
+        }
+      }, {
+        type: 'manifest',
+        manifest: {
+          name: 'sender',
+          actions: {
+            fire: {
+              handler: async (input: any, ctx: any) => {
+                void ctx.call('faulty.crash', { body: {} }).catch(() => {});
+                return { sent: true };
               }
             }
           }
-        }, {
-          type: 'manifest',
-          manifest: {
-            name: 'sender',
-            actions: {
-              fire: {
-                handler: async (input: any, ctx: any) => {
-                  ctx.tell.faulty.crash({ body: {} });
-                  return { sent: true };
-                }
-              }
-            }
-          }
-        }]
-      });
+        }
+      }]
+    });
 
-      // This should NOT throw, even though the tell target crashes
-      const result = await kit.capskit.call('sender.fire', { body: {} });
-      
-      if (!result.sent) {
-        throw new Error('Expected sent: true');
-      }
-
-      // Give the async tell a moment to execute and fail
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // The error should have been logged to console.error
-      if (!loggedError || !loggedError.includes('Silent crash')) {
-        console.warn(`[InvokeTellTest] Expected error to be logged, got: ${loggedError}`);
-        // Don't fail - logging may vary
-      }
-    } finally {
-      console.error = originalError;
+    const result = await kit.capskit.call('sender.fire', { body: {} });
+    
+    if (!result.sent) {
+      throw new Error('Expected sent: true');
     }
-    console.log('✅ tell does not propagate errors');
+
+    await new Promise(resolve => setTimeout(resolve, 100));
+    console.log('✅ fire-and-forget does not propagate errors');
   }
 
   // ============================================================
-  // Test 6: Invoke integration with tracing
+  // Test 6: Call integration with tracing
   // ============================================================
-  console.log('Test: invoke integration with tracing');
+  console.log('Test: call integration with tracing');
   {
     const prevTrace = process.env.CAPSKIT_TRACE;
     const prevFile = process.env.CAPSKIT_TRACE_FILE;
     
-    // Use a temp file for reliable trace capture
     const tmpDir = os.tmpdir();
-    const traceFile = path.join(tmpDir, `capskit-invoke-trace-${Date.now()}.jsonl`);
+    const traceFile = path.join(tmpDir, `capskit-call-trace-${Date.now()}.jsonl`);
     
     try {
       process.env.CAPSKIT_TRACE = '1';
@@ -315,8 +293,7 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
             actions: {
               delta: {
                 handler: async (input: any, ctx: any) => {
-                  // Use invoke to call across capsules
-                  return ctx.invoke.alpha.beta({ body: { x: input.body.n } });
+                  return ctx.call('alpha.beta', { body: { x: input.body.n } });
                 }
               }
             }
@@ -326,7 +303,6 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
 
       await kit.capskit.call('gamma.delta', { body: { n: 7 } });
 
-      // Read the trace file
       let traces: any[] = [];
       if (fs.existsSync(traceFile)) {
         const content = fs.readFileSync(traceFile, 'utf-8');
@@ -350,7 +326,6 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
       if (!outerTrace) throw new Error('No trace for gamma.delta');
       if (!innerTrace) throw new Error('No trace for alpha.beta');
 
-      // Inner trace should have outer as parent
       if (innerTrace.parentSpanId !== outerTrace.spanId) {
         throw new Error(
           `Expected parentSpanId to match outer span. ` +
@@ -358,16 +333,14 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
         );
       }
 
-      // Same trace ID
       if (innerTrace.traceId !== outerTrace.traceId) {
         throw new Error('Trace IDs should match for nested calls');
       }
 
-      console.log('✅ invoke integrates with tracing');
+      console.log('✅ call integrates with tracing');
     } finally {
       process.env.CAPSKIT_TRACE = prevTrace;
       process.env.CAPSKIT_TRACE_FILE = prevFile;
-      // Clean up temp file
       try {
         if (fs.existsSync(traceFile)) {
           fs.unlinkSync(traceFile);
@@ -377,9 +350,9 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
   }
 
   // ============================================================
-  // Test 7: Invoke integration with interceptors
+  // Test 7: Call integration with interceptors
   // ============================================================
-  console.log('Test: invoke integration with interceptors');
+  console.log('Test: call integration with interceptors');
   {
     const interceptorLog: string[] = [];
 
@@ -401,7 +374,7 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
           actions: {
             use: {
               handler: async (input: any, ctx: any) => {
-                return ctx.invoke.svc.op({ body: { val: 42 } });
+                return ctx.call('svc.op', { body: { val: 42 } });
               }
             }
           }
@@ -409,7 +382,6 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
       }]
     });
 
-    // Add interceptor after boot
     kit.capskit.addInterceptor(async (actionName: string, payload: any, context: any, next: () => Promise<any>) => {
       interceptorLog.push(`before:${actionName}`);
       const result = await next();
@@ -423,7 +395,6 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
       throw new Error(`Unexpected result: ${JSON.stringify(result)}`);
     }
 
-    // Interceptor should have seen both actions
     const consumerBefore = interceptorLog.find(e => e === 'before:consumer.use');
     const svcBefore = interceptorLog.find(e => e === 'before:svc.op');
     const svcAfter = interceptorLog.find(e => e === 'after:svc.op');
@@ -433,7 +404,6 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
       throw new Error(`Interceptor log incomplete: ${interceptorLog.join(', ')}`);
     }
 
-    // Order should be: consumer before → svc before → svc after → consumer after
     const consumerBeforeIdx = interceptorLog.indexOf('before:consumer.use');
     const svcBeforeIdx = interceptorLog.indexOf('before:svc.op');
     const svcAfterIdx = interceptorLog.indexOf('after:svc.op');
@@ -443,13 +413,13 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
       throw new Error(`Interceptor order incorrect: ${interceptorLog.join(', ')}`);
     }
 
-    console.log('✅ invoke integrates with interceptors');
+    console.log('✅ call integrates with interceptors');
   }
 
   // ============================================================
-  // Test 8: Invoke with structured payload (body + params + query)
+  // Test 8: Call with structured payload (body + params + query)
   // ============================================================
-  console.log('Test: invoke with structured payload');
+  console.log('Test: call with structured payload');
   {
     const kit = await kitFactory({
       capsules: [{
@@ -473,7 +443,7 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
           actions: {
             run: {
               handler: async (input: any, ctx: any) => {
-                return ctx.invoke.echo.mirror({
+                return ctx.call('echo.mirror', {
                   body: { msg: 'hi' },
                   params: { id: '123' },
                   query: { filter: 'active' }
@@ -496,13 +466,13 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
     if (result.query?.filter !== 'active') {
       throw new Error(`Expected query.filter 'active', got ${JSON.stringify(result.query)}`);
     }
-    console.log('✅ invoke with structured payload works');
+    console.log('✅ call with structured payload works');
   }
 
   // ============================================================
-  // Test 9: Multiple chained invocations
+  // Test 9: Multiple chained calls
   // ============================================================
-  console.log('Test: multiple chained invocations');
+  console.log('Test: multiple chained calls');
   {
     const kit = await kitFactory({
       capsules: [{
@@ -532,8 +502,8 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
           actions: {
             run: {
               handler: async (input: any, ctx: any) => {
-                const r1 = await ctx.invoke.step1.process({ body: { value: 5 } });
-                const r2 = await ctx.invoke.step2.process({ body: { value: r1.step1 } });
+                const r1 = await ctx.call('step1.process', { body: { value: 5 } });
+                const r2 = await ctx.call('step2.process', { body: { value: r1.step1 } });
                 return { final: r2.step2 };
               }
             }
@@ -544,16 +514,16 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
 
     const result = await kit.capskit.call('pipeline.run', { body: {} });
     
-    if (result.final !== 20) { // (5 * 2) + 10 = 20
+    if (result.final !== 20) {
       throw new Error(`Expected final 20, got ${result.final}`);
     }
-    console.log('✅ multiple chained invocations work');
+    console.log('✅ multiple chained calls work');
   }
 
   // ============================================================
-  // Test 10: Tell with structured payload
+  // Test 10: Fire-and-forget with structured payload
   // ============================================================
-  console.log('Test: tell with structured payload');
+  console.log('Test: fire-and-forget with structured payload');
   {
     let receivedPayload: any = null;
 
@@ -578,11 +548,11 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
           actions: {
             ping: {
               handler: async (input: any, ctx: any) => {
-                ctx.tell.receiver.handle({
+                void ctx.call('receiver.handle', {
                   body: { event: 'ping' },
                   params: { origin: 'notifier' },
                   query: { urgent: 'true' }
-                });
+                }).catch(() => {});
                 return { notified: true };
               }
             }
@@ -597,7 +567,6 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
       throw new Error('Expected notified: true');
     }
 
-    // Give async tell time to execute
     await new Promise(resolve => setTimeout(resolve, 100));
 
     if (!receivedPayload) {
@@ -609,13 +578,13 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
     if (receivedPayload.params?.origin !== 'notifier') {
       throw new Error(`Expected params.origin 'notifier', got ${JSON.stringify(receivedPayload.params)}`);
     }
-    console.log('✅ tell with structured payload works');
+    console.log('✅ fire-and-forget with structured payload works');
   }
 
   // ============================================================
-  // Test 11: Invoke throws on missing action
+  // Test 11: Call throws on missing action
   // ============================================================
-  console.log('Test: invoke throws on missing action');
+  console.log('Test: call throws on missing action');
   {
     const kit = await kitFactory({
       capsules: [{
@@ -625,8 +594,7 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
           actions: {
             callMissing: {
               handler: async (input: any, ctx: any) => {
-                // Attempt to invoke an action that does not exist
-                return ctx.invoke.nonexistent.doSomething({ body: {} });
+                return ctx.call('nonexistent.doSomething', { body: {} });
               }
             }
           }
@@ -637,7 +605,7 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
     let errorCaught: any = null;
     try {
       await kit.capskit.call('caller.callMissing', { body: {} });
-      throw new Error('Expected invoke to throw on missing action, but it succeeded');
+      throw new Error('Expected call to throw on missing action, but it succeeded');
     } catch (err: any) {
       errorCaught = err;
     }
@@ -646,77 +614,16 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
       throw new Error('Expected error to be caught for missing action');
     }
 
-    // The error should be a NotFoundError or contain relevant info
     const errorMessage = errorCaught?.message || errorCaught?.toString() || '';
-    if (!errorMessage.includes('nonexistent') && !errorMessage.includes('not found') && !errorMessage.includes('not found')) {
-      console.warn(`[InvokeTellTest] Expected error to mention missing action. Got: ${errorMessage}`);
-      // Don't hard fail; different error formats may vary
+    if (!errorMessage.includes('nonexistent') && !errorMessage.includes('not found')) {
+      console.warn(`[CallProxyTest] Expected error to mention missing action. Got: ${errorMessage}`);
     }
 
-    console.log('✅ invoke throws on missing action');
+    console.log('✅ call throws on missing action');
   }
 
   // ============================================================
-  // Test 12: Tell logs warning on missing action
-  // ============================================================
-  console.log('Test: tell logs warning on missing action');
-  {
-    const originalError = console.error;
-    const loggedErrors: string[] = [];
-    console.error = (...args: any[]) => {
-      loggedErrors.push(args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' '));
-    };
-
-    try {
-      const kit = await kitFactory({
-        capsules: [{
-          type: 'manifest',
-          manifest: {
-            name: 'sender',
-            actions: {
-              fire: {
-                handler: async (input: any, ctx: any) => {
-                  // Fire-and-forget to a non-existent action
-                  ctx.tell.missingService.missingAction({ body: { hello: 'world' } });
-                  return { sent: true };
-                }
-              }
-            }
-          }
-        }]
-      });
-
-      // Tell should NOT throw even when the target action is missing
-      const result = await kit.capskit.call('sender.fire', { body: {} });
-      
-      if (!result.sent) {
-        throw new Error('Expected sent: true even when tell target is missing');
-      }
-
-      // Give async tell time to execute and log error
-      await new Promise(resolve => setTimeout(resolve, 150));
-
-      // The tell error handler should have logged an error containing the action name
-      const hasErrorLog = loggedErrors.some(
-        log => log.includes('missingService.missingAction') || log.includes('Unhandled error')
-      );
-
-      if (!hasErrorLog) {
-        console.warn(
-          `[InvokeTellTest] Expected console.error to log missing action warning. ` +
-          `Logged errors: ${JSON.stringify(loggedErrors)}`
-        );
-        // Don't hard fail; logging may route differently
-      }
-
-      console.log('✅ tell logs warning on missing action');
-    } finally {
-      console.error = originalError;
-    }
-  }
-
-  // ============================================================
-  // Test 13: Context has all required properties (invoke, tell, deps, emit)
+  // Test 12: Context has all required properties (call, deps, emit)
   // ============================================================
   console.log('Test: context has all required properties');
   {
@@ -734,19 +641,14 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
           actions: {
             examine: {
               handler: async (input: any, ctx: any) => {
-                // Take a snapshot of the context for inspection
                 contextSnapshot = {
-                  hasInvoke: 'invoke' in ctx,
-                  invokeType: typeof ctx.invoke,
-                  hasTell: 'tell' in ctx,
-                  tellType: typeof ctx.tell,
+                  hasCall: 'call' in ctx,
+                  callType: typeof ctx.call,
                   hasDeps: 'deps' in ctx,
                   depsType: typeof ctx.deps,
                   depsKeys: ctx.deps ? Object.keys(ctx.deps) : [],
                   hasEmit: 'emit' in ctx,
                   emitType: typeof ctx.emit,
-                  hasCall: 'call' in ctx,
-                  callType: typeof ctx.call,
                   hasUse: 'use' in ctx,
                   useType: typeof ctx.use,
                   hasParams: 'params' in ctx,
@@ -754,13 +656,6 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
                   hasQuery: 'query' in ctx,
                 };
                 
-                // Also test that invoke is callable by checking its type
-                if (ctx.invoke) {
-                  contextSnapshot.invokeIsObject = typeof ctx.invoke === 'object' || typeof ctx.invoke === 'function';
-                }
-                if (ctx.tell) {
-                  contextSnapshot.tellIsObject = typeof ctx.tell === 'object' || typeof ctx.tell === 'function';
-                }
                 if (ctx.deps) {
                   contextSnapshot.dbConnected = ctx.deps.db?.connected;
                   contextSnapshot.cacheBackend = ctx.deps.cache?.backend;
@@ -789,23 +684,8 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
       throw new Error('Expected examined: true');
     }
 
-    // Validate context structure
     if (!contextSnapshot) {
       throw new Error('Context snapshot was not captured');
-    }
-
-    if (!contextSnapshot.hasInvoke) {
-      throw new Error('Context missing invoke property');
-    }
-    if (!contextSnapshot.invokeIsObject) {
-      throw new Error(`Expected ctx.invoke to be an object, got ${contextSnapshot.invokeType}`);
-    }
-
-    if (!contextSnapshot.hasTell) {
-      throw new Error('Context missing tell property');
-    }
-    if (!contextSnapshot.tellIsObject) {
-      throw new Error(`Expected ctx.tell to be an object, got ${contextSnapshot.tellType}`);
     }
 
     if (!contextSnapshot.hasDeps) {
@@ -852,5 +732,5 @@ export async function runInvokeTellTests(kitFactory: (config: any) => Promise<an
     console.log('✅ context has all required properties');
   }
 
-  console.log('=== All Invoke/Tell Proxy Tests Passed ===');
+  console.log('=== All Call Proxy Tests Passed ===');
 }

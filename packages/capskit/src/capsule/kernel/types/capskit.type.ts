@@ -27,12 +27,6 @@ export interface ICapsKit {
   emit(event: string, data: unknown): void;
 
   /**
-   * Fire-and-forget invocation of an action.
-   * Errors are silently discarded.
-   */
-  tell(capPath: string, payload: unknown): void;
-
-  /**
    * Get the manifest for a specific capsule by name.
    * Returns undefined if the capsule is not registered.
    */
@@ -47,6 +41,11 @@ export interface ICapsKit {
    * Register a global hook.
    */
   addHook(hook: { name: string; handler: CapHandler }): void;
+
+  /**
+   * Add a global interceptor.
+   */
+  addInterceptor(interceptor: (actionName: string, payload: any, context: any, next: () => Promise<any>) => Promise<any>): void;
 
   /**
    * Gracefully shutdown the kernel.

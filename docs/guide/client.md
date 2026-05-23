@@ -119,7 +119,7 @@ const client = createCapsKitClient({
 });
 ```
 
-Uses HTTP for `call()`, `emit()`, and `tell()` operations. Lazily opens a WebSocket connection only when `subscribe()` is called. Best of both worlds — no persistent connection overhead unless you need real-time events.
+Uses HTTP for `call()` and `emit()` operations. Lazily opens a WebSocket connection only when `subscribe()` is called. Best of both worlds — no persistent connection overhead unless you need real-time events.
 
 ---
 
@@ -127,10 +127,14 @@ Uses HTTP for `call()`, `emit()`, and `tell()` operations. Lazily opens a WebSoc
 
 ### `client.call<T>(actionPath, payload?, options?)`
 
-Invoke a server-side action and return its result.
+Invoke a server-side action and return its result. For fire-and-forget dispatch, simply don't `await` the call.
 
 ```ts
+// Request/response
 const result = await client.call<{ result: number }>('orders.sum', { a: 15, b: 30 });
+
+// Fire-and-forget
+client.call('notifications.send-email', { to: 'user@example.com' });
 ```
 
 **Parameters:**
@@ -170,14 +174,6 @@ Publish an event to the server's events capsule.
 ```ts
 const result = await client.emit('order.created', { orderId: '123' });
 // result: { emitted: true, event: 'order.created' }
-```
-
-### `client.tell(actionPath, payload)`
-
-Fire-and-forget dispatch. Sends the action without waiting for a result. Errors are silently ignored.
-
-```ts
-await client.tell('notifications.send-email', { to: 'user@example.com' });
 ```
 
 ### `client.describe()`

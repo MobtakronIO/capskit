@@ -101,8 +101,8 @@ When a subscriber cap fails, the events cap handles the failure:
 ```ts
 // In events/caps/emit.cap.ts
 for (const sub of allSubs) {
-  ctx.invoke(sub.capPath, { body: data }).catch(err => {
-    ctx.invoke('events.handle-dead-letter', {
+  ctx.call(sub.capPath, { body: data }).catch(err => {
+    ctx.call('events.handle-dead-letter', {
       body: {
         event,
         data,

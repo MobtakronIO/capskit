@@ -1,7 +1,7 @@
 {
   "name": "@mobtakronio/capskit-client",
   "version": "0.1.0",
-  "description": "TypeScript client for CapsKit — call, emit, tell, use, subscribe",
+  "description": "TypeScript client for CapsKit — call, emit, use, subscribe",
   "license": "MIT",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",

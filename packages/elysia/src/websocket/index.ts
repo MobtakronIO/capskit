@@ -55,12 +55,25 @@ export function createSocket(capskit: ICapsKit, options: WebSocketAdapterOptions
   const { path = '/ws/capskit' } = options;
   const state = getOrCreateState();
 
+  // Inject adapter eventBus into kernel dependencies so ctx.deps.dependencies.eventBus
+  // is available in emit.cap.ts for dispatching to WebSocket clients.
+  // The runtime type is CapsKitPlatform which exposes `state`, even though ICapsKit doesn't.
+  const platform = capskit as any;
+  if (platform.state && platform.state.dependencies) {
+    platform.state.dependencies.eventBus = state.eventBus;
+  }
+  if (typeof platform.getDependencies === 'function') {
+    const deps = platform.getDependencies();
+    if (deps) {
+      deps.eventBus = state.eventBus;
+    }
+  }
+
   const sockets: Record<string, any> = {};
 
   sockets[path] = {
     open: async (ws: any) => {
       const clientId = `ws-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      ws.data = { clientId };
 
       const client: WSClient = {
         id: clientId,
@@ -69,17 +82,10 @@ export function createSocket(capskit: ICapsKit, options: WebSocketAdapterOptions
       };
       state.clients.set(clientId, client);
 
-      // Subscribe client to event bus — events are pushed via onEvent callback
-      // Subscriptions are added when client sends subscribe frames
+      ws.send(makeFrame({ type: 'welcome', clientId }));
     },
 
     message: async (ws: any, rawMessage: any) => {
-      const clientId = ws.data?.clientId;
-      if (!clientId) return;
-
-      const client = state.clients.get(clientId);
-      if (!client) return;
-
       let frame: WSClientFrame;
       try {
         frame = typeof rawMessage === 'string' ? JSON.parse(rawMessage) : rawMessage;
@@ -88,12 +94,29 @@ export function createSocket(capskit: ICapsKit, options: WebSocketAdapterOptions
         return;
       }
 
+      const clientId = frame.clientId;
+      if (!clientId) {
+        console.log('Received message from unknown client (missing clientId)');
+        return;
+      }
+
+      const client = state.clients.get(clientId);
+      if (!client) {
+        console.log('Received message from unknown client:', clientId);
+        return;
+      }
+
       try {
         switch (frame.type) {
           case 'call': {
             const startTime = Date.now();
             try {
-              const result = await capskit.call(frame.actionPath, frame.payload);
+              const capInput = {
+                body: frame.payload as Record<string, unknown>,
+                params: {} as Record<string, string>,
+                query: {} as Record<string, string>,
+              };
+              const result = await capskit.call(frame.actionPath, capInput);
               ws.send(makeFrame({
                 type: 'response',
                 id: frame.id,
@@ -103,6 +126,7 @@ export function createSocket(capskit: ICapsKit, options: WebSocketAdapterOptions
               }));
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err);
+              console.error('[WS call error]', frame.actionPath, msg);
               ws.send(makeFrame({
                 type: 'response',
                 id: frame.id,
@@ -119,11 +143,6 @@ export function createSocket(capskit: ICapsKit, options: WebSocketAdapterOptions
             break;
           }
 
-          case 'tell': {
-            capskit.tell(frame.actionPath, frame.payload);
-            break;
-          }
-
           case 'subscribe': {
             const subscription: WSSubscription = {
               id: frame.id,
@@ -134,10 +153,11 @@ export function createSocket(capskit: ICapsKit, options: WebSocketAdapterOptions
             // Register with event bus
             state.eventBus.subscribe(
               {
-                id: clientId,
+                id: frame.id,
                 patterns: frame.patterns,
                 onEvent: (event: string, data: unknown, pattern: string) => {
                   // Only push to this specific client
+                  console.log('[WS eventBus] onEvent triggered:', event, '→ client', client.id);
                   if (client.ws.readyState === 1) {
                     client.ws.send(makeFrame({
                       type: 'event',
@@ -184,16 +204,12 @@ export function createSocket(capskit: ICapsKit, options: WebSocketAdapterOptions
     },
 
     close: async (ws: any) => {
-      const clientId = ws.data?.clientId;
-      if (clientId) {
-        const client = state.clients.get(clientId);
-        if (client) {
-          // Unsubscribe from all patterns
-          for (const sub of client.subscriptions) {
-            state.eventBus.unsubscribe(sub.id);
-          }
-          state.clients.delete(clientId);
+      const client = [...state.clients.values()].find((c) => c.ws === ws);
+      if (client) {
+        for (const sub of client.subscriptions) {
+          state.eventBus.unsubscribe(sub.id);
         }
+        state.clients.delete(client.id);
       }
     },
   };

@@ -16,7 +16,7 @@ export default async function use(input: CapInput, ctx: CapContext) {
     throw new Error('capsuleName is required');
   }
 
-  const invoke = ctx.invoke;
+  const call = ctx.call;
 
   // Create a proxy that resolves cap method calls
   const proxy = new Proxy({}, {
@@ -28,7 +28,7 @@ export default async function use(input: CapInput, ctx: CapContext) {
         const normalizedPayload = hasBody
             ? (payload as Record<string, unknown>)
             : { body: payload, params: {}, query: {} };
-        return invoke(capPath, normalizedPayload);
+        return call(capPath, normalizedPayload);
       };
     },
   });

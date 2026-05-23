@@ -1,4 +1,4 @@
-import { createCapsKit } from '../src/kernel/platform';
+import { createCapsKit, createCapsKit as createCapsKitModern } from '../src/capsule/kernel/create-capskit';
 import * as path from 'node:path';
 
 // Automated test suites
@@ -11,7 +11,7 @@ import { runTraceTests } from './suites/trace.suite';
 import { runCacheTests } from './suites/cache.suite';
 import { runSchemaValidationTests } from './suites/schema-validation.suite';
 import { runResiliencyTests } from './suites/resiliency.suite';
-import { runInvokeTellTests } from './suites/invoke-tell.suite';
+import { runCallProxyTests } from './suites/call.suite';
 import { runDualFormatBootTests } from './suites/dual-format-boot.suite';
 
 import { test } from 'vitest';
@@ -109,9 +109,9 @@ async function verify() {
    await runErrorTaxonomyTests();
    await runTraceTests(createCapsKit);
    await runSchemaValidationTests(createCapsKit);
-   await runResiliencyTests(createCapsKit);
+   await runResiliencyTests(createCapsKitModern);
    await runCacheTests();
-   await runInvokeTellTests(createCapsKit);
+    await runCallProxyTests(createCapsKit);
    await runDualFormatBootTests(createCapsKit);
    console.log('✅ All automated test suites passed');
  }

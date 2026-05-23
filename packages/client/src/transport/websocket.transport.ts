@@ -5,9 +5,10 @@ import type {
   WSEventFrame,
   WSManifestFrame,
   WSErrorFrame,
+  WSWelcomeFrame,
   WSErrorEnvelope,
 } from '@mobtakronio/capskit';
-import type { AuthConfig, CallOptions, DescribeResult, EmitResult, TellResult, WebSocketConfig } from '../types/client.type';
+import type { AuthConfig, CallOptions, DescribeResult, EmitResult, WebSocketConfig } from '../types/client.type';
 import { NetworkError, ActionExecutionError, SubscriptionError, OfflineError } from '../errors/client-errors.error';
 
 type PendingResolver = {
@@ -48,6 +49,8 @@ export class WebSocketTransport {
   private eventHandler: WebSocketEventHandler | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private manualClose = false;
+  private clientId: string | null = null;
+  private handshakeResolve: (() => void) | null = null;
 
   constructor(config: WebSocketTransportConfig) {
     this.wsUrl = deriveWsUrl(config.baseUrl, config.wsPath ?? '/ws/capskit');
@@ -74,6 +77,8 @@ export class WebSocketTransport {
     }
 
     this.manualClose = false;
+    this.clientId = null;
+
     return new Promise((resolve, reject) => {
       this.state = 'connecting';
 
@@ -86,8 +91,11 @@ export class WebSocketTransport {
       }
 
       this.ws.onopen = () => {
-        this.state = 'connected';
-        resolve();
+        this.handshakeResolve = () => {
+          this.state = 'connected';
+          this.handshakeResolve = null;
+          resolve();
+        };
       };
 
       this.ws.onmessage = (event: MessageEvent) => {
@@ -97,11 +105,13 @@ export class WebSocketTransport {
       this.ws.onerror = () => {
         if (this.state === 'connecting') {
           this.state = 'disconnected';
+          this.handshakeResolve = null;
           reject(new NetworkError('WebSocket connection failed'));
         }
       };
 
       this.ws.onclose = () => {
+        this.handshakeResolve = null;
         if (this.manualClose) {
           this.state = 'disconnected';
           this.rejectAllPending(new OfflineError('WebSocket connection closed'));
@@ -124,7 +134,7 @@ export class WebSocketTransport {
     }
 
     const id = generateRequestId();
-    const frame: WSClientFrame = { type: 'call', id, actionPath, payload };
+    const frame: WSClientFrame = { type: 'call', clientId: this.clientId!, id, actionPath, payload };
 
     return new Promise<T>((resolve, reject) => {
       this.pending.set(id, {
@@ -142,19 +152,9 @@ export class WebSocketTransport {
       throw new OfflineError('WebSocket is not connected');
     }
 
-    const frame: WSClientFrame = { type: 'emit', event, data };
+    const frame: WSClientFrame = { type: 'emit', clientId: this.clientId!, event, data };
     this.send(frame);
     return { emitted: true, event };
-  }
-
-  async tell(actionPath: string, payload: unknown): Promise<TellResult> {
-    if (this.state !== 'connected') {
-      throw new OfflineError('WebSocket is not connected');
-    }
-
-    const frame: WSClientFrame = { type: 'tell', actionPath, payload };
-    this.send(frame);
-    return { told: true, actionPath };
   }
 
   async describe(): Promise<DescribeResult> {
@@ -163,7 +163,7 @@ export class WebSocketTransport {
     }
 
     const id = generateRequestId();
-    const frame: WSClientFrame = { type: 'describe', id };
+    const frame: WSClientFrame = { type: 'describe', clientId: this.clientId!, id };
 
     return new Promise<DescribeResult>((resolve, reject) => {
       this.pending.set(id, {
@@ -180,7 +180,7 @@ export class WebSocketTransport {
       throw new SubscriptionError('WebSocket is not connected');
     }
 
-    const frame: WSClientFrame = { type: 'subscribe', id, patterns };
+    const frame: WSClientFrame = { type: 'subscribe', clientId: this.clientId!, id, patterns };
     this.send(frame);
   }
 
@@ -189,7 +189,7 @@ export class WebSocketTransport {
       return;
     }
 
-    const frame: WSClientFrame = { type: 'unsubscribe', id };
+    const frame: WSClientFrame = { type: 'unsubscribe', clientId: this.clientId!, id };
     this.send(frame);
   }
 
@@ -223,6 +223,9 @@ export class WebSocketTransport {
     }
 
     switch (frame.type) {
+      case 'welcome':
+        this.handleWelcome(frame);
+        break;
       case 'response':
         this.handleResponse(frame);
         break;
@@ -235,6 +238,13 @@ export class WebSocketTransport {
       case 'error':
         this.handleError(frame);
         break;
+    }
+  }
+
+  private handleWelcome(frame: WSWelcomeFrame): void {
+    this.clientId = frame.clientId;
+    if (this.handshakeResolve) {
+      this.handshakeResolve();
     }
   }
 

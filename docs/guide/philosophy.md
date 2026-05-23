@@ -72,7 +72,7 @@ The same cap can be triggered by:
 - HTTP request
 - WebSocket message
 - Event subscription
-- `ctx.invoke()` from another cap
+- `ctx.call()` from another cap
 - CLI command
 
 No code changes. No conditional logic. No transport detection.

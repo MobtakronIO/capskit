@@ -167,9 +167,8 @@ Use specific suffixes instead: `.helper.ts`, `.rule.ts`, `.repository.ts`. Vague
 
 Caps communicate via:
 
-- **`ctx.invoke('capsules.action', payload)`** — RPC (request/response)
+- **`ctx.call('capsules.action', payload)`** — RPC (request/response). Fire-and-forget by not awaiting.
 - **`ctx.emit('event.name', data)`** — Event-driven (fire-and-forget)
-- **`ctx.tell('capsules.action', payload)`** — Fire-and-forget RPC
 
 **NEVER** import from another `.cap.ts` file directly.
 

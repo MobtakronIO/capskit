@@ -6,12 +6,12 @@ Hooks are regular caps that wrap other cap handlers in a middleware pipeline. A 
 
 ## What Are Hooks?
 
-A hook is a standard `.cap.ts` file. It becomes a hook when another cap or capsule declares it as one. Hooks run in two phases:
+A hook is a standard `.cap.ts` file. It becomes a hook when another cap or capsule declares it as one. Hooks use a **Koa-style middleware pattern** — each hook receives `ctx.next()` and can run logic before and after calling it.
 
-- **Pre hooks** — run before the cap handler (auth, validation, logging)
-- **Post hooks** — run after the cap handler (response transformation, audit logging)
+- **Pre logic** — run before calling `ctx.next()` (auth, validation, logging)
+- **Post logic** — run after `await ctx.next()` returns (response transformation, audit logging)
 
-Hooks are **transport-agnostic** — they work for HTTP, WebSocket, events, and `ctx.invoke()` calls.
+Hooks are **transport-agnostic** — they work for HTTP, WebSocket, events, and `ctx.call()` calls.
 
 ---
 
@@ -141,20 +141,7 @@ export const meta: CapMeta = {
 
 ### Post Hooks
 
-Post hooks run after the cap handler and receive the result via `ctx.result`:
-
-```ts
-// capsules/observability/caps/audit-log.cap.ts
-import { CapInput, CapContext, CapMeta } from '@mobtakronio/capskit';
-
-export const meta: CapMeta = {
-  name: 'audit-log',
-};
-```
-
-### Post Hooks
-
-Post hooks run after the cap handler and receive the result via `ctx.result`:
+Post hooks run after the cap handler. They receive `ctx.result` and can optionally call `ctx.next()` to run logic after subsequent post hooks. Returning a value transforms the result for downstream hooks:
 
 ```ts
 // capsules/observability/caps/audit-log.cap.ts
@@ -165,12 +152,27 @@ export const meta: CapMeta = {
 };
 
 export default async function auditLog(input: CapInput, ctx: CapContext) {
+  // Continue to next post hook (if any), then get final result
   const result = await ctx.next();
+  ctx.deps.logger.info(`Action completed`, {
+    cap: ctx.actionName,
+    result,
+  });
+  return result;
+}
+```
+
+Or, for simple post hooks that just need the result:
+
+```ts
+export default async function auditLog(input: CapInput, ctx: CapContext) {
+  // ctx.result is already set to the handler result
+  // Not calling ctx.next() — pipeline auto-continues to next post hook
+  // Return value (if any) transforms the result for subsequent hooks
   ctx.deps.logger.info(`Action completed`, {
     cap: ctx.actionName,
     result: ctx.result,
   });
-  return result;
 }
 ```
 
@@ -246,9 +248,39 @@ Request → Pre Hook 1 → Pre Hook 2 → ... → Cap Handler → Post Hook 1 �
 2. Kernel resolves cap-level hooks from meta.hooks
 3. Kernel builds middleware chain: [capsulePre..., capPre..., handler, capPost..., capsulePost...]
 4. Kernel dispatches through the chain
-5. Each hook calls ctx.next() to continue
+5. Each hook may call await ctx.next() to continue — omitting it auto-continues to the next middleware
 6. If any hook throws, the chain aborts
 7. The cap handler runs between pre and post hooks
+8. Post hooks can transform the result by returning a new value
+```
+
+### Hook Pattern
+
+All hooks receive `ctx.next()`, but calling it is **optional** — omitting it auto-continues to the next hook:
+
+```ts
+export default async function myHook(input: CapInput, ctx: CapContext) {
+  // Pre logic: runs before the next middleware/handler
+  ctx.deps.logger.info(`Starting`, { cap: ctx.actionName });
+
+  // Continue to next middleware or handler
+  const result = await ctx.next();
+
+  // Post logic: runs after the next middleware/handler returns
+  ctx.deps.logger.info(`Completed`, { cap: ctx.actionName, result });
+
+  return result;
+}
+```
+
+Hooks that only need pre logic can skip calling `ctx.next()`:
+
+```ts
+export default async function requireAuth(input: CapInput, ctx: CapContext) {
+  const token = input.headers?.authorization?.replace('Bearer ', '');
+  if (!token) throw new AuthorizationError('Authentication required');
+  // No ctx.next() — this is a pre-only hook
+}
 ```
 
 ---

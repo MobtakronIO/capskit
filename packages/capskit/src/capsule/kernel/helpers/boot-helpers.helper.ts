@@ -1,9 +1,11 @@
 import { CapsuleDefinition, CapFile } from '../types/capsule-definition.type';
 import { CapMeta } from '../types/cap-meta.type';
-import { CapInput, KernelDeps, CapEntry, CapHandler } from '../types/cap-input.type';
+import { CapInput, KernelDeps, CapEntry, CapHandler, EventsState } from '../types/cap-input.type';
 import { filesystemRepository } from '../repository/filesystem.repository';
 import { discoverCaps } from './discover-caps.helper';
 import { BUILTIN_CAPSULES } from '../constants';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 function isCapHandler(fn: unknown): fn is CapHandler {
   return typeof fn === 'function';
@@ -13,7 +15,9 @@ export interface BootState {
   capsules: Map<string, { def: CapsuleDefinition; dir?: string }>;
   caps: Map<string, CapFile & { capsuleDef?: CapsuleDefinition }>;
   dependencies: Record<string, unknown>;
+  eventsState?: EventsState;
 }
+
 
 function buildKernelDeps(state: BootState): KernelDeps {
   const capEntries = new Map<string, CapEntry>();
@@ -106,7 +110,11 @@ export async function runBootLifecycles(sorted: CapsuleDefinition[], state: Boot
       await capsuleDef.boot.init({ deps });
     }
   }
+  if (deps.eventsState) {
+    state.eventsState = deps.eventsState;
+  }
 }
+
 
 export function shapeBootResponse(sorted: CapsuleDefinition[], state: BootState) {
   return {
@@ -117,18 +125,135 @@ export function shapeBootResponse(sorted: CapsuleDefinition[], state: BootState)
   };
 }
 
+export function validateManifest(manifest: any): void {
+  if (!manifest.name || typeof manifest.name !== 'string' || manifest.name.trim() === '') {
+    const err = new Error('Capsule manifest must have a non-empty name');
+    (err as any).code = 'VALIDATION_ERROR';
+    throw err;
+  }
+  const VALID_NAME = /^[a-zA-Z0-9_-]+$/;
+  if (!VALID_NAME.test(manifest.name)) {
+    const err = new Error(`Capsule manifest has invalid name "${manifest.name}". Name must be alphanumeric, hyphens, and underscores only`);
+    (err as any).code = 'VALIDATION_ERROR';
+    throw err;
+  }
+  if (!manifest.actions || typeof manifest.actions !== 'object') {
+    const err = new Error(`Capsule manifest "${manifest.name}" must have an actions object`);
+    (err as any).code = 'VALIDATION_ERROR';
+    throw err;
+  }
+  for (const actionName of Object.keys(manifest.actions)) {
+    if (!VALID_NAME.test(actionName)) {
+      const err = new Error(`Capsule "${manifest.name}" has invalid action name "${actionName}". Action names must be alphanumeric, hyphens, and underscores only`);
+      (err as any).code = 'VALIDATION_ERROR';
+      throw err;
+    }
+  }
+}
+
+export function toCapsuleDefinition(manifest: any): CapsuleDefinition {
+  validateManifest(manifest);
+  const manifestRoutes = manifest.routes || [];
+  const manifestSubscribes = manifest.events?.subscribes || [];
+  const manifestPublishes = manifest.events?.publishes || [];
+
+  return {
+    name: manifest.name,
+    dependencies: manifest.dependencies || manifest.requires,
+    caps: Object.entries(manifest.actions || {}).map(([actionName, actionDef]: [string, any]) => {
+      const matchedRoutes = manifestRoutes.filter((r: any) => r.action === actionName);
+      const actionRoutes = [
+        ...(actionDef.routes || []),
+        ...matchedRoutes.map((r: any) => ({
+          method: r.method,
+          path: r.path,
+          action: r.action,
+        })),
+      ];
+
+      // Match manifest-level event subscriptions for this action
+      const matchedSubscribes = manifestSubscribes.filter((s: any) => s.action === actionName);
+      const actionSubscribes = [
+        ...(actionDef.events?.subscribes || []),
+        ...matchedSubscribes.map((s: any) => ({
+          event: s.event,
+        })),
+      ];
+
+      const actionPublishes = actionDef.events?.publishes || [];
+
+      const actionEvents = (actionSubscribes.length > 0 || actionPublishes.length > 0)
+        ? {
+            subscribes: actionSubscribes.length > 0 ? actionSubscribes : undefined,
+            publishes: actionPublishes.length > 0 ? actionPublishes : undefined,
+          }
+        : actionDef.events;
+
+      return {
+        meta: {
+          name: actionName,
+          inputSchema: actionDef.inputSchema || actionDef.schema,
+          outputSchema: actionDef.outputSchema,
+          resiliency: actionDef.resiliency,
+          hooks: actionDef.hooks,
+          events: actionEvents,
+          routes: actionRoutes.length > 0 ? actionRoutes : undefined,
+        },
+        handler: actionDef.handler,
+      };
+    }),
+  };
+}
+
 export async function scanUserCapsules(capsuleDirs: string[], state: BootState): Promise<void> {
   for (const dir of capsuleDirs) {
-    const capsulePaths = await filesystemRepository.discoverCapsules(dir);
+    const directCapsule = path.join(dir, 'capsule.ts');
+    const directCaps = path.join(dir, 'caps.ts');
+    let capsulePaths: string[] = [];
+
+    if (fs.existsSync(directCapsule)) {
+      capsulePaths.push(directCapsule);
+    } else if (fs.existsSync(directCaps)) {
+      capsulePaths.push(directCaps);
+    } else {
+      capsulePaths = await filesystemRepository.discoverCapsules(dir);
+    }
+
     for (const capsulePath of capsulePaths) {
-      const capsuleDef = await filesystemRepository.readCapsuleDef(capsulePath);
-      const capsuleDir = capsulePath.replace(/capsule\.ts$/, '');
+      let capsuleDef: CapsuleDefinition;
+      let capsuleDir: string;
+
+      if (capsulePath.endsWith('capsule.ts')) {
+        capsuleDef = await filesystemRepository.readCapsuleDef(capsulePath);
+        capsuleDir = capsulePath.replace(/capsule\.ts$/, '');
+      } else {
+        const mod = await import(capsulePath);
+        const registry = mod.default || Object.values(mod)[0];
+        const { convertRegistryToManifest } = await import('../../../kernel/cap-loader');
+        const manifest = convertRegistryToManifest(registry);
+        capsuleDef = toCapsuleDefinition(manifest);
+        capsuleDir = capsulePath.replace(/caps\.ts$/, '');
+      }
+
       state.capsules.set(capsuleDef.name, { def: capsuleDef, dir: capsuleDir });
 
-      const caps = await discoverCaps(capsuleDir, capsuleDef.name);
-      for (const cap of caps) {
-        const capPath = `${cap.capsuleName}.${cap.meta.name}`;
-        state.caps.set(capPath, { ...cap, capsuleDef });
+      if (capsuleDef.caps) {
+        for (const cap of capsuleDef.caps) {
+          const capPath = `${capsuleDef.name}.${cap.meta.name}`;
+          state.caps.set(capPath, {
+            meta: cap.meta,
+            handler: cap.handler,
+            capsuleName: capsuleDef.name,
+            filePath: `virtual://${capsuleDef.name}/${cap.meta.name}`,
+            capsuleDef,
+          });
+        }
+      } else {
+        const caps = await discoverCaps(capsuleDir, capsuleDef.name);
+        for (const cap of caps) {
+          const capPath = `${cap.capsuleName}.${cap.meta.name}`;
+          state.caps.set(capPath, { ...cap, capsuleDef });
+        }
       }
     }
   }
@@ -152,8 +277,8 @@ async function loadBuiltinCapsule(name: string, state: BootState) {
         state.caps.set(capPath, { ...cap, capsuleDef });
       }
     }
-  } catch {
-    console.warn(`Built-in capsule "${name}" not found, skipping`);
+  } catch (err: any) {
+    console.warn(`Built-in capsule "${name}" not found, skipping:`, err.message || err);
   }
 }
 

@@ -1,6 +1,6 @@
 import { CapInput, CapContext } from '../types/cap-input.type';
 import { CapMeta } from '../types/cap-meta.type';
-import { buildHooksPipeline, resolveHooks } from '../helpers/build-hooks-pipeline.helper';
+import { executeCap } from '../helpers/execute-cap.helper';
 
 export const meta: CapMeta = {
   name: 'call',
@@ -15,45 +15,9 @@ export default async function call(input: CapInput, ctx: CapContext) {
     throw new Error('capPath is required');
   }
 
-  const capEntry = ctx.deps.capsMap.get(capPath);
-  if (!capEntry) {
-    throw new Error(`Cap "${capPath}" not found`);
-  }
-
-  const capMeta = capEntry.meta;
-  const capHookNames = capMeta.hooks || [];
-
-  const capsuleDef = capEntry.capsuleDef;
-  const capsuleHooks = capsuleDef?.hooks;
-
-  const allCaps = ctx.deps.allCaps;
-
-  const { pre, post } = resolveHooks(capHookNames, allCaps, capsuleHooks, capMeta.name);
-
-  const handler = capEntry.handler;
-  const pipeline = buildHooksPipeline(pre, post, handler);
-
-  const capCtx: CapContext = {
-    deps: ctx.deps,
-    emit: ctx.emit,
-    invoke: ctx.invoke,
-    tell: ctx.tell,
-    use: ctx.use,
-  };
-
-  // Normalize payload to { body, params, query } format
-  const hasBody = payload && typeof payload === 'object' && 'body' in payload;
-  const normalizedPayload = hasBody
-      ? (payload as Record<string, unknown>)
-      : { body: payload, params: {}, query: {} };
-
-  const mergedInput: CapInput = {
-      ...normalizedPayload,
-  };
-
   const startTime = Date.now();
   try {
-    const result = await pipeline(mergedInput, capCtx);
+    const result = await executeCap(capPath, payload, ctx);
     return {
       ok: true,
       result,

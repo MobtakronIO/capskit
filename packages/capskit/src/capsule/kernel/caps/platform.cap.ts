@@ -1,6 +1,7 @@
 import { CapHandler, KernelDeps, CapInput, CapContext, CapEntry } from '../types/cap-input.type';
 import { InternalState, BootOptions } from '../types/platform.types';
 import { buildContext } from '../helpers/build-context.helper';
+import { executeCap } from '../helpers/execute-cap.helper';
 import { CapsuleDefinition, CapFile } from '../types/capsule-definition.type';
 import { CapMeta } from '../types/cap-meta.type';
 import { CapsuleManifest } from '../types/capsule-manifest.type';
@@ -23,10 +24,13 @@ export interface PreBuiltCap {
  */
 export interface CapsKitPlatform extends ICapsKit {
   state: InternalState;
+  dependencies: Record<string, unknown>;
+  getDependencies: () => Record<string, unknown>;
   boot: (options?: BootOptions) => Promise<unknown>;
   register: CapHandler;
   rpc: CapHandler;
   registerCapsule: (capsuleDef: CapsuleDefinition, caps?: PreBuiltCap[]) => void;
+  interceptors: ((actionName: string, payload: any, context: any, next: () => Promise<any>) => Promise<any>)[];
 }
 
 export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
@@ -36,6 +40,8 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
     allCaps: new Map(),
     dependencies: {},
     booted: false,
+    circuitBreakerState: new Map(),
+    cacheStore: new Map(),
   };
 
   const preRegisteredCapsules: CapsuleDefinition[] = [];
@@ -92,6 +98,7 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
       const routes: CapsuleManifest['routes'] = [];
       const eventPublishes = new Set<string>();
       const eventSubscribes: { event: string }[] = [];
+      const actions: Record<string, any> = {};
 
       for (const [capPath, capFile] of state.caps) {
         if (capFile.capsuleName !== capsuleName) continue;
@@ -106,6 +113,16 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
           hooks: capMeta.hooks,
           events: capMeta.events,
         });
+        actions[capMeta.name] = {
+          handler: capFile.handler,
+          meta: capMeta,
+          description: capMeta.description,
+          inputSchema: capMeta.inputSchema,
+          outputSchema: capMeta.outputSchema,
+          routes: capMeta.routes,
+          hooks: capMeta.hooks,
+          events: capMeta.events,
+        };
         if (capMeta.routes) {
           for (const route of capMeta.routes) {
             routes!.push({
@@ -127,13 +144,15 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
       manifests.push({
         name: capsuleName,
         dependencies: capsuleEntry.def.dependencies,
+        requires: capsuleEntry.def.dependencies,
         caps,
+        actions,
         routes: routes!.length > 0 ? routes : undefined,
         events: {
           publishes: eventPublishes.size > 0 ? Array.from(eventPublishes) : undefined,
           subscribes: eventSubscribes.length > 0 ? eventSubscribes : undefined,
         },
-      });
+      } as any);
     }
     return manifests;
   }
@@ -152,20 +171,18 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
    * ICapsKit.call(capPath, payload) — accepts the public API signature.
    * Also works as CapHandler({ body }, ctx) for backward compatibility.
    */
-  async function call(a: string, b?: unknown): Promise<unknown>;
+  async function call(a: string, b?: unknown, suppressWarn?: boolean): Promise<unknown>;
   async function call(input: CapInput, ctx?: CapContext): Promise<unknown>;
-  async function call(a: string | CapInput, b?: unknown): Promise<unknown> {
+  async function call(a: string | CapInput, b?: unknown, suppressWarn?: boolean): Promise<unknown> {
     // ICapsKit signature: call(capPath, payload)
     if (typeof a === 'string') {
       const capPath = a;
-      const payload = b;
-      const input: CapInput = { body: { capPath, payload } };
-      const result = await executeCapCall(input);
-      if (result && typeof result === 'object' && 'ok' in result) {
-        if ((result as any).ok) return (result as any).result;
-        throw new Error((result as any).error || 'Cap execution failed');
+      if (state.warnOnDirectCall && !suppressWarn) {
+        console.warn(`Warning: Direct call to "${capPath}" via capskit.call() is discouraged. Use capskit.use('<capsule>').<action>() instead.`);
       }
-      return result;
+      const payload = b;
+      const ctx = buildContext(state);
+      return executeCap(capPath, payload, ctx);
     }
     // CapHandler signature: call({ body }, ctx)
     return executeCapCall(a);
@@ -214,7 +231,12 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
         state.allCaps.set(capPath, capEntry);
       }
     }
-    state.dependencies = bootState.state.dependencies;
+    state.dependencies = {
+      ...bootState.state.dependencies,
+      capskit: platform,
+    };
+    state.eventsState = bootState.state.eventsState;
+    state.warnOnDirectCall = options?.warnOnDirectCall;
     state.booted = true;
 
     return shapeBootResponse(sorted, bootState.state);
@@ -226,7 +248,7 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
   function use<TCapsule = unknown>(capsuleName: string): TCapsule {
     return new Proxy({}, {
       get(_target, prop: string) {
-        return async (payload: unknown) => call(`${capsuleName}.${prop}`, payload);
+        return async (payload: unknown) => call(`${capsuleName}.${prop}`, payload, true);
       },
     }) as TCapsule;
   }
@@ -239,14 +261,16 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
     if (emitCap) {
       const ctx = buildContext(state);
       emitCap.handler({ body: { event, data } }, ctx);
+    } else {
+      const adapterEventBus = (state.dependencies as any).eventBus;
+      if (adapterEventBus) {
+        if (typeof adapterEventBus.emit === 'function') {
+          adapterEventBus.emit(event, data);
+        } else if (typeof adapterEventBus.dispatch === 'function') {
+          adapterEventBus.dispatch(event, data);
+        }
+      }
     }
-  }
-
-  /**
-   * ICapsKit.tell(capPath, payload) — fire-and-forget.
-   */
-  function tell(capPath: string, payload: unknown) {
-    void call(capPath, payload).catch(() => {});
   }
 
   /**
@@ -297,22 +321,36 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
     return shutdownMod.default(input, ctx);
   }
 
-  return {
+  const interceptors: ((actionName: string, payload: any, context: any, next: () => Promise<any>) => Promise<any>)[] = [];
+
+  function addInterceptor(interceptor: any) {
+    interceptors.push(interceptor);
+  }
+
+  const platform = {
     state,
+    dependencies: state.dependencies,
+    getDependencies: () => state.dependencies,
     boot,
     call,
     use,
     emit,
-    tell,
     describe,
     getManifests,
     addHook,
+    addInterceptor,
+    interceptors,
     start,
     shutdown,
     register: registerMod.default,
     rpc: rpcMod.default,
     registerCapsule,
   };
+
+  // DI invariant: platform references itself in dependencies
+  state.dependencies.capskit = platform;
+
+  return platform;
 }
 
 /**

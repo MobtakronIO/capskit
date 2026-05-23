@@ -30,7 +30,7 @@ The capsule returns a configuration object. Your framework adapter is responsibl
 
 ## Writing a Framework Adapter
 
-The adapter is responsible for receiving WebSocket frames, routing them to CapsKit (`call`, `emit`, `subscribe`, `tell`, `describe`), and sending responses back.
+The adapter is responsible for receiving WebSocket frames, routing them to CapsKit (`call`, `emit`, `subscribe`, `describe`), and sending responses back.
 
 ### Express + ws example
 
@@ -248,19 +248,6 @@ Publish an event.
   "type": "emit",
   "event": "order.created",
   "data": { "orderId": "123" }
-}
-```
-
-#### tell
-
-Fire-and-forget dispatch (no response expected).
-
-**Request:**
-```json
-{
-  "type": "tell",
-  "actionPath": "notifications.send",
-  "payload": { "body": { "to": "user@example.com" } }
 }
 ```
 

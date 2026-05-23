@@ -94,11 +94,8 @@ const context: CapContext = {
   emit: (event: string, data: any) => {
     capskit.call('events.emit', { body: { event, data } });
   },
-  invoke: (actionPath, payload) => {
+  call: (actionPath, payload) => {
     return capskit.call(actionPath, payload, { fromUse: true });
-  },
-  tell: (actionPath, payload) => {
-    capskit.call(actionPath, payload, { fromUse: true }).catch(() => {});
   },
   use: (name) => capskit.use(name),
 };
@@ -108,12 +105,12 @@ The kernel has **no event logic**. All pub/sub belongs to the events capsule.
 
 ---
 
-## How ctx.invoke and ctx.tell Work
+## How ctx.call Works
 
-- **`ctx.invoke(actionPath, payload)`** — RPC call. Waits for the cap to complete and returns its result.
-- **`ctx.tell(actionPath, payload)`** — Fire-and-forget. Dispatches the cap without waiting. Errors are caught silently.
+- **`ctx.call(actionPath, payload)`** — Unified RPC call. Awaits the cap to complete and returns its result by default.
+- **Fire-and-forget** — Simply don't `await` the call. Errors can be caught with `.catch(() => {})` if desired.
 
-Both delegate to `capskit.call()` internally. The cap path format is `capsule-name.cap-name` (e.g., `orders.create-order`).
+The cap path format is `capsule-name.cap-name` (e.g., `orders.create-order`).
 
 ---
 

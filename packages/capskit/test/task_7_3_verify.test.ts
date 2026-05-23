@@ -14,8 +14,8 @@
 
 import { describe, test, expect } from 'vitest';
 import { convertRegistryToManifest } from '../src/kernel/cap-loader';
-import { createCapsKit } from '../src/kernel/platform';
-import { ValidationError, AuthorizationError } from '../src/kernel/errors';
+import { createCapsKit } from '../src/capsule/kernel/create-capskit';
+import { ValidationError, AuthorizationError } from '../src/capsule/kernel/errors';
 import type { CapsuleRegistry, CapsuleManifest } from '../src/types';
 import * as path from 'node:path';
 

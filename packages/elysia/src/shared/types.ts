@@ -55,8 +55,9 @@ export interface CorsOptions {
  */
 export interface HttpOptions {
   /**
-   * Trait handlers for HTTP routes.
-   * These are merged with top-level traitHandlers (transport-specific handlers take precedence).
+   * @deprecated Use hook caps instead. Trait handlers are legacy adapter-level middleware.
+   * Hooks are now handled by the kernel via meta.hooks and capsuleDef.hooks.
+   * This field will be removed in a future version.
    */
   traitHandlers?: Record<string, TraitHandler>;
 
@@ -90,6 +91,7 @@ export interface LifecycleHooks {
 }
 
 /**
+ * @deprecated Use hook caps instead. See docs/guide/hooks.md
  * A trait handler function.
  * @param traitValue - The parameter from the trait declaration (e.g., 'admin' in 'auth:role:admin')
  * @param context - The request context containing deps, params, body, etc.

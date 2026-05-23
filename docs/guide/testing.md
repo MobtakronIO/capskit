@@ -81,8 +81,7 @@ export function createMockContext(
       logger: { info: () => {}, error: () => {} },
     },
     emit: () => {},
-    invoke: async () => ({}),
-    tell: () => {},
+    call: async () => ({}),
     use: () => ({}) as any,
     ...overrides,
   };

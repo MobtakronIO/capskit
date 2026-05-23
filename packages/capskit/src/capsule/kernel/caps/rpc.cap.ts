@@ -3,7 +3,7 @@ import { CapMeta } from '../types/cap-meta.type';
 
 export const meta: CapMeta = {
   name: 'rpc',
-  description: 'Unified RPC Endpoint for call, emit, and tell operations',
+  description: 'Unified RPC Endpoint for call and emit operations',
 };
 
 export default async function rpc(input: CapInput, ctx: CapContext) {
@@ -11,7 +11,7 @@ export default async function rpc(input: CapInput, ctx: CapContext) {
   const method = body.method as string | undefined;
 
   if (!method) {
-    throw new Error('method is required (call, emit, or tell)');
+    throw new Error('method is required (call or emit)');
   }
 
   const startTime = Date.now();
@@ -22,13 +22,12 @@ export default async function rpc(input: CapInput, ctx: CapContext) {
       if (!capPath) {
         throw new Error('capPath is required for call');
       }
-      // Normalize payload to { body, params, query } format
       const rawPayload = body.payload;
       const hasBody = rawPayload && typeof rawPayload === 'object' && 'body' in rawPayload;
       const normalizedPayload = hasBody
           ? (rawPayload as Record<string, unknown>)
           : { body: rawPayload, params: {}, query: {} };
-      const result = await ctx.invoke(capPath, normalizedPayload);
+      const result = await ctx.call(capPath, normalizedPayload);
       return {
         ok: true,
         result,
@@ -49,20 +48,7 @@ export default async function rpc(input: CapInput, ctx: CapContext) {
       };
     }
 
-    case 'tell': {
-      const capPath = body.capPath as string | undefined;
-      if (!capPath) {
-        throw new Error('capPath is required for tell');
-      }
-      ctx.tell(capPath, body.payload);
-      return {
-        ok: true,
-        result: { told: true, capPath },
-        durationMs: Date.now() - startTime,
-      };
-    }
-
     default:
-      throw new Error(`Unknown RPC method: "${method}". Must be call, emit, or tell`);
+      throw new Error(`Unknown RPC method: "${method}". Must be call or emit`);
   }
 }

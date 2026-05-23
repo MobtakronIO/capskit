@@ -27,17 +27,31 @@ export interface KernelDeps {
   capsules: Map<string, { def: CapsuleDefinition; dir?: string }>;
   eventsState?: EventsState;
   dependencies: Record<string, unknown>;
+  circuitBreakerState?: Map<string, {
+    failures: number;
+    lastFailureTime: number | null;
+    state: 'closed' | 'open' | 'half-open';
+  }>;
+  cacheStore?: Map<string, { value: unknown; expiry: number }>;
 }
 
 export interface CapContext<TDeps extends KernelDeps = KernelDeps> {
   deps: TDeps;
   emit: (event: string, data: unknown) => void;
-  invoke: (capPath: string, payload: unknown) => Promise<unknown>;
-  tell: (capPath: string, payload: unknown) => void;
+  call: {
+    (capPath: string, payload?: unknown): Promise<unknown>;
+    [capsuleName: string]: {
+      [actionName: string]: (payload?: unknown) => Promise<unknown>;
+    };
+  };
   use: <T = unknown>(capsuleName: string) => T;
   user?: unknown;
   next?: () => Promise<unknown>;
   result?: unknown;
+  /** The capPath being executed (e.g., 'orders.create-order') */
+  capPath?: string;
+  /** The action/cap name (e.g., 'create-order') */
+  actionName?: string;
 }
 
 export type CapHandler<TDeps extends KernelDeps = KernelDeps> = (

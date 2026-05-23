@@ -73,8 +73,11 @@ interface CreateElysiaAdapterOptions {
   websocket?: boolean | WebSocketOptions;
 
   /**
+   * @deprecated Use hook caps instead. See docs/guide/hooks.md
    * Shared trait handlers applied to both HTTP and WebSocket transports.
    * Can be overridden per-transport via transport-specific options.
+   * Hooks are now handled by the kernel via meta.hooks and capsuleDef.hooks.
+   * This field will be removed in a future version.
    */
   traitHandlers?: Record<string, TraitHandler>;
 
@@ -103,8 +106,10 @@ interface CreateElysiaAdapterOptions {
 ```ts
 interface HttpOptions {
   /**
+   * @deprecated Use hook caps instead. See docs/guide/hooks.md
    * Trait handlers for HTTP routes.
    * Merged with top-level `traitHandlers` (transport-specific takes precedence).
+   * Hooks are now handled by the kernel via meta.hooks and capsuleDef.hooks.
    */
   traitHandlers?: Record<string, TraitHandler>;
 
@@ -225,7 +230,37 @@ new Elysia()
 await adapter.shutdown();
 ```
 
-### With Trait Handlers
+### With Hook Caps (Recommended)
+
+Hooks are now handled by the kernel via `meta.hooks` and `capsuleDef.hooks`. Define hook caps in your capsule and reference them — no adapter configuration needed:
+
+```ts
+// capsules/orders/capsule.ts
+export default {
+  name: 'orders',
+  hooks: {
+    pre: [{ name: 'require-auth' }],
+  },
+} satisfies CapsuleDefinition;
+```
+
+```ts
+// capsules/orders/caps/create-order.cap.ts
+export const meta: CapMeta = {
+  name: 'create-order',
+  hooks: {
+    pre: ['require-auth', 'validate-input'],
+    post: ['audit-log'],
+  },
+  routes: [{ method: 'POST', path: '/orders', cap: 'create-order' }],
+};
+```
+
+The adapter calls `capskit.call(route.cap, ...)` and the kernel automatically runs the hook pipeline. No adapter-level configuration needed.
+
+### With Trait Handlers (Deprecated)
+
+> **Deprecated:** Use hook caps instead. Trait handlers are legacy adapter-level middleware. See [Hooks Guide](../../docs/guide/hooks.md).
 
 ```ts
 const adapter = await createElysiaAdapter(capskit, {
@@ -263,13 +298,11 @@ const adapter = await createElysiaAdapter(capskit, {
   }
 });
 
-// Combined with trait handlers
+// Combined with trait handlers (deprecated)
 const adapter = await createElysiaAdapter(capskit, {
   http: {
     cors: true,
-    traitHandlers: {
-      'auth:role': async (role, ctx) => { /* ... */ }
-    }
+    // traitHandlers is deprecated - use hook caps instead
   }
 });
 ```
