@@ -39,8 +39,13 @@ export function createEventBus(): EventBus {
     emit(event: string, data: unknown) {
       for (const sub of subscribers.values()) {
         for (const pattern of sub.patterns) {
-          if (matchEventPattern(pattern, event)) {
-            sub.onEvent(event, data, pattern);
+          const matched = matchEventPattern(pattern, event);
+          if (matched) {
+            try {
+              sub.onEvent(event, data, pattern);
+            } catch (err) {
+              console.error('[EventBus] Error in onEvent callback:', err);
+            }
             break;
           }
         }
@@ -54,3 +59,4 @@ export function createEventBus(): EventBus {
     },
   };
 }
+

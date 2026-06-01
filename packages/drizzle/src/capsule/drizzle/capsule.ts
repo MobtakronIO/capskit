@@ -143,25 +143,22 @@ export async function createCapsule(config: DrizzleCapsuleConfig): Promise<Capsu
         let db: unknown;
 
         if (config.dialect === 'sqlite') {
-          // @ts-expect-error peer dependency
           const { drizzle } = await import('drizzle-orm/better-sqlite3');
           const Database = (await import('better-sqlite3')).default;
           const dbInstance = typeof config.connection === 'string'
             ? new Database(config.connection)
             : config.connection;
-          db = drizzle(dbInstance, { schema: resolvedSchema });
+          db = drizzle(dbInstance as any, { schema: resolvedSchema });
           deps.dependencies.drizzleInstance = dbInstance;
         } else if (config.dialect === 'bun-sqlite') {
-          // @ts-expect-error peer dependency
           const { drizzle } = await import('drizzle-orm/bun-sqlite');
           const { Database } = await import('bun:sqlite' as string);
           const dbInstance = typeof config.connection === 'string'
             ? new Database(config.connection)
             : config.connection;
-          db = drizzle(dbInstance, { schema: resolvedSchema });
+          db = drizzle(dbInstance as any, { schema: resolvedSchema });
           deps.dependencies.drizzleInstance = dbInstance;
         } else {
-          // @ts-expect-error peer dependency
           const { drizzle } = await import('drizzle-orm/node-postgres');
           // @ts-expect-error peer dependency
           const { Pool } = await import('pg');

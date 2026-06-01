@@ -12,7 +12,7 @@ export function matchEventPattern(pattern: string, event: string): boolean {
   // Convert pattern to regex
   const regexPattern = pattern
     .replace(/\./g, '\\.')
-    .replace(/\*/g, '[^.]+');
+    .replace(/\*/g, '.*');
 
   return new RegExp(`^${regexPattern}$`).test(event);
 }

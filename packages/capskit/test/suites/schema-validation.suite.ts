@@ -501,5 +501,60 @@ export async function runSchemaValidationTests(kitFactory = createCapsKit) {
   }
   console.log('✅ Output validation skipped when strict is false');
 
+  // ===== Type Coercion Tests =====
+  console.log('Test: Type Coercion of string to number/boolean');
+  const coercionCapsule = {
+    name: 'coercion-test',
+    version: '1.0.0',
+    actions: {
+      coerceData: {
+        handler: async (payload: any) => {
+          return {
+            body: payload.body,
+            query: payload.query,
+            params: payload.params,
+          };
+        },
+        inputSchema: {
+          type: 'object',
+          properties: {
+            age: { type: 'integer' },
+            price: { type: 'number' },
+            isActive: { type: 'boolean' },
+          },
+          required: ['age', 'price', 'isActive'],
+        },
+        metadata: {}
+      }
+    }
+  };
+
+  const { capskit: coercionKit } = await kitFactory({
+    capsules: [{ type: 'manifest', manifest: coercionCapsule }],
+    warnOnDirectCall: false
+  });
+
+  // Call with string representations
+  const payload = {
+    body: { age: '25', price: '99.99', isActive: 'true' }
+  };
+  const coercionResult = await coercionKit.call('coercion-test.coerceData', payload);
+  if (coercionResult.body.age !== 25) throw new Error(`Expected age to be coerced to 25, got ${coercionResult.body.age}`);
+  if (coercionResult.body.price !== 99.99) throw new Error(`Expected price to be coerced to 99.99, got ${coercionResult.body.price}`);
+  if (coercionResult.body.isActive !== true) throw new Error(`Expected isActive to be coerced to true, got ${coercionResult.body.isActive}`);
+
+  // Test structured payload coercion
+  const structuredPayload = {
+    body: { age: '30' },
+    query: { price: '19.99' },
+    params: { isActive: 'false' },
+  };
+  const coercionResultStructured = await coercionKit.call('coercion-test.coerceData', structuredPayload);
+  if (coercionResultStructured.body.age !== 30) throw new Error('Structured age coercion failed');
+  if (coercionResultStructured.query.price !== 19.99) throw new Error('Structured query price coercion failed');
+  if (coercionResultStructured.params.isActive !== false) throw new Error('Structured params isActive coercion failed');
+
+  console.log('✅ Type Coercion verified successfully');
+
   console.log('✅ All schema validation tests passed!');
 }

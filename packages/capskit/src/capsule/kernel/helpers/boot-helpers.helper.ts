@@ -7,6 +7,20 @@ import { BUILTIN_CAPSULES } from '../constants';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import kernelCapsule from '../../kernel/capsule';
+import eventsCapsule from '../../events/capsule';
+import httpCapsule from '../../http/capsule';
+import websocketCapsule from '../../websocket/capsule';
+import systemCapsule from '../../system/capsule';
+
+const BUILTIN_CAPSULES_MAP: Record<string, any> = {
+  kernel: kernelCapsule,
+  events: eventsCapsule,
+  http: httpCapsule,
+  websocket: websocketCapsule,
+  system: systemCapsule,
+};
+
 function isCapHandler(fn: unknown): fn is CapHandler {
   return typeof fn === 'function';
 }
@@ -260,25 +274,26 @@ export async function scanUserCapsules(capsuleDirs: string[], state: BootState):
 }
 
 async function loadBuiltinCapsule(name: string, state: BootState) {
-  const capsulePath = `../../${name}/capsule`;
-  try {
-    const mod = await import(capsulePath);
-    const capsuleDef = mod.default as CapsuleDefinition;
-    const capsuleDir = `../../${name}/`;
-    state.capsules.set(capsuleDef.name, { def: capsuleDef, dir: capsuleDir });
+  const capsuleDef = BUILTIN_CAPSULES_MAP[name] as CapsuleDefinition | undefined;
+  if (!capsuleDef) {
+    console.warn(`Built-in capsule "${name}" not found in static registry`);
+    return;
+  }
 
-    const path = await import('path');
-    const fs = await import('fs');
-    const absDir = path.default.resolve(__dirname, capsuleDir);
-    if (fs.default.existsSync(path.default.join(absDir, 'caps'))) {
-      const caps = await discoverCaps(absDir, capsuleDef.name);
-      for (const cap of caps) {
-        const capPath = `${cap.capsuleName}.${cap.meta.name}`;
-        state.caps.set(capPath, { ...cap, capsuleDef });
-      }
+  const capsuleDir = `virtual://${name}`;
+  state.capsules.set(capsuleDef.name, { def: capsuleDef, dir: capsuleDir });
+
+  if (capsuleDef.caps) {
+    for (const cap of capsuleDef.caps) {
+      const capPath = `${capsuleDef.name}.${cap.meta.name}`;
+      state.caps.set(capPath, {
+        meta: cap.meta,
+        handler: cap.handler,
+        capsuleName: capsuleDef.name,
+        filePath: `virtual://${capsuleDef.name}/${cap.meta.name}`,
+        capsuleDef,
+      });
     }
-  } catch (err: any) {
-    console.warn(`Built-in capsule "${name}" not found, skipping:`, err.message || err);
   }
 }
 

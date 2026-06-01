@@ -150,7 +150,7 @@ export async function executeCap(
   const capMeta = capEntry.meta;
 
   return withTracing(capPath, payload, async () => {
-    const platform = ctx.deps.capskit as any;
+    const platform = (ctx.deps as any).capskit;
     const interceptors = platform?.interceptors || [];
 
     const executeBody = async () => {
