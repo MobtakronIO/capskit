@@ -38,3 +38,9 @@ export interface CapFile {
   capsuleName: string;
   filePath: string;
 }
+
+export interface PreBuiltCap {
+  meta: CapMeta;
+  handler: CapHandler;
+  filePath?: string;
+}

@@ -1,17 +1,16 @@
-import { CapHandler, KernelDeps, CapInput, CapContext, CapEntry } from '../types/cap-input.type';
+import { CapHandler, KernelDeps, CapInput, CapContext } from '../types/cap-input.type';
 import { InternalState, BootOptions } from '../types/platform.types';
 import { buildContext } from '../helpers/build-context.helper';
 import { executeCap } from '../helpers/execute-cap.helper';
-import { CapsuleDefinition, CapFile } from '../types/capsule-definition.type';
+import { CapsuleDefinition, CapFile, PreBuiltCap } from '../types/capsule-definition.type';
 import { CapMeta } from '../types/cap-meta.type';
 import { CapsuleManifest } from '../types/capsule-manifest.type';
 import { ICapsKit } from '../types/capskit.type';
+import { buildManifests } from '../helpers/platform/build-manifests.helper';
+import { emitEvent } from '../helpers/platform/emit-event.helper';
+import { registerCapsule as registerCapsuleHelper } from '../helpers/platform/register-capsule.helper';
 
-export interface PreBuiltCap {
-  meta: CapMeta;
-  handler: CapHandler;
-  filePath?: string;
-}
+export type { PreBuiltCap };
 
 export interface CapsKitPlatform extends ICapsKit {
   state: InternalState;
@@ -22,72 +21,6 @@ export interface CapsKitPlatform extends ICapsKit {
   rpc: CapHandler;
   registerCapsule: (capsuleDef: CapsuleDefinition, caps?: PreBuiltCap[]) => void;
   interceptors: ((actionName: string, payload: unknown, context: CapContext, next: () => Promise<unknown>) => Promise<unknown>)[];
-}
-
-function buildManifests(state: InternalState): CapsuleManifest[] {
-  const manifests: CapsuleManifest[] = [];
-  for (const [capsuleName, capsuleEntry] of state.capsules) {
-    const caps: CapsuleManifest['caps'] = [];
-    const routes: CapsuleManifest['routes'] = [];
-    const eventPublishes = new Set<string>();
-    const eventSubscribes: { event: string }[] = [];
-    const actions: Record<string, any> = {};
-
-    for (const [capPath, capFile] of state.caps) {
-      if (capFile.capsuleName !== capsuleName) continue;
-      const capMeta = capFile.meta;
-      caps.push({
-        name: capMeta.name,
-        capPath,
-        description: capMeta.description,
-        inputSchema: capMeta.inputSchema,
-        outputSchema: capMeta.outputSchema,
-        routes: capMeta.routes,
-        hooks: capMeta.hooks,
-        events: capMeta.events,
-      });
-      actions[capMeta.name] = {
-        handler: capFile.handler,
-        meta: capMeta,
-        description: capMeta.description,
-        inputSchema: capMeta.inputSchema,
-        outputSchema: capMeta.outputSchema,
-        routes: capMeta.routes,
-        hooks: capMeta.hooks,
-        events: capMeta.events,
-      };
-      if (capMeta.routes) {
-        for (const route of capMeta.routes) {
-          routes!.push({
-            method: route.method,
-            path: route.path,
-            cap: capPath,
-            action: route.action,
-          });
-        }
-      }
-      if (capMeta.events?.publishes) {
-        for (const evt of capMeta.events.publishes) eventPublishes.add(evt);
-      }
-      if (capMeta.events?.subscribes) {
-        for (const sub of capMeta.events.subscribes) eventSubscribes.push(sub);
-      }
-    }
-
-    manifests.push({
-      name: capsuleName,
-      dependencies: capsuleEntry.def.dependencies,
-      requires: capsuleEntry.def.dependencies,
-      caps,
-      actions,
-      routes: routes!.length > 0 ? routes : undefined,
-      events: {
-        publishes: eventPublishes.size > 0 ? Array.from(eventPublishes) : undefined,
-        subscribes: eventSubscribes.length > 0 ? eventSubscribes : undefined,
-      },
-    } as any);
-  }
-  return manifests;
 }
 
 export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
@@ -107,30 +40,7 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
   const rpcMod = await import('./rpc.cap');
 
   function registerCapsule(capsuleDef: CapsuleDefinition, caps?: PreBuiltCap[]): void {
-    if (state.capsules.has(capsuleDef.name)) {
-      throw new Error(`Capsule "${capsuleDef.name}" is already registered`);
-    }
-
-    preRegisteredCapsules.push(capsuleDef);
-    state.capsules.set(capsuleDef.name, { def: capsuleDef, dir: `virtual://${capsuleDef.name}` });
-
-    const resolvedCaps = caps || (capsuleDef.caps?.map(c => ({
-      meta: c.meta,
-      handler: c.handler,
-      filePath: `virtual://${capsuleDef.name}/${c.meta.name}`,
-    })) || []);
-
-    for (const cap of resolvedCaps) {
-      const capPath = `${capsuleDef.name}.${cap.meta.name}`;
-      const capFile: CapFile = {
-        meta: cap.meta,
-        handler: cap.handler,
-        capsuleName: capsuleDef.name,
-        filePath: cap.filePath || `virtual://${capsuleDef.name}/${cap.meta.name}`,
-      };
-      state.caps.set(capPath, capFile);
-      state.allCaps.set(capPath, capFile);
-    }
+    registerCapsuleHelper(state, preRegisteredCapsules, capsuleDef, caps);
   }
 
   async function executeCapCall(input: CapInput): Promise<unknown> {
@@ -169,7 +79,7 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
 
     const bootState = parseAndBuildState(bootInput);
 
-    await loadAllCapsules(bootState.disableBuiltins, bootState.capsuleDirs, bootState.state, bootState.preRegisteredCapsules);
+    await loadAllCapsules(bootState.disableBuiltins, bootState.state.capsuleDirs || [], bootState.state, bootState.preRegisteredCapsules);
     const sorted = (await import('../helpers/validate-and-order.helper')).validateAndOrder(
       new Map(bootState.state.capsules.entries())
     );
@@ -212,16 +122,7 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
   }
 
   function emit(event: string, data: unknown) {
-    const emitCap = state.caps.get('events.emit');
-    if (emitCap) {
-      const ctx = buildContext(state);
-      emitCap.handler({ body: { event, data } }, ctx);
-    } else {
-      const adapterEventBus = state.dependencies.eventBus;
-      if (adapterEventBus) {
-        adapterEventBus.dispatch(event, data);
-      }
-    }
+    emitEvent(state, event, data);
   }
 
   function describe(capsuleName?: string): CapsuleManifest | undefined {
