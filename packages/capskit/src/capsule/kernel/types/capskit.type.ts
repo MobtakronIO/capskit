@@ -1,5 +1,5 @@
 import { CapsuleManifest } from './capsule-manifest.type';
-import { CapInput, CapContext, CapHandler } from './cap-input.type';
+import { CapInput, CapContext, CapHandler, InterceptorFn } from './cap-input.type';
 
 /**
  * Public interface for the CapsKit kernel instance.
@@ -45,7 +45,7 @@ export interface ICapsKit {
   /**
    * Add a global interceptor.
    */
-  addInterceptor(interceptor: (actionName: string, payload: any, context: any, next: () => Promise<any>) => Promise<any>): void;
+  addInterceptor(interceptor: InterceptorFn): void;
 
   /**
    * Gracefully shutdown the kernel.

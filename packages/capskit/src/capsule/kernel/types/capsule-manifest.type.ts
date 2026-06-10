@@ -9,8 +9,10 @@ import { CapRoute } from './cap-meta.type';
 export interface CapsuleManifest {
   name: string;
   dependencies?: string[];
+  requires?: string[];
   description?: string;
   caps: CapsuleCapManifest[];
+  actions?: Record<string, unknown>;
   routes?: RouteManifest[];
   sockets?: SocketManifest[];
   events?: {

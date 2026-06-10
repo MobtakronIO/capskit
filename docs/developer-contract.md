@@ -91,11 +91,26 @@ ctx.user              // Set by auth hooks
 ## Errors
 
 ```ts
-throw new ValidationError('Bad input')    // 400
-throw new NotFoundError('Missing')        // 404
-throw new AuthorizationError('No access') // 403
-throw new DependencyError('DB down')      // 503
-throw new InternalError('Unexpected')     // 500
+// HTTP-mapped errors (auto-mapped to status codes)
+throw new ValidationError('Bad input')        // 400
+throw new UnauthorizedError('No auth')        // 401
+throw new AuthorizationError('No access')     // 403
+throw new NotFoundError('Missing')            // 404
+throw new TimeoutError('Timed out')           // 408
+throw new DependencyError('DB down')          // 503
+throw new InternalError('Unexpected')         // 500
+
+// Kernel lifecycle errors
+throw new CycleError('Circular dependency')   // boot aborts
+throw new CapLoadError('Cap failed to load')  // boot aborts
+throw new DuplicateCapNameError(name)         // boot aborts
+throw new CapCycleError('Cap circular deps')  // boot aborts
+throw new TraitError('Trait violation')       // runtime
+throw new HandlerError('Handler failed')      // runtime
+
+// Event delivery errors
+throw new EventDeliveryError('Delivery failed') // runtime
+throw new DeadLetterError('Exhausted retries')  // runtime
 ```
 
 ---
@@ -138,6 +153,6 @@ throw new InternalError('Unexpected')     // 500
 | `.repository.ts` import from `.rule.ts`? | No. Imports `.type`/`.error`/`.constant` only. |
 | Share state between caps? | `ctx.emit` + subscribe, or `ctx.deps`. |
 | Auth on all caps? | Capsule-level hooks in `capsule.ts`. |
-| Which error class? | `ValidationError`, `NotFoundError`, `AuthorizationError`, `InternalError`. Never raw `Error`. |
+| Which error class? | `ValidationError` (400), `UnauthorizedError` (401), `AuthorizationError` (403), `NotFoundError` (404), `TimeoutError` (408), `DependencyError` (503), `InternalError` (500). Never raw `Error`. |
 | Business logic in `capsule.ts`? | No. Logic in `.cap.ts`, graduating to rules/helpers/repositories. |
 | Need data from another capsule? | `ctx.call('other-capsule.cap-name', payload)`. |

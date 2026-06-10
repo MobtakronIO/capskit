@@ -57,6 +57,13 @@ export interface CapContext<TDeps extends KernelDeps = KernelDeps> {
   actionName?: string;
 }
 
+export type InterceptorFn = (
+  actionName: string,
+  payload: unknown,
+  context: CapContext,
+  next: () => Promise<unknown>,
+) => Promise<unknown>;
+
 export type CapHandler<TDeps extends KernelDeps = KernelDeps> = (
   input: CapInput,
   ctx: CapContext<TDeps>,

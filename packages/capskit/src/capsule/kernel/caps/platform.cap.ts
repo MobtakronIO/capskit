@@ -1,4 +1,4 @@
-import { CapHandler, KernelDeps, CapInput, CapContext } from '../types/cap-input.type';
+import { CapHandler, KernelDeps, CapInput, CapContext, InterceptorFn } from '../types/cap-input.type';
 import { InternalState, BootOptions } from '../types/platform.types';
 import { buildContext } from '../helpers/build-context.helper';
 import { executeCap } from '../helpers/execute-cap.helper';
@@ -158,9 +158,9 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
     return shutdownMod.default(input, ctx);
   }
 
-  const interceptors: ((actionName: string, payload: any, context: any, next: () => Promise<any>) => Promise<any>)[] = [];
+  const interceptors: InterceptorFn[] = [];
 
-  function addInterceptor(interceptor: any) {
+  function addInterceptor(interceptor: InterceptorFn) {
     interceptors.push(interceptor);
   }
 
