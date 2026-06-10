@@ -157,7 +157,7 @@ export function createSocket(capskit: ICapsKit, options: WebSocketAdapterOptions
                 patterns: frame.patterns,
                 onEvent: (event: string, data: unknown, pattern: string) => {
                   // Only push to this specific client
-                  console.log('[WS eventBus] onEvent triggered:', event, '→ client', client.id);
+                  // console.log('[WS eventBus] onEvent triggered:', event, '→ client', client.id);
                   if (client.ws.readyState === 1) {
                     client.ws.send(makeFrame({
                       type: 'event',

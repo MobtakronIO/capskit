@@ -1,4 +1,4 @@
-import type { CapsuleRegistry, CapMeta } from '../../kernel/cap-loader';
+import type { CapsuleRegistry, CapMeta } from '../../capsule/kernel';
 
 class HealthCap {
   async getHealth(_payload: any, _context: any) {

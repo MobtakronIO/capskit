@@ -1,4 +1,4 @@
-import type { CapsuleRegistry, CapMeta } from '../../kernel/cap-loader';
+import type { CapsuleRegistry, CapMeta } from '../../capsule/kernel';
 
 export class WebSocketCap {
   async buildSocket(payload: any, _context: any) {

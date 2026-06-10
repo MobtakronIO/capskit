@@ -1,18 +1,8 @@
-// Cap loader - full implementation for cap manifest loading and validation pipeline
-
 import * as fs from 'fs';
 import * as path from 'path';
+import { CapLoadError } from '../errors';
 
 // ── Errors ────────────────────────────────────────────────────────────────
-
-export class CapLoadError extends Error {
-  public readonly filePath?: string;
-  constructor(message: string, filePath?: string) {
-    super(message);
-    this.name = 'CapLoadError';
-    this.filePath = filePath;
-  }
-}
 
 export class DuplicateCapNameError extends CapLoadError {
   public readonly duplicates: string[];
@@ -94,7 +84,6 @@ export interface CapFileResult {
 
 const VALID_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 const VALID_HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
-const FRAMEWORK_MODULES = ['elysia', 'express', 'fastify', 'hono', 'koa', 'nest', '@nestjs/core', 'restify', 'polka', 'micro', 'sapper', 'sveltekit', 'next', 'remix'];
 
 export function validateCapMeta(meta: unknown, filePath?: string): CapMeta {
   if (meta === null || meta === undefined) throw new CapLoadError('Cap meta must not be null or undefined', filePath);
@@ -164,11 +153,9 @@ export function validateCapClass(capClass: unknown, filePath?: string): void {
   if (capClass === null || capClass === undefined) throw new CapLoadError('Cap class must not be null or undefined', filePath);
   if (typeof capClass !== 'function') throw new CapLoadError('Cap must be a class/function', filePath);
 
-  // Check if it's an arrow function (no prototype)
   const fn = capClass as Function;
   if (!fn.prototype) throw new CapLoadError('Cap must be a class, not an arrow function', filePath);
 
-  // Check for methods (excluding constructor)
   const methodNames = Object.getOwnPropertyNames(fn.prototype).filter(n => n !== 'constructor');
   if (methodNames.length === 0) throw new CapLoadError('Cap class must have at least one method', filePath);
 }
@@ -186,13 +173,11 @@ export function validateCapsuleRegistry(registry: unknown, filePath?: string): C
     return { class: c.class as new () => unknown, meta: c.meta as CapMeta };
   });
 
-  // Check for duplicate names
   const nameCount = new Map<string, number>();
   for (const c of caps) nameCount.set(c.meta.name, (nameCount.get(c.meta.name) || 0) + 1);
   const dupes = Array.from(nameCount.entries()).filter(([, count]) => count > 1).map(([name]) => name);
   if (dupes.length > 0) throw new DuplicateCapNameError(dupes, r.name as string);
 
-  // Check for cycles
   const cycle = detectCapCycle(caps.map(c => ({ class: c.class, meta: c.meta })));
   if (cycle) throw new CapCycleError(cycle, r.name as string);
 
@@ -237,7 +222,6 @@ export function detectCapCycle(caps: Array<{ class?: new () => unknown; meta: Ca
   for (const cap of caps) {
     if (!visited.has(cap.meta.name)) {
       if (dfs(cap.meta.name)) {
-        // Extract the cycle from cyclePath
         const lastNode = cyclePath[cyclePath.length - 1];
         const cycleStart = cyclePath.indexOf(lastNode);
         return cyclePath.slice(cycleStart);
@@ -264,7 +248,7 @@ function mergeActionMeta(method: string, capMeta: CapMeta, defaults: Record<stri
   const result = { ...defaults };
   if (m.description) result.description = m.description;
   if (m.inputSchema) result.inputSchema = m.inputSchema;
-  if (m.schema) result.inputSchema = m.schema; // deprecated field mapped
+  if (m.schema) result.inputSchema = m.schema;
   if (m.outputSchema) result.outputSchema = m.outputSchema;
   if (m.cache) result.cache = m.cache;
   if (m.resiliency) result.resiliency = m.resiliency;
@@ -438,7 +422,6 @@ export function detectCapsuleFormat(dirPath: string): CapsuleFormatDetection {
 
   const entries = fs.readdirSync(dirPath, { withFileTypes: true });
 
-  // Check for caps.ts / caps.js / caps.mjs
   for (const entry of entries) {
     if (entry.isFile() && /^caps\.(ts|js|mjs)$/.test(entry.name)) {
       result.hasCapsTs = true;
@@ -463,33 +446,6 @@ export function detectCapsuleFormat(dirPath: string): CapsuleFormatDetection {
 
 function isCapDirectory(dirPath: string): boolean {
   return path.basename(dirPath).endsWith('.cap');
-}
-
-function loadCapFile(dirPath: string): CapFileResult | null {
-  if (!isCapDirectory(dirPath)) return null;
-
-  const capTsPath = path.join(dirPath, 'cap.ts');
-  const capJsPath = path.join(dirPath, 'cap.js');
-  const metaTsPath = path.join(dirPath, 'cap.meta.ts');
-  const metaJsPath = path.join(dirPath, 'cap.meta.js');
-
-  const capPath = fs.existsSync(capTsPath) ? capTsPath : fs.existsSync(capJsPath) ? capJsPath : null;
-  const metaPath = fs.existsSync(metaTsPath) ? metaTsPath : fs.existsSync(metaJsPath) ? metaJsPath : null;
-
-  if (!capPath || !metaPath) return null;
-
-  try {
-    // Dynamic import with cache busting for test fixtures
-    const cacheKey = `${capPath}?t=${Date.now()}`;
-    import.meta.url; // ensure ESM context
-    const capModule = require(capPath);
-    const metaModule = require(metaPath);
-    const capClass = capModule.default || Object.values(capModule)[0];
-    const meta = metaModule.default || Object.values(metaModule)[0];
-    return { class: capClass, meta };
-  } catch {
-    return null;
-  }
 }
 
 export async function loadCapFromDir(dirPath: string): Promise<CapFileResult | null> {
@@ -540,7 +496,6 @@ export async function loadCapsFromDirectory(dirPath: string): Promise<CapFileRes
     }
   }
 
-  // Check for duplicates
   const dupes = detectDuplicateCapNames(results);
   if (dupes.length > 0) throw new DuplicateCapNameError(dupes, dirPath);
 

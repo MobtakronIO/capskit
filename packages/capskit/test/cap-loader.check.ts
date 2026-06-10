@@ -34,7 +34,7 @@ import {
   CapMeta,
   CapDefinition,
   CapsuleRegistry,
-} from '../src/kernel/cap-loader';
+} from '../src/capsule/kernel';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURES_DIR = path.resolve(__dirname, 'cap-loader-fixtures');

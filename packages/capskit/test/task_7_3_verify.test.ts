@@ -13,10 +13,10 @@
  */
 
 import { describe, test, expect } from 'vitest';
-import { convertRegistryToManifest } from '../src/kernel/cap-loader';
+import { convertRegistryToManifest } from '../src/capsule/kernel';
 import { createCapsKit } from '../src/capsule/kernel/create-capskit';
 import { ValidationError, AuthorizationError } from '../src/capsule/kernel/errors';
-import type { CapsuleRegistry, CapsuleManifest } from '../src/kernel/cap-loader';
+import type { CapsuleRegistry, CapsuleManifest } from '../src/capsule/kernel';
 import * as path from 'node:path';
 
 // HTTP capsule is no longer builtin — it must be loaded as a capsule source.

@@ -1,4 +1,4 @@
-import type { CapsuleRegistry, CapMeta } from '../../kernel/cap-loader';
+import type { CapsuleRegistry, CapMeta } from '../../capsule/kernel';
 
 export class BuildRouterCap {
   async buildRouter(payload: any, context: any): Promise<{ router: any }> {

@@ -144,8 +144,24 @@ export class CycleError extends Error {
 }
 
 export class CapLoadError extends Error {
-  constructor(message: string) {
+  public readonly filePath?: string;
+  constructor(message: string, filePath?: string) {
     super(message);
     this.name = 'CapLoadError';
+    this.filePath = filePath;
+  }
+}
+
+export class TraitError extends FrameworkError {
+  constructor(message: string, public readonly trait: string, details?: Record<string, unknown>) {
+    super(message, 'TRAIT_ERROR', 403, details);
+    this.name = 'TraitError';
+  }
+}
+
+export class HandlerError extends FrameworkError {
+  constructor(message: string, public readonly actionName: string, details?: Record<string, unknown>) {
+    super(message, 'HANDLER_ERROR', 500, details);
+    this.name = 'HandlerError';
   }
 }

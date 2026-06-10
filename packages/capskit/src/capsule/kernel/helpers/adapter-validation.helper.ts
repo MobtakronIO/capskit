@@ -1,5 +1,3 @@
-// Adapter validation compatibility shim
-
 export interface AdapterManifest {
   name: string;
   version: string;
@@ -38,7 +36,6 @@ export function checkVersionCompatibility(
   requiredMin: string,
   requiredMax: string,
 ): VersionCompatibilityResult {
-  // Simple semver comparison stub
   const compatible = adapterVersion >= requiredMin && adapterVersion <= requiredMax;
   return {
     compatible,

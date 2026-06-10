@@ -10,7 +10,7 @@ import {
   checkVersionCompatibility,
   loadAdapterManifest,
   buildIncompatibilityError,
-} from '../../src/kernel/adapter-validation';
+} from '../../src/capsule/kernel/helpers/adapter-validation.helper';
 
 // Mock manifest for testing
 const mockManifest = {

@@ -23,12 +23,9 @@ import {
   toErrorEnvelope,
   shouldExposeStack,
   getSafeErrorMessage,
-} from '../../src/kernel/errors';
-
-import {
   DuplicateCapNameError,
   CapCycleError,
-} from '../../src/kernel/cap-loader';
+} from '../../src/capsule/kernel';
 
 export async function runErrorTaxonomyTests() {
   console.log('\n📦 Error Taxonomy Tests');

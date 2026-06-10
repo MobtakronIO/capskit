@@ -14,12 +14,12 @@ import {
   convertRegistryToManifest,
   convertCapToManifest,
   CapLoadError,
-} from '../src/kernel/cap-loader';
+} from '../src/capsule/kernel';
 import type {
   CapsuleRegistry,
   CapsuleManifest,
   CapDefinition,
-} from '../src/kernel/cap-loader';
+} from '../src/capsule/kernel';
 
 // ===========================================================================
 // 1. STATIC VERIFICATION: System capsule registry → manifest conversion

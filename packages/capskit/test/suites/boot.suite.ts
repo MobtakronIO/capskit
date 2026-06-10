@@ -8,7 +8,7 @@ import {
   BootTimeoutError,
   validateManifests,
   describeBootOrder
-} from '../../src/kernel/boot';
+} from '../../src/capsule/kernel/helpers/legacy-boot.helper';
 
 /**
  * Boot functionality tests

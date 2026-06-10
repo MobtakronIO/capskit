@@ -1,7 +1,7 @@
 import { CapsuleDefinition } from './types/capsule-definition.type';
 import { BootOptions } from './types/platform.types';
 import { CapsKitPlatform, createCapsKitPlatform } from './caps/platform.cap';
-import { convertRegistryToManifest } from '../../kernel/cap-loader';
+import { convertRegistryToManifest } from './helpers/legacy-bridge.helper';
 import { ValidationError, AuthorizationError } from './errors';
 import { buildContext } from './helpers/build-context.helper';
 import { executeCap } from './helpers/execute-cap.helper';

@@ -243,7 +243,7 @@ export async function scanUserCapsules(capsuleDirs: string[], state: BootState):
       } else {
         const mod = await import(capsulePath);
         const registry = mod.default || Object.values(mod)[0];
-        const { convertRegistryToManifest } = await import('../../../kernel/cap-loader');
+        const { convertRegistryToManifest } = await import('./legacy-bridge.helper');
         const manifest = convertRegistryToManifest(registry);
         capsuleDef = toCapsuleDefinition(manifest);
         capsuleDir = capsulePath.replace(/caps\.ts$/, '');

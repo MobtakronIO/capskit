@@ -24,13 +24,13 @@ import {
   createCapContext,
   wrapCapHandler,
   CapLoadError,
-} from '../../src/kernel/cap-loader';
+} from '../../src/capsule/kernel';
 import type {
   CapDefinition,
   CapsuleRegistry,
   CapsuleManifest,
-} from '../../src/kernel/cap-loader';
-import type { PlatformContext } from '../../src/kernel/cap-loader';
+} from '../../src/capsule/kernel';
+import type { PlatformContext } from '../../src/capsule/kernel';
 
 // ===========================================================================
 // 1. SINGLE CAP CONVERSION (convertCapToManifest)

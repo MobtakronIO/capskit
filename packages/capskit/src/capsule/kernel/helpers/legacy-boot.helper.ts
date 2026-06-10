@@ -1,5 +1,5 @@
 // Boot compatibility shim
-import { FrameworkError } from './errors';
+import { FrameworkError } from '../errors';
 
 export class CycleDetectedError extends FrameworkError {
   public cycle: string[];

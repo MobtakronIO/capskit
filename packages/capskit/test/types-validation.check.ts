@@ -17,7 +17,7 @@ import type {
 import type {
   CapDefinition,
   CapsuleRegistry,
-} from '../src/kernel/cap-loader';
+} from '../src/capsule/kernel';
 
 // ============================================================
 // 1. CapResponseMessage — response shape (kept conceptually,

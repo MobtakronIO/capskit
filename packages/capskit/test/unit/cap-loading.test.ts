@@ -18,6 +18,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import {
+  CapLoadError,
+} from '../../src/capsule/kernel';
+import {
   // Validation
   validateCapMeta,
   validateCapClass,
@@ -38,10 +41,9 @@ import {
   detectCapCycle,
   detectCapsuleFormat,
   // Errors
-  CapLoadError,
   DuplicateCapNameError,
   CapCycleError,
-} from '../../src/kernel/cap-loader';
+} from '../../src/capsule/kernel/helpers/legacy-bridge.helper';
 import type {
   CapMeta,
   CapDefinition,
@@ -50,7 +52,7 @@ import type {
   CapEventSubscription,
   CapRoute,
   CapsuleFormatDetection,
-} from '../../src/kernel/cap-loader';
+} from '../../src/capsule/kernel/helpers/legacy-bridge.helper';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURES_DIR = path.resolve(__dirname, '..', 'cap-loader-fixtures');
