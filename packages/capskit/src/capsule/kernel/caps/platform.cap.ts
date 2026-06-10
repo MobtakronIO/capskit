@@ -7,21 +7,12 @@ import { CapMeta } from '../types/cap-meta.type';
 import { CapsuleManifest } from '../types/capsule-manifest.type';
 import { ICapsKit } from '../types/capskit.type';
 
-/**
- * Pre-built cap entry for capsules that don't live on the filesystem.
- * Matches the CapFile shape but allows omitting capsuleName (inferred from capsuleDef).
- */
 export interface PreBuiltCap {
   meta: CapMeta;
   handler: CapHandler;
   filePath?: string;
 }
 
-/**
- * The platform instance returned by createCapsKitPlatform().
- * Implements both the low-level cap handler interface AND ICapsKit,
- * so it can be passed directly to createElysiaAdapter without wrapping.
- */
 export interface CapsKitPlatform extends ICapsKit {
   state: InternalState;
   dependencies: Record<string, unknown>;
@@ -31,6 +22,72 @@ export interface CapsKitPlatform extends ICapsKit {
   rpc: CapHandler;
   registerCapsule: (capsuleDef: CapsuleDefinition, caps?: PreBuiltCap[]) => void;
   interceptors: ((actionName: string, payload: unknown, context: CapContext, next: () => Promise<unknown>) => Promise<unknown>)[];
+}
+
+function buildManifests(state: InternalState): CapsuleManifest[] {
+  const manifests: CapsuleManifest[] = [];
+  for (const [capsuleName, capsuleEntry] of state.capsules) {
+    const caps: CapsuleManifest['caps'] = [];
+    const routes: CapsuleManifest['routes'] = [];
+    const eventPublishes = new Set<string>();
+    const eventSubscribes: { event: string }[] = [];
+    const actions: Record<string, any> = {};
+
+    for (const [capPath, capFile] of state.caps) {
+      if (capFile.capsuleName !== capsuleName) continue;
+      const capMeta = capFile.meta;
+      caps.push({
+        name: capMeta.name,
+        capPath,
+        description: capMeta.description,
+        inputSchema: capMeta.inputSchema,
+        outputSchema: capMeta.outputSchema,
+        routes: capMeta.routes,
+        hooks: capMeta.hooks,
+        events: capMeta.events,
+      });
+      actions[capMeta.name] = {
+        handler: capFile.handler,
+        meta: capMeta,
+        description: capMeta.description,
+        inputSchema: capMeta.inputSchema,
+        outputSchema: capMeta.outputSchema,
+        routes: capMeta.routes,
+        hooks: capMeta.hooks,
+        events: capMeta.events,
+      };
+      if (capMeta.routes) {
+        for (const route of capMeta.routes) {
+          routes!.push({
+            method: route.method,
+            path: route.path,
+            cap: capPath,
+            action: route.action,
+          });
+        }
+      }
+      if (capMeta.events?.publishes) {
+        for (const evt of capMeta.events.publishes) eventPublishes.add(evt);
+      }
+      if (capMeta.events?.subscribes) {
+        for (const sub of capMeta.events.subscribes) eventSubscribes.push(sub);
+      }
+    }
+
+    manifests.push({
+      name: capsuleName,
+      dependencies: capsuleEntry.def.dependencies,
+      requires: capsuleEntry.def.dependencies,
+      caps,
+      actions,
+      routes: routes!.length > 0 ? routes : undefined,
+      events: {
+        publishes: eventPublishes.size > 0 ? Array.from(eventPublishes) : undefined,
+        subscribes: eventSubscribes.length > 0 ? eventSubscribes : undefined,
+      },
+    } as any);
+  }
+  return manifests;
 }
 
 export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
@@ -46,20 +103,9 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
 
   const preRegisteredCapsules: CapsuleDefinition[] = [];
 
-  // Import the cap handlers
-  const bootMod = await import('./boot.cap');
-  const callMod = await import('./call.cap');
-  const useMod = await import('./use.cap');
   const registerMod = await import('./register.cap');
-  const shutdownMod = await import('./shutdown.cap');
-  const describeMod = await import('./describe.cap');
   const rpcMod = await import('./rpc.cap');
 
-  /**
-   * Register a pre-built capsule definition with its caps directly into state.
-   * Use this before calling boot() when you have capsules that don't live on
-   * the filesystem (e.g. @mobtakronio/capskit-drizzle).
-   */
   function registerCapsule(capsuleDef: CapsuleDefinition, caps?: PreBuiltCap[]): void {
     if (state.capsules.has(capsuleDef.name)) {
       throw new Error(`Capsule "${capsuleDef.name}" is already registered`);
@@ -68,7 +114,6 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
     preRegisteredCapsules.push(capsuleDef);
     state.capsules.set(capsuleDef.name, { def: capsuleDef, dir: `virtual://${capsuleDef.name}` });
 
-    // Auto-derive caps from capsuleDef.caps when not explicitly provided
     const resolvedCaps = caps || (capsuleDef.caps?.map(c => ({
       meta: c.meta,
       handler: c.handler,
@@ -88,93 +133,15 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
     }
   }
 
-  /**
-   * Build manifests from state for getManifests() and describe().
-   */
-  function buildManifests(): CapsuleManifest[] {
-    const manifests: CapsuleManifest[] = [];
-    for (const [capsuleName, capsuleEntry] of state.capsules) {
-      const caps: CapsuleManifest['caps'] = [];
-      const routes: CapsuleManifest['routes'] = [];
-      const eventPublishes = new Set<string>();
-      const eventSubscribes: { event: string }[] = [];
-      const actions: Record<string, any> = {};
-
-      for (const [capPath, capFile] of state.caps) {
-        if (capFile.capsuleName !== capsuleName) continue;
-        const capMeta = capFile.meta;
-        caps.push({
-          name: capMeta.name,
-          capPath,
-          description: capMeta.description,
-          inputSchema: capMeta.inputSchema,
-          outputSchema: capMeta.outputSchema,
-          routes: capMeta.routes,
-          hooks: capMeta.hooks,
-          events: capMeta.events,
-        });
-        actions[capMeta.name] = {
-          handler: capFile.handler,
-          meta: capMeta,
-          description: capMeta.description,
-          inputSchema: capMeta.inputSchema,
-          outputSchema: capMeta.outputSchema,
-          routes: capMeta.routes,
-          hooks: capMeta.hooks,
-          events: capMeta.events,
-        };
-        if (capMeta.routes) {
-          for (const route of capMeta.routes) {
-            routes!.push({
-              method: route.method,
-              path: route.path,
-              cap: capPath,
-              action: route.action,
-            });
-          }
-        }
-        if (capMeta.events?.publishes) {
-          for (const evt of capMeta.events.publishes) eventPublishes.add(evt);
-        }
-        if (capMeta.events?.subscribes) {
-          for (const sub of capMeta.events.subscribes) eventSubscribes.push(sub);
-        }
-      }
-
-      manifests.push({
-        name: capsuleName,
-        dependencies: capsuleEntry.def.dependencies,
-        requires: capsuleEntry.def.dependencies,
-        caps,
-        actions,
-        routes: routes!.length > 0 ? routes : undefined,
-        events: {
-          publishes: eventPublishes.size > 0 ? Array.from(eventPublishes) : undefined,
-          subscribes: eventSubscribes.length > 0 ? eventSubscribes : undefined,
-        },
-      } as any);
-    }
-    return manifests;
-  }
-
-  /**
-   * Internal: execute a cap via the kernel call.cap handler.
-   * Accepts CapInput format: { body: { capPath, payload } }
-   */
   async function executeCapCall(input: CapInput): Promise<unknown> {
     const ctx = buildContext(state);
     const callMod = await import('./call.cap');
     return callMod.default(input, ctx);
   }
 
-  /**
-   * ICapsKit.call(capPath, payload) — accepts the public API signature.
-   * Also works as CapHandler({ body }, ctx) for backward compatibility.
-   */
   async function call(a: string, b?: unknown, suppressWarn?: boolean): Promise<unknown>;
   async function call(input: CapInput, ctx?: CapContext): Promise<unknown>;
   async function call(a: string | CapInput, b?: unknown, suppressWarn?: boolean): Promise<unknown> {
-    // ICapsKit signature: call(capPath, payload)
     if (typeof a === 'string') {
       const capPath = a;
       if (state.warnOnDirectCall && !suppressWarn) {
@@ -184,18 +151,13 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
       const ctx = buildContext(state);
       return executeCap(capPath, payload, ctx);
     }
-    // CapHandler signature: call({ body }, ctx)
     return executeCapCall(a);
   }
 
-  /**
-   * Boot handler that wires discovered caps into platform.state.
-   */
   const boot = async (options?: BootOptions): Promise<unknown> => {
     const { parseAndBuildState, loadAllCapsules, runBootLifecycles, shapeBootResponse } =
       await import('../helpers/boot-helpers.helper');
 
-    // Build a synthetic CapInput from BootOptions for compatibility with parseAndBuildState
     const bootInput: CapInput = {
       body: {
         capsuleDirs: options?.capsuleDirs || [],
@@ -213,7 +175,6 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
     );
     await runBootLifecycles(sorted, bootState.state);
 
-    // Wire discovered capsules and caps into platform.state
     for (const [name, entry] of bootState.state.capsules) {
       if (!state.capsules.has(name)) {
         state.capsules.set(name, { def: entry.def, dir: entry.dir || '' });
@@ -242,9 +203,6 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
     return shapeBootResponse(sorted, bootState.state);
   };
 
-  /**
-   * ICapsKit.use(capsuleName) — returns a proxy that calls caps as methods.
-   */
   function use<TCapsule = unknown>(capsuleName: string): TCapsule {
     return new Proxy({}, {
       get(_target, prop: string) {
@@ -253,16 +211,13 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
     }) as TCapsule;
   }
 
-  /**
-   * ICapsKit.emit(event, data) — delegates to events.emit cap.
-   */
   function emit(event: string, data: unknown) {
     const emitCap = state.caps.get('events.emit');
     if (emitCap) {
       const ctx = buildContext(state);
       emitCap.handler({ body: { event, data } }, ctx);
     } else {
-      const adapterEventBus = (state.dependencies as any).eventBus;
+      const adapterEventBus = state.dependencies.eventBus;
       if (adapterEventBus) {
         if (typeof adapterEventBus.emit === 'function') {
           adapterEventBus.emit(event, data);
@@ -273,33 +228,21 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
     }
   }
 
-  /**
-   * ICapsKit.describe(capsuleName?) — returns manifest for one capsule or undefined.
-   */
   function describe(capsuleName?: string): CapsuleManifest | undefined {
     if (capsuleName) {
-      return buildManifests().find(m => m.name === capsuleName);
+      return buildManifests(state).find(m => m.name === capsuleName);
     }
     return undefined;
   }
 
-  /**
-   * ICapsKit.getManifests() — returns all capsule manifests.
-   */
   function getManifests(): CapsuleManifest[] {
-    return buildManifests();
+    return buildManifests(state);
   }
 
-  /**
-   * ICapsKit.addHook(hook) — no-op shim; hooks live on capsule definitions.
-   */
   function addHook(_hook: { name: string; handler: CapHandler }) {
     // no-op
   }
 
-  /**
-   * ICapsKit.start() — checks boot status and returns summary.
-   */
   async function start() {
     if (!state.booted) {
       throw new Error('Platform not booted. Call platform.boot() first, or use createCapsKit() for auto-boot.');
@@ -311,9 +254,6 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
     };
   }
 
-  /**
-   * ICapsKit.shutdown() — runs shutdown lifecycle in reverse order.
-   */
   async function shutdown() {
     const input: CapInput = { body: {} };
     const ctx = buildContext(state);
@@ -327,7 +267,7 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
     interceptors.push(interceptor);
   }
 
-  const platform = {
+  const platform: CapsKitPlatform = {
     state,
     dependencies: state.dependencies,
     getDependencies: () => state.dependencies,
@@ -347,7 +287,6 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
     registerCapsule,
   };
 
-  // DI invariant: platform references itself in dependencies
   state.dependencies.capskit = platform;
 
   return platform;

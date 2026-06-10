@@ -1,5 +1,6 @@
 import { CapMeta } from './cap-meta.type';
 import { CapsuleDefinition, CapFile } from './capsule-definition.type';
+import type { EventBus } from '../../events/types/event-bus.type';
 
 export interface CapInput {
   body?: Record<string, unknown>;
@@ -28,6 +29,7 @@ export interface KernelDeps {
   capsules: Map<string, { def: CapsuleDefinition; dir?: string }>;
   eventsState?: EventsState;
   dependencies: Record<string, unknown>;
+  eventBus?: EventBus;
   circuitBreakerState?: Map<string, {
     failures: number;
     lastFailureTime: number | null;

@@ -1,5 +1,6 @@
 import { CapsuleDefinition, CapFile } from './capsule-definition.type';
 import { EventsState } from './cap-input.type';
+import type { EventBus } from '../../events/types/event-bus.type';
 
 export interface CapsKitInstance {
   call: (capPath: string, payload?: unknown, options?: unknown) => Promise<unknown>;
@@ -14,7 +15,7 @@ export interface InternalState {
   capsules: Map<string, { def: CapsuleDefinition; dir: string }>;
   caps: Map<string, CapFile>;
   allCaps: Map<string, CapFile>;
-  dependencies: Record<string, unknown>;
+  dependencies: Record<string, unknown> & { eventBus?: EventBus };
   eventsState?: EventsState;
   booted: boolean;
   circuitBreakerState?: Map<string, {

@@ -30,25 +30,6 @@ export { buildHooksPipeline, resolveHooks } from './helpers/build-hooks-pipeline
 export { buildContext } from './helpers/build-context.helper';
 export { executeCap } from './helpers/execute-cap.helper';
 export { redactPayload } from './helpers/redact-payload.helper';
-export {
-  DuplicateCapNameError,
-  CapCycleError,
-  validateCapClass,
-  detectCapCycle,
-  detectDuplicateCapNames,
-  detectCapsuleFormat,
-  loadCapFromDir,
-  loadCapsFromDirectory,
-  createCapContext,
-  wrapCapHandler,
-} from './helpers/legacy-bridge.helper';
-export type {
-  CapsuleFormatDetection,
-  CapFileResult,
-  PlatformContext,
-  CapContextAdapter,
-  CapMethod,
-} from './helpers/legacy-bridge.helper';
 
 // Caps
 export { default as bootCap, meta as bootCapMeta } from './caps/boot.cap';

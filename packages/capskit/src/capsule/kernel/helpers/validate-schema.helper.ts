@@ -1,3 +1,5 @@
+import Ajv, { ValidateFunction } from 'ajv';
+import addFormats from 'ajv-formats';
 import { ValidationError } from '../errors';
 
 export interface FieldError {
@@ -6,31 +8,30 @@ export interface FieldError {
   message: string;
 }
 
-/**
- * Validates a value against a JSON Schema-like schema object.
- *
- * Supported JSON Schema subset:
- * - type: 'object', 'array', 'string', 'number', 'integer', 'boolean', 'null'
- * - required: string[]
- * - properties: Record<string, Schema> (recursive)
- * - additionalProperties: false
- * - items: Schema (for array type, recursive)
- * - enum: unknown[]
- * - nullable: boolean (non-standard, but supported)
- * - String constraints: minLength, maxLength, pattern, format (email, uri, uuid, date-time)
- * - Number constraints: minimum, maximum
- *
- * NOT supported (v4+ features):
- * - oneOf, anyOf, allOf, not
- * - if/then/else
- * - $ref / $defs
- * - const
- * - minItems/maxItems, minProperties/maxProperties
- * - uniqueItems
- * - multipleOf
- * - default
- * - readOnly/writeOnly/deprecated
- */
+export { FieldError };
+
+const ajv = new Ajv({ allErrors: true, coerceTypes: true, useDefaults: false });
+addFormats(ajv);
+
+const schemaCache = new WeakMap<Record<string, unknown>, ValidateFunction>();
+
+function getValidator(schema: Record<string, unknown>): ValidateFunction {
+  let validate = schemaCache.get(schema);
+  if (validate) return validate;
+  validate = ajv.compile(schema);
+  schemaCache.set(schema, validate);
+  return validate;
+}
+
+function extractPayload(payload: unknown): { body: Record<string, unknown>; raw: unknown } {
+  if (payload && typeof payload === 'object' && ('body' in payload || 'query' in payload || 'params' in payload)) {
+    const raw = payload as Record<string, unknown>;
+    const body = { ...(raw.body || {}), ...(raw.query || {}), ...(raw.params || {}) };
+    return { body, raw: payload };
+  }
+  return { body: (payload as any)?.body ?? payload ?? {}, raw: payload };
+}
+
 export function validateSchema(
   payload: unknown,
   schema: Record<string, unknown> | undefined,
@@ -39,19 +40,46 @@ export function validateSchema(
 ): void {
   if (!schema) return;
 
-  const raw = payload && typeof payload === 'object' && ('body' in payload || 'query' in payload || 'params' in payload)
-    ? payload
-    : ((payload as any)?.body ?? payload);
-  const body = raw && typeof raw === 'object' && !Array.isArray(raw) && ('body' in raw || 'query' in raw || 'params' in raw)
-    ? { ...(raw.body || {}), ...(raw.query || {}), ...(raw.params || {}) }
-    : raw;
-  const fieldErrors: FieldError[] = [];
+  const { body, raw } = extractPayload(payload);
 
-  coerceTypes(payload, body, schema);
+  const validate = getValidator(schema);
+  const valid = validate(body);
 
-  validateValue(body, schema, '', fieldErrors);
+  if (!valid && validate.errors) {
+    const fieldErrors: FieldError[] = validate.errors.map(err => {
+      let field = err.instancePath ? err.instancePath.slice(1) : 'root';
+      let constraint = err.keyword;
+      let message = err.message || `${field} ${err.keyword}`;
 
-  if (fieldErrors.length > 0) {
+      if (err.keyword === 'required' && err.params?.missingProperty) {
+        field = err.params.missingProperty as string;
+        constraint = 'required';
+        message = `${field} is required`;
+      } else if (err.keyword === 'additionalProperties' && err.params?.additionalProperty) {
+        field = err.params.additionalProperty as string;
+        constraint = 'additionalProperties:false';
+        message = `${field} is not allowed`;
+      } else if (err.keyword === 'enum') {
+        constraint = 'enum';
+      } else if (err.keyword === 'type') {
+        constraint = 'type';
+      } else if (err.keyword === 'format') {
+        constraint = 'format';
+      } else if (err.keyword === 'pattern') {
+        constraint = 'pattern';
+      } else if (err.keyword === 'minimum' || err.keyword === 'exclusiveMinimum') {
+        constraint = 'minimum';
+      } else if (err.keyword === 'maximum' || err.keyword === 'exclusiveMaximum') {
+        constraint = 'maximum';
+      } else if (err.keyword === 'minLength') {
+        constraint = 'minLength';
+      } else if (err.keyword === 'maxLength') {
+        constraint = 'maxLength';
+      }
+
+      return { field, constraint, message };
+    });
+
     const prefix = isOutput ? 'Output validation failed' : 'Validation failed';
     const reasons = fieldErrors.map(e => e.message);
     const details: Record<string, any> = { fieldErrors };
@@ -60,105 +88,27 @@ export function validateSchema(
     }
     throw new ValidationError(`${prefix} for ${targetName}: ${reasons.join('; ')}`, details);
   }
-}
 
-import { coerceTypes } from './validation/coerce-types.helper';
-import {
-  validateObject,
-  validateArray,
-  validateString,
-  validateNumber,
-} from './validation/type-validators.helper';
-
-export function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function checkType(value: unknown, expectedType: string): boolean {
-  switch (expectedType) {
-    case 'object':
-      return isPlainObject(value);
-    case 'array':
-      return Array.isArray(value);
-    case 'null':
-      return value === null;
-    case 'integer':
-      return Number.isInteger(value);
-    case 'number':
-      return typeof value === 'number' && !Number.isNaN(value);
-    case 'string':
-      return typeof value === 'string';
-    case 'boolean':
-      return typeof value === 'boolean';
-    default:
-      return true;
-  }
-}
-
-function getTypeName(value: unknown): string {
-  if (value === null) return 'null';
-  if (Array.isArray(value)) return 'array';
-  return typeof value;
-}
-
-export function validateValue(
-  value: unknown,
-  schema: Record<string, unknown>,
-  path: string,
-  fieldErrors: FieldError[],
-): void {
-  // Nullability
-  if (value === null) {
-    if (schema.nullable === true) return;
-  }
-
-  // Enforce top-level type
-  if (schema.type && typeof schema.type === 'string') {
-    if (!checkType(value, schema.type)) {
-      const location = path || 'root';
-      fieldErrors.push({
-        field: location,
-        constraint: 'type',
-        message: `Expected type "${schema.type}" at ${location}, got "${getTypeName(value)}"`,
-      });
-      return;
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const rawObj = raw as Record<string, unknown>;
+    const mergedKeys = new Set(Object.keys(body));
+    if ('body' in rawObj && rawObj.body && typeof rawObj.body === 'object') {
+      const rawBody = rawObj.body as Record<string, unknown>;
+      for (const key of mergedKeys) {
+        if (key in rawBody) rawBody[key] = body[key];
+      }
     }
-  }
-
-  // Enum check (applies to any type)
-  if (schema.enum && Array.isArray(schema.enum)) {
-    if (!schema.enum.includes(value)) {
-      const location = path || 'root';
-      fieldErrors.push({
-        field: location,
-        constraint: 'enum',
-        message: `\`"${location}"\` must be one of: ${schema.enum.map(v => JSON.stringify(v)).join(', ')}`,
-      });
+    if ('query' in rawObj && rawObj.query && typeof rawObj.query === 'object') {
+      const rawQuery = rawObj.query as Record<string, unknown>;
+      for (const key of mergedKeys) {
+        if (key in rawQuery) rawQuery[key] = body[key];
+      }
     }
-  }
-
-  // Nullability fallback if null is not allowed but we bypassed checkType (e.g. no type specified)
-  if (value === null) {
-    return;
-  }
-
-  // Object validation
-  if (isPlainObject(value)) {
-    validateObject(value, schema, path, fieldErrors);
-  }
-
-  // Array validation
-  if (Array.isArray(value) && schema.items) {
-    validateArray(value, schema, path, fieldErrors);
-  }
-
-  // String constraints
-  if (typeof value === 'string') {
-    validateString(value, schema, path, fieldErrors);
-  }
-
-  // Number constraints
-  if (typeof value === 'number' && !Number.isNaN(value)) {
-    validateNumber(value, schema, path, fieldErrors);
+    if ('params' in rawObj && rawObj.params && typeof rawObj.params === 'object') {
+      const rawParams = rawObj.params as Record<string, unknown>;
+      for (const key of mergedKeys) {
+        if (key in rawParams) rawParams[key] = body[key];
+      }
+    }
   }
 }

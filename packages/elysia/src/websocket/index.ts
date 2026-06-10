@@ -14,6 +14,10 @@ export { WebSocketOptions };
 export interface WebSocketAdapterOptions extends WebSocketOptions {
   /** WebSocket path. Default: '/ws/capskit' */
   path?: string;
+  /** Pre-existing EventBus from the CapsKit dependency system. When provided, this
+   *  instance is used for WebSocket subscription dispatch instead of creating a new one,
+   *  and no post-boot injection into state.dependencies is needed. */
+  eventBus?: EventBus;
 }
 
 interface WSClient {
@@ -29,11 +33,11 @@ interface WSState {
 
 let wsState: WSState | null = null;
 
-function getOrCreateState(): WSState {
+function getOrCreateState(eventBus?: EventBus): WSState {
   if (!wsState) {
     wsState = {
       clients: new Map(),
-      eventBus: createEventBus(),
+      eventBus: eventBus ?? createEventBus(),
     };
   }
   return wsState;
@@ -53,21 +57,7 @@ function errorEnvelope(code: string, message: string, status?: number): WSErrorE
 
 export function createSocket(capskit: ICapsKit, options: WebSocketAdapterOptions = {}) {
   const { path = '/ws/capskit' } = options;
-  const state = getOrCreateState();
-
-  // Inject adapter eventBus into kernel dependencies so ctx.deps.dependencies.eventBus
-  // is available in emit.cap.ts for dispatching to WebSocket clients.
-  // The runtime type is CapsKitPlatform which exposes `state`, even though ICapsKit doesn't.
-  const platform = capskit as any;
-  if (platform.state && platform.state.dependencies) {
-    platform.state.dependencies.eventBus = state.eventBus;
-  }
-  if (typeof platform.getDependencies === 'function') {
-    const deps = platform.getDependencies();
-    if (deps) {
-      deps.eventBus = state.eventBus;
-    }
-  }
+  const state = getOrCreateState(options.eventBus);
 
   const sockets: Record<string, any> = {};
 
@@ -223,6 +213,10 @@ export function getEventBus(): EventBus | null {
 
 export function getConnectedClients(): number {
   return wsState?.clients.size ?? 0;
+}
+
+export function resetState(): void {
+  wsState = null;
 }
 
 export default createSocket;

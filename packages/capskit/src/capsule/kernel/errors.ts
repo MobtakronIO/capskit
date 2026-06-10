@@ -152,6 +152,33 @@ export class CapLoadError extends Error {
   }
 }
 
+export class DuplicateCapNameError extends CapLoadError {
+  public readonly duplicates: string[];
+  constructor(duplicates: string[], context: string) {
+    const names = duplicates.join(', ');
+    super(
+      `Duplicate cap name(s) detected in ${context}: ${names}. ` +
+        `Each cap must have a unique name within its capsule/context.`
+    );
+    this.name = 'DuplicateCapNameError';
+    this.duplicates = duplicates;
+  }
+}
+
+export class CapCycleError extends CapLoadError {
+  public readonly cycle: string[];
+  constructor(cycle: string[], context: string) {
+    const cycleStr = cycle.join(' → ');
+    super(
+      `Dependency cycle detected in ${context}: ${cycleStr}. ` +
+        `Caps cannot depend on each other circularly.`
+    );
+    this.name = 'CapCycleError';
+    this.cycle = cycle;
+  }
+}
+
+
 export class TraitError extends FrameworkError {
   constructor(message: string, public readonly trait: string, details?: Record<string, unknown>) {
     super(message, 'TRAIT_ERROR', 403, details);

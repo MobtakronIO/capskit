@@ -129,8 +129,6 @@ export async function createCapsKit(options?: CreateCapsKitOptions): Promise<Cre
           const source = capsule as any;
           if (source.type === 'manifest' && source.manifest) {
             name = source.manifest.name;
-          } else if (source.type === 'registry' && source.registry) {
-            name = source.registry.name;
           }
         } else if ('name' in capsule) {
           name = (capsule as any).name;

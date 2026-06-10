@@ -1,5 +1,5 @@
 import { Elysia } from 'elysia';
-import type { ICapsKit } from '@mobtakronio/capskit';
+import type { ICapsKit, EventBus } from '@mobtakronio/capskit';
 import { createRouter } from './http';
 import { createSocket } from './websocket';
 import type { ElysiaAdapterOptions, HttpOptions, WebSocketOptions, LifecycleHooks } from './shared';
@@ -75,6 +75,13 @@ export async function createElysiaAdapter(capskit: ICapsKit, options: CreateElys
 
   if (!enableHttp && !enableWs) {
     throw new Error('[Elysia Adapter] At least one of http or websocket must be enabled');
+  }
+
+  // Use the eventBus from the kernel dependency system if already registered,
+  // so WebSocket subscriptions route through the same bus that emit() dispatches to.
+  const existingEventBus = (capskit as any).state?.dependencies?.eventBus as EventBus | undefined;
+  if (wsOptions && existingEventBus) {
+    (wsOptions as any).eventBus = existingEventBus;
   }
 
   const lifecycle: LifecycleHooks = {

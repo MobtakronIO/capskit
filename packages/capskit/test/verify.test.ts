@@ -5,9 +5,7 @@ import wsCapsuleDef from '../src/capsule/websocket/capsule';
 
 // Automated test suites
 import { runPlatformTests } from './suites/platform.suite';
-import { runBootTests } from './suites/boot.suite';
 import { runEventTests } from './suites/events.suite';
-import { runLoaderEdgeCaseTests } from './suites/loader-edge-cases.suite';
 import { runErrorTaxonomyTests } from './suites/error-taxonomy.suite';
 import { runTraceTests } from './suites/trace.suite';
 import { runCacheTests } from './suites/cache.suite';
@@ -129,9 +127,7 @@ async function verify() {
    // Run automated test suites for hardened contracts
    console.log('\n=== Running Automated Test Suites ===');
    await runPlatformTests(createCapsKit);
-   await runBootTests();
    await runEventTests(createCapsKit);
-   await runLoaderEdgeCaseTests();
    await runErrorTaxonomyTests();
    await runTraceTests(createCapsKit);
    await runSchemaValidationTests(createCapsKit);

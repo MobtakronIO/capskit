@@ -349,15 +349,14 @@ export async function runSchemaValidationTests(kitFactory = createCapsKit) {
   }
   console.log('✅ Array type validation enforced');
 
-  // Test: Array item type validation
-  console.log('Test: Array item type validation');
-  try {
-    await kit.call('test-schema.addTags', { body: { tags: [1, 2, 3] } });
-    throw new Error('Should have thrown');
-  } catch (error) {
-    if (!(error instanceof ValidationError)) throw error;
+  // Test: Array item type coercion (numbers coerced to strings with coerceTypes)
+  console.log('Test: Array item type coercion');
+  const coercedArrayResult = await kit.call('test-schema.addTags', { body: { tags: [1, 2, 3] } });
+  if (!Array.isArray(coercedArrayResult.tags)) throw new Error('Array result not returned');
+  if (coercedArrayResult.tags[0] !== '1' || coercedArrayResult.tags[1] !== '2' || coercedArrayResult.tags[2] !== '3') {
+    throw new Error(`Array items not coerced to strings: ${JSON.stringify(coercedArrayResult.tags)}`);
   }
-  console.log('✅ Array item type validation enforced');
+  console.log('✅ Array item type coercion enforced');
 
   // Test: Valid array passes
   console.log('Test: Valid array passes');

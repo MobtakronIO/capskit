@@ -1,3 +1,4 @@
+import { NotFoundError, ValidationError } from '@mobtakronio/capskit';
 import type { DrizzleRepository } from '../types/drizzle.type';
 
 /**
@@ -9,7 +10,7 @@ export function createDrizzleRepository(db: unknown): DrizzleRepository {
   return {
     async query(input: { table: string; operation: string; where?: Record<string, unknown>; limit?: number; offset?: number; orderBy?: { field: string; direction: string }[] }) {
       const table = d[input.table];
-      if (!table) throw new Error(`Table "${input.table}" not found`);
+      if (!table) throw new NotFoundError(`Table "${input.table}" not found`);
 
       let q = table;
       if (input.where) q = q.where(input.where);
@@ -23,13 +24,13 @@ export function createDrizzleRepository(db: unknown): DrizzleRepository {
 
     async execute(input: { table: string; operation: string; data?: Record<string, unknown>; where?: Record<string, unknown> }) {
       const table = d[input.table];
-      if (!table) throw new Error(`Table "${input.table}" not found`);
+      if (!table) throw new NotFoundError(`Table "${input.table}" not found`);
 
       switch (input.operation) {
         case 'insert': return table.insert(input.data);
         case 'update': return table.update(input.data).where(input.where);
         case 'delete': return table.delete().where(input.where);
-        default: throw new Error(`Unknown operation: ${input.operation}`);
+        default: throw new ValidationError(`Unknown operation: ${input.operation}`);
       }
     },
 
@@ -38,12 +39,12 @@ export function createDrizzleRepository(db: unknown): DrizzleRepository {
         const results = [];
         for (const op of operations) {
           const table = tx[op.table];
-          if (!table) throw new Error(`Table "${op.table}" not found in transaction`);
+          if (!table) throw new NotFoundError(`Table "${op.table}" not found in transaction`);
           switch (op.operation) {
             case 'insert': results.push(await table.insert(op.data)); break;
             case 'update': results.push(await table.update(op.data).where(op.where)); break;
             case 'delete': results.push(await table.delete().where(op.where)); break;
-            default: throw new Error(`Unknown operation: ${op.operation}`);
+            default: throw new ValidationError(`Unknown operation: ${op.operation}`);
           }
         }
         return results;

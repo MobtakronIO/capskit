@@ -55,7 +55,7 @@ export default async function emit(input: CapInput, ctx: CapContext) {
   }
 
   // Also dispatch to adapter eventBus (WebSocket clients)
-  const adapterEventBus = (ctx.deps as any).eventBus;
+  const adapterEventBus = ctx.deps.eventBus;
   if (adapterEventBus) {
     if (typeof adapterEventBus.emit === 'function') {
       adapterEventBus.emit(event, data);

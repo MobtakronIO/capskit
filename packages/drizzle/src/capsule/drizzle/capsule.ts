@@ -1,4 +1,5 @@
 import type { CapsuleDefinition, CapsuleCap, KernelDeps } from '@mobtakronio/capskit';
+import { DependencyError } from '@mobtakronio/capskit';
 import { drizzleRepository, createDrizzleRepository } from './repository/drizzle.repository';
 import type { DrizzleRepository } from './types/drizzle.type';
 import * as fs from 'fs';
@@ -38,7 +39,7 @@ function ensureDbDirExists(connection: string): void {
 
 function requireRepo(ctx: any): DrizzleRepository {
   const repo = ctx.deps.dependencies?.drizzleRepo;
-  if (!repo) throw new Error('Drizzle repository not initialized — use createDrizzleCapsule(config) and register as a pre-registered capsule');
+  if (!repo) throw new DependencyError('Drizzle repository not initialized — use createDrizzleCapsule(config) and register as a pre-registered capsule');
   return repo;
 }
 
@@ -72,8 +73,8 @@ const drizzleCaps: CapsuleCap[] = [
     handler: async (input: any, ctx: any) => {
       const rawDb = ctx.deps.drizzleInstance;
       const config = ctx.deps.drizzleConfig;
-      if (!rawDb) throw new Error('Drizzle instance not available');
-      if (!config) throw new Error('Drizzle config not available');
+      if (!rawDb) throw new DependencyError('Drizzle instance not available');
+      if (!config) throw new DependencyError('Drizzle config not available');
 
       const folder = input.body?.path || config.migrationsFolder || './drizzle';
 

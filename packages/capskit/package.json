@@ -75,7 +75,10 @@
     "test": "vitest run",
     "prepublishOnly": "npm run build"
   },
-  "dependencies": {},
+  "dependencies": {
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1"
+  },
   "devDependencies": {
     "@types/node": "^25.4.0",
     "@typescript-eslint/parser": "^8.0.0",

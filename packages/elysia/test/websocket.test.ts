@@ -1,12 +1,17 @@
-import { describe, test, expect } from 'vitest';
-import { createSocket } from '../src/websocket';
+import { describe, test, expect, beforeEach } from 'vitest';
+import { createSocket, resetState } from '../src/websocket';
+import { createEventBus } from '@mobtakronio/capskit';
 import type { ICapsKit } from '@mobtakronio/capskit';
 
 describe('WebSocket Event Routing and Subscriptions', () => {
+  beforeEach(() => {
+    resetState();
+  });
+
   test('should handle client connection, subscription, event routing, unsubscription, and disconnection', async () => {
-    // 1. Mock CapsKit Instance
+    const eventBus = createEventBus();
     const mockState = {
-      dependencies: {} as Record<string, any>
+      dependencies: { eventBus } as Record<string, any>
     };
     
     const emittedEvents: Array<{ event: string; data: any }> = [];
@@ -28,8 +33,8 @@ describe('WebSocket Event Routing and Subscriptions', () => {
       getDependencies: () => mockState.dependencies,
     } as unknown as ICapsKit;
 
-    // Create the socket handlers
-    const sockets = createSocket(mockCapskit, { path: '/ws/capskit' });
+    // Create the socket handlers, passing eventBus via options so WebSocket uses the same bus
+    const sockets = createSocket(mockCapskit, { path: '/ws/capskit', eventBus });
     const wsHandler = sockets['/ws/capskit'];
 
     expect(wsHandler).toBeDefined();
@@ -114,8 +119,9 @@ describe('WebSocket Event Routing and Subscriptions', () => {
   });
 
   test('should handle client call with correct payload mapping to body', async () => {
+    const eventBus = createEventBus();
     const mockState = {
-      dependencies: {} as Record<string, any>
+      dependencies: { eventBus } as Record<string, any>
     };
 
     let lastCallArgs: { action: string; payload: any } | null = null;
@@ -131,7 +137,7 @@ describe('WebSocket Event Routing and Subscriptions', () => {
       getDependencies: () => mockState.dependencies,
     } as unknown as ICapsKit;
 
-    const sockets = createSocket(mockCapskit, { path: '/ws/capskit' });
+    const sockets = createSocket(mockCapskit, { path: '/ws/capskit', eventBus });
     const wsHandler = sockets['/ws/capskit'];
 
     const ws1Sent: any[] = [];

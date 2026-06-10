@@ -1,6 +1,6 @@
 import { Elysia } from 'elysia';
-import type { CapsuleDefinition, ICapsKit } from '@mobtakronio/capskit';
-import { createCapsKit as createCapsKitCore } from '@mobtakronio/capskit';
+import type { CapsuleDefinition, ICapsKit, EventBus } from '@mobtakronio/capskit';
+import { createCapsKit as createCapsKitCore, createEventBus } from '@mobtakronio/capskit';
 import { createRouter } from './http';
 import { createSocket } from './websocket';
 import type { HttpOptions, WebSocketOptions } from './shared';
@@ -64,10 +64,19 @@ export interface CreateCapsKitAppResult {
  * ```
  */
 export async function createCapsKit(options?: CreateCapsKitAppOptions): Promise<CreateCapsKitAppResult> {
+  // Create WebSocket eventBus before boot so it flows through the proper
+  // dependency system instead of post-boot direct injection.
+  const wsEventBus: EventBus = createEventBus();
+
   // 1. Create and boot core CapsKit
+  const mergedDependencies: Record<string, unknown> = {
+    ...options?.dependencies,
+    eventBus: wsEventBus,
+  };
+
   const { capskit } = await createCapsKitCore({
     capsuleDirs: options?.capsuleDirs,
-    dependencies: options?.dependencies,
+    dependencies: mergedDependencies,
   });
 
   // 2. Create Elysia app
@@ -83,7 +92,8 @@ export async function createCapsKit(options?: CreateCapsKitAppOptions): Promise<
 
   // 4. WebSocket
   if (options?.wsPath) {
-    const wsOptions: WebSocketOptions = options?.websocket || {};
+    const wsOptions: WebSocketOptions & { eventBus?: EventBus } = options?.websocket || {};
+    wsOptions.eventBus = wsEventBus;
     const sockets = createSocket(capskit as unknown as ICapsKit, wsOptions);
     app.ws(options.wsPath, sockets[options.wsPath] as any);
   }

@@ -1,3 +1,5 @@
+import { DependencyError } from '@mobtakronio/capskit';
+
 export const meta = {
   name: 'migrate',
 };
@@ -6,9 +8,9 @@ export default async function migrate(input: any, ctx: any) {
   const db = ctx.deps.drizzle;
   const rawDb = ctx.deps.drizzleInstance;
   const config = ctx.deps.drizzleConfig;
-  if (!db) throw new Error('Drizzle ORM not injected');
-  if (!rawDb) throw new Error('Drizzle instance not available');
-  if (!config) throw new Error('Drizzle config not available');
+  if (!db) throw new DependencyError('Drizzle ORM not injected');
+  if (!rawDb) throw new DependencyError('Drizzle instance not available');
+  if (!config) throw new DependencyError('Drizzle config not available');
 
   const folder = input.body?.path || config.migrationsFolder || './drizzle';
 
