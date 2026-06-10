@@ -74,7 +74,7 @@ const myCaps: CapsuleCap[] = [
   {
     meta: { name: 'query' },
     handler: async (input, ctx) => {
-      const repo = ctx.deps.dependencies.myRepo;
+      const repo = ctx.deps.myRepo;
       return repo.query(input.body);
     },
   },
@@ -86,9 +86,9 @@ export function createMyCapsule(config: MyConfig): CapsuleDefinition {
     caps: myCaps,
     boot: {
       init: async ({ deps }) => {
-        // Create resources and store in deps
-        deps.dependencies.myResource = await createResource(config);
-        deps.dependencies.myRepo = createMyRepository(deps.dependencies.myResource);
+        // Create resources and store in deps flatly
+        deps.myResource = await createResource(config);
+        deps.myRepo = createMyRepository(deps.myResource);
       },
     },
   };
@@ -106,7 +106,7 @@ const { capskit, shutdown } = await createCapsKit({
 // Or use the low-level platform API:
 const platform = await createCapsKitPlatform();
 platform.registerCapsule(createMyCapsule({ /* config */ }));
-await platform.boot({ capsuleDirs: [] });
+await platform.boot({ body: { capsuleDirs: [] } });
 ```
 
 ---
@@ -126,7 +126,7 @@ Or using the low-level platform API:
 ```ts
 const platform = await createCapsKitPlatform();
 await platform.boot({
-  capsuleDirs: ['./caps', './packages/shared-capsules'],
+  body: { capsuleDirs: ['./caps', './packages/shared-capsules'] },
 });
 ```
 
@@ -170,13 +170,13 @@ Or using the low-level platform API:
 ```ts
 const platform = await createCapsKitPlatform();
 platform.registerCapsule(createCapsule({ dialect: 'sqlite', connection: './db.sqlite' }));
-await platform.boot({ capsuleDirs: ['./caps'] });
+await platform.boot({ body: { capsuleDirs: ['./caps'] } });
 ```
 
-Access them in any cap via `ctx.deps.dependencies`:
+Access them in any cap flatly via `ctx.deps`:
 
 ```ts
-const repo = ctx.deps.dependencies.drizzleRepo;
+const repo = ctx.deps.drizzleRepo;
 const order = await repo.query({ table: 'orders', operation: 'select' });
 ```
 
@@ -200,25 +200,25 @@ export function createOrderRepository(db: any) {
 }
 ```
 
-Create the factory once in `boot.init` and store it in `deps.dependencies`:
+Create the factory once in `boot.init` and store it in `deps`:
 
 ```ts
 // capsule.ts
 boot: {
   init: async ({ deps }) => {
     const db = await connectDatabase();
-    deps.dependencies.db = db;
-    deps.dependencies.orderRepo = createOrderRepository(db);
+    deps.db = db;
+    deps.orderRepo = createOrderRepository(db);
   },
 }
 ```
 
-Then use it in caps without passing `db`:
+Then use it in caps flatly:
 
 ```ts
 // caps/list-orders.cap.ts
 export default async function listOrders(_input: CapInput, ctx: CapContext) {
-  const repo = ctx.deps.dependencies.orderRepo;
+  const repo = ctx.deps.orderRepo;
   const orders = await repo.findWithFilters({ status: 'pending' });
   return { orders };
 }

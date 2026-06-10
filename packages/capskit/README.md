@@ -52,7 +52,7 @@ export const meta: CapMeta = {
 };
 
 export default async function listOrders(_input: CapInput, ctx: CapContext) {
-  const repo = ctx.deps.dependencies.orderRepo;
+  const repo = ctx.deps.orderRepo;
   const orders = await repo.findWithFilters({ status: 'pending' });
   return { orders };
 }
@@ -65,7 +65,7 @@ import { createCapsKitPlatform } from '@mobtakronio/capskit';
 import { createElysiaAdapter } from '@mobtakronio/capskit-elysia';
 import { Elysia } from 'elysia';
 
-// Create the platform
+// Create the platform (takes no configuration arguments directly)
 const platform = await createCapsKitPlatform();
 
 // Register factory capsules (e.g., database)
@@ -74,7 +74,7 @@ platform.registerCapsule(createDrizzleCapsule({
   connection: './db.sqlite',
 }));
 
-// Boot with user capsule directories
+// Boot with user capsule directories passed via options
 await platform.boot({ body: { capsuleDirs: ['./src/capsules'] } });
 
 // Create the Elysia adapter
@@ -87,11 +87,14 @@ app.listen(3000);
 ### 3. Invoke Capsules
 
 ```typescript
-// Via proxy (recommended)
-const orders = platform.use('orders');
-const { orders: list } = await orders['list-orders']({});
+// Via Proxy calling chain (recommended)
+const { orders: list } = await platform.call.orders['list-orders']({});
 
-// Via call
+// Via ctx.use proxy interface
+const orders = platform.use('orders');
+const { orders: list2 } = await orders['list-orders']({});
+
+// Via legacy string-based call
 const result = await platform.call('orders.list-orders', {});
 ```
 
@@ -109,7 +112,7 @@ For programmatic capsules (databases, cache, etc.), include caps inline:
 const myCaps: CapsuleCap[] = [
   {
     meta: { name: 'query' },
-    handler: async (input, ctx) => ctx.deps.dependencies.myRepo.query(input.body),
+    handler: async (input, ctx) => ctx.deps.myRepo.query(input.body),
   },
 ];
 
@@ -119,7 +122,7 @@ export function createMyCapsule(config: MyConfig): CapsuleDefinition {
     caps: myCaps,
     boot: {
       init: async ({ deps }) => {
-        deps.dependencies.myRepo = createMyRepository(await connect(config));
+        deps.myRepo = createMyRepository(await connect(config));
       },
     },
   };

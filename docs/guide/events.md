@@ -40,7 +40,7 @@ export const meta: CapMeta = {
   name: 'send-welcome-email',
   events: {
     subscribes: [
-      { event: 'user.created', cap: 'send-welcome-email' },
+      { event: 'user.created' },
     ],
   },
 };
@@ -67,8 +67,8 @@ Subscriptions support wildcard patterns:
 ```ts
 events: {
   subscribes: [
-    { event: 'orders.*', cap: 'log-order-event' },    // Matches orders.created, orders.cancelled, etc.
-    { event: 'user.*.created', cap: 'track-creation' }, // Matches user.admin.created, user.member.created
+    { event: 'orders.*' },    // Matches orders.created, orders.cancelled, etc.
+    { event: 'user.*.created' }, // Matches user.admin.created, user.member.created
   ],
 }
 ```
@@ -119,7 +119,7 @@ Dead letter events can be subscribed to for monitoring and alerting:
 ```ts
 events: {
   subscribes: [
-    { event: 'events.dead-letter', cap: 'log-dead-letter' },
+    { event: 'events.dead-letter' },
   ],
 }
 ```
@@ -157,7 +157,7 @@ export const meta: CapMeta = {
   name: 'send-order-confirmation',
   events: {
     subscribes: [
-      { event: 'order.created', cap: 'send-order-confirmation' },
+      { event: 'order.created' },
     ],
   },
 };

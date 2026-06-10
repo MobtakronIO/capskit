@@ -107,9 +107,8 @@ import { createCapsKitPlatform } from '@mobtakronio/capskit';
 import { createMyAdapter } from '@myorg/capskit-http-myframework';
 
 test('adapter builds routes from cap metadata', async () => {
-  const platform = await createCapsKitPlatform({
-    capsuleDirs: ['./test-caps'],
-  });
+  const platform = await createCapsKitPlatform();
+  await platform.boot({ body: { capsuleDirs: ['./test-caps'] } });
 
   const server = await createMyAdapter(platform, { port: 0 });
 

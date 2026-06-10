@@ -41,10 +41,13 @@ CapsKit exports these base error classes from `@mobtakronio/capskit`:
 
 | Error | Description | Typical HTTP Status |
 |---|---|---|
-| `CapsKitError` | Base for all CapsKit errors | — |
+| `FrameworkError` | Base class for all structured framework errors | 500 |
 | `ValidationError` | Payload failed schema validation | 400 Bad Request |
 | `NotFoundError` | Resource not found | 404 Not Found |
+| `UnauthorizedError` | Caller lacks authentication credentials | 401 Unauthorized |
 | `AuthorizationError` | Caller lacks required permissions | 403 Forbidden |
+| `TraitError` | Missing specific claim or scope trait | 403 Forbidden |
+| `HandlerError` | Action method execution failed | 500 |
 | `DependencyError` | Required dependency missing | 500/503 |
 | `InternalError` | Unexpected internal error | 500 Internal Server Error |
 

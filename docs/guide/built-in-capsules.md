@@ -167,7 +167,7 @@ Same pattern as HTTP: kernel compiles, adapter serves.
 
 ## 5. System Capsule
 
-**Mission:** Introspection — health check, runtime inspection.
+**Mission:** Introspection — health check, runtime inspection, metrics.
 
 ### Caps
 
@@ -175,6 +175,10 @@ Same pattern as HTTP: kernel compiles, adapter serves.
 |---|---|
 | `health` | Health check: status, uptime, capsule count |
 | `inspect` | List caps, dependencies, hooks |
+| `audit` | Log execution metrics and events |
+| `getHealth` | Direct health check payload |
+| `listCapsules` | List all loaded capsules |
+| `metrics` | CPU and memory usage statistics |
 
 ### Structure
 
@@ -182,8 +186,12 @@ Same pattern as HTTP: kernel compiles, adapter serves.
 capsules/system/
 ├── capsule.ts
 └── caps/
+    ├── audit.cap.ts
+    ├── getHealth.cap.ts
     ├── health.cap.ts
-    └── inspect.cap.ts
+    ├── inspect.cap.ts
+    ├── listCapsules.cap.ts
+    └── metrics.cap.ts
 ```
 
 Minimal capsule. No types, rules, or helpers needed — data comes from querying kernel state.
@@ -195,7 +203,9 @@ Minimal capsule. No types, rules, or helpers needed — data comes from querying
 If you don't need a built-in capsule, disable it:
 
 ```ts
-const platform = await createCapsKitPlatform({
+import { createCapsKit } from '@mobtakronio/capskit';
+
+const { capskit: platform } = await createCapsKit({
   capsuleDirs: ['./caps'],
   disableBuiltins: ['websocket'], // CRON-only app, no WS needed
 });

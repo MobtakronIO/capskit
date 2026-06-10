@@ -2,6 +2,9 @@
 
 Initialize a CapsKit application in under a minute.
 
+> [!NOTE]
+   > The CapsKit Type Generator CLI (`npx capskit generate`) is currently in active development and not yet published. For now, please write client types manually or define interfaces directly in your codebase.
+
 ---
 
 ## Installation

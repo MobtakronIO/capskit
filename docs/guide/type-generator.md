@@ -2,6 +2,9 @@
 
 The type generator CLI creates TypeScript types from your server's manifest, enabling fully typed `call()` and `use()` operations with IDE autocomplete.
 
+> [!NOTE]
+   > The CapsKit Type Generator CLI (`npx capskit generate`) is currently in active development and not yet published. The examples below demonstrate the target syntax and generated output schema for when it is released. For current projects, please write interfaces manually.
+
 ---
 
 ## Usage
