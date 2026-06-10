@@ -30,7 +30,7 @@ export interface CapsKitPlatform extends ICapsKit {
   register: CapHandler;
   rpc: CapHandler;
   registerCapsule: (capsuleDef: CapsuleDefinition, caps?: PreBuiltCap[]) => void;
-  interceptors: ((actionName: string, payload: any, context: any, next: () => Promise<any>) => Promise<any>)[];
+  interceptors: ((actionName: string, payload: unknown, context: CapContext, next: () => Promise<unknown>) => Promise<unknown>)[];
 }
 
 export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {

@@ -22,6 +22,7 @@ export interface EventsState {
 }
 
 export interface KernelDeps {
+  [serviceName: string]: any;
   capsMap: Map<string, CapEntry>;
   allCaps: Map<string, CapEntry>;
   capsules: Map<string, { def: CapsuleDefinition; dir?: string }>;
