@@ -42,13 +42,9 @@ export function buildContext(state: InternalState): CapContext {
       if (emitCap) {
         executeCap('events.emit', { body: { event, data } }, ctxRef.current!);
       } else {
-        const adapterEventBus = (state.dependencies as any).eventBus;
+        const adapterEventBus = state.dependencies.eventBus;
         if (adapterEventBus) {
-          if (typeof adapterEventBus.emit === 'function') {
-            adapterEventBus.emit(event, data);
-          } else if (typeof adapterEventBus.dispatch === 'function') {
-            adapterEventBus.dispatch(event, data);
-          }
+          adapterEventBus.dispatch(event, data);
         }
       }
     },

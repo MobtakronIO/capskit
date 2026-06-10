@@ -8,6 +8,9 @@ describe('Event Bus Fallback Logic', () => {
       emitted: [] as Array<{ event: string; data: any }>,
       emit(event: string, data: any) {
         this.emitted.push({ event, data });
+      },
+      dispatch(event: string, data: any) {
+        this.emitted.push({ event, data });
       }
     };
 

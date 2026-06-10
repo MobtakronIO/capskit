@@ -9,11 +9,7 @@ export function emitEvent(state: InternalState, event: string, data: unknown): v
   } else {
     const eventBus = state.dependencies.eventBus;
     if (eventBus) {
-      if (typeof eventBus.emit === 'function') {
-        eventBus.emit(event, data);
-      } else if (typeof eventBus.dispatch === 'function') {
-        eventBus.dispatch(event, data);
-      }
+      eventBus.dispatch(event, data);
     }
   }
 }

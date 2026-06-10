@@ -52,6 +52,9 @@ export function createEventBus(): EventBus {
         }
       }
     },
+    dispatch(event: string, data: unknown) {
+      this.emit(event, data);
+    },
     subscribe(sub: EventSubscriber, patterns: string[]) {
       subscribers.set(sub.id, { ...sub, patterns });
     },

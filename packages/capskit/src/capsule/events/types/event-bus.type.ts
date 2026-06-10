@@ -1,5 +1,6 @@
 export interface EventBus {
   emit(event: string, data: unknown): void;
+  dispatch(event: string, data: unknown): void;
   subscribe(sub: EventSubscriber, patterns: string[]): void;
   unsubscribe(id: string): void;
 }

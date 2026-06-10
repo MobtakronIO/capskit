@@ -219,11 +219,7 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
     } else {
       const adapterEventBus = state.dependencies.eventBus;
       if (adapterEventBus) {
-        if (typeof adapterEventBus.emit === 'function') {
-          adapterEventBus.emit(event, data);
-        } else if (typeof adapterEventBus.dispatch === 'function') {
-          adapterEventBus.dispatch(event, data);
-        }
+        adapterEventBus.dispatch(event, data);
       }
     }
   }
