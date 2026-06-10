@@ -1,27 +1,11 @@
 import { CapsuleDefinition, CapFile } from '../types/capsule-definition.type';
 import { CapMeta } from '../types/cap-meta.type';
 import { CapInput, KernelDeps, CapEntry, CapHandler, EventsState } from '../types/cap-input.type';
-import { filesystemRepository } from '../repository/filesystem.repository';
 import { toCapsuleDefinition } from './boot/manifest-converter.helper';
 export { toCapsuleDefinition };
 import { discoverCaps } from './discover-caps.helper';
-import { BUILTIN_CAPSULES } from '../constants';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-
-import kernelCapsule from '../../kernel/capsule';
-import eventsCapsule from '../../events/capsule';
-import httpCapsule from '../../http/capsule';
-import websocketCapsule from '../../websocket/capsule';
-import systemCapsule from '../../system/capsule';
-
-const BUILTIN_CAPSULES_MAP: Record<string, any> = {
-  kernel: kernelCapsule,
-  events: eventsCapsule,
-  http: httpCapsule,
-  websocket: websocketCapsule,
-  system: systemCapsule,
-};
+import { scanUserCapsules } from './boot/scan-capsules.helper';
+import { loadBuiltinCapsules } from './boot/load-builtins.helper';
 
 function isCapHandler(fn: unknown): fn is CapHandler {
   return typeof fn === 'function';
@@ -143,83 +127,4 @@ export function shapeBootResponse(sorted: CapsuleDefinition[], state: BootState)
   };
 }
 
-export async function scanUserCapsules(capsuleDirs: string[], state: BootState): Promise<void> {
-  for (const dir of capsuleDirs) {
-    const directCapsule = path.join(dir, 'capsule.ts');
-    const directCaps = path.join(dir, 'caps.ts');
-    let capsulePaths: string[] = [];
-
-    if (fs.existsSync(directCapsule)) {
-      capsulePaths.push(directCapsule);
-    } else if (fs.existsSync(directCaps)) {
-      capsulePaths.push(directCaps);
-    } else {
-      capsulePaths = await filesystemRepository.discoverCapsules(dir);
-    }
-
-    for (const capsulePath of capsulePaths) {
-      let capsuleDef: CapsuleDefinition;
-      let capsuleDir: string;
-
-      if (capsulePath.endsWith('capsule.ts')) {
-        capsuleDef = await filesystemRepository.readCapsuleDef(capsulePath);
-        capsuleDir = capsulePath.replace(/capsule\.ts$/, '');
-      } else {
-        throw new Error(`Unsupported capsule file format: ${capsulePath}. Legacy registry formats (caps.ts) have been removed.`);
-      }
-
-
-      state.capsules.set(capsuleDef.name, { def: capsuleDef, dir: capsuleDir });
-
-      if (capsuleDef.caps) {
-        for (const cap of capsuleDef.caps) {
-          const capPath = `${capsuleDef.name}.${cap.meta.name}`;
-          state.caps.set(capPath, {
-            meta: cap.meta,
-            handler: cap.handler,
-            capsuleName: capsuleDef.name,
-            filePath: `virtual://${capsuleDef.name}/${cap.meta.name}`,
-            capsuleDef,
-          });
-        }
-      } else {
-        const caps = await discoverCaps(capsuleDir, capsuleDef.name);
-        for (const cap of caps) {
-          const capPath = `${cap.capsuleName}.${cap.meta.name}`;
-          state.caps.set(capPath, { ...cap, capsuleDef });
-        }
-      }
-    }
-  }
-}
-
-async function loadBuiltinCapsule(name: string, state: BootState) {
-  const capsuleDef = BUILTIN_CAPSULES_MAP[name] as CapsuleDefinition | undefined;
-  if (!capsuleDef) {
-    console.warn(`Built-in capsule "${name}" not found in static registry`);
-    return;
-  }
-
-  const capsuleDir = `virtual://${name}`;
-  state.capsules.set(capsuleDef.name, { def: capsuleDef, dir: capsuleDir });
-
-  if (capsuleDef.caps) {
-    for (const cap of capsuleDef.caps) {
-      const capPath = `${capsuleDef.name}.${cap.meta.name}`;
-      state.caps.set(capPath, {
-        meta: cap.meta,
-        handler: cap.handler,
-        capsuleName: capsuleDef.name,
-        filePath: `virtual://${capsuleDef.name}/${cap.meta.name}`,
-        capsuleDef,
-      });
-    }
-  }
-}
-
-async function loadBuiltinCapsules(disableBuiltins: string[], state: BootState): Promise<void> {
-  const enabledBuiltins = BUILTIN_CAPSULES.filter(b => !disableBuiltins.includes(b));
-  for (const builtinName of enabledBuiltins) {
-    await loadBuiltinCapsule(builtinName, state);
-  }
-}
+export { scanUserCapsules, loadBuiltinCapsules };
