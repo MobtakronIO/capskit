@@ -165,13 +165,9 @@ export async function scanUserCapsules(capsuleDirs: string[], state: BootState):
         capsuleDef = await filesystemRepository.readCapsuleDef(capsulePath);
         capsuleDir = capsulePath.replace(/capsule\.ts$/, '');
       } else {
-        const mod = await import(capsulePath);
-        const registry = mod.default || Object.values(mod)[0];
-        const { convertRegistryToManifest } = await import('./legacy-bridge.helper');
-        const manifest = convertRegistryToManifest(registry);
-        capsuleDef = toCapsuleDefinition(manifest);
-        capsuleDir = capsulePath.replace(/caps\.ts$/, '');
+        throw new Error(`Unsupported capsule file format: ${capsulePath}. Legacy registry formats (caps.ts) have been removed.`);
       }
+
 
       state.capsules.set(capsuleDef.name, { def: capsuleDef, dir: capsuleDir });
 

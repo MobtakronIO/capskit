@@ -352,12 +352,3 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
 
   return platform;
 }
-
-/**
- * @deprecated createCapsKitAdapter is no longer needed.
- * createCapsKitPlatform() now returns an object that implements ICapsKit directly.
- * Pass the platform to createElysiaAdapter without wrapping.
- */
-export function createCapsKitAdapter(platform: CapsKitPlatform): ICapsKit {
-  return platform;
-}

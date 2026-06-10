@@ -1,5 +1,7 @@
 import { createCapsKit, createCapsKit as createCapsKitModern } from '../src/capsule/kernel/create-capskit';
 import * as path from 'node:path';
+import httpCapsuleDef from '../src/capsule/http/capsule';
+import wsCapsuleDef from '../src/capsule/websocket/capsule';
 
 // Automated test suites
 import { runPlatformTests } from './suites/platform.suite';
@@ -12,34 +14,57 @@ import { runCacheTests } from './suites/cache.suite';
 import { runSchemaValidationTests } from './suites/schema-validation.suite';
 import { runResiliencyTests } from './suites/resiliency.suite';
 import { runCallProxyTests } from './suites/call.suite';
-import { runDualFormatBootTests } from './suites/dual-format-boot.suite';
 
 import { test } from 'vitest';
+
+const calculatorCapsuleDef = {
+  name: 'capskit-calculator',
+  caps: [
+    {
+      meta: { name: 'sum' },
+      handler: async (input: any) => {
+        const { a, b } = input.body || input;
+        return { result: a + b };
+      }
+    },
+    {
+      meta: { name: 'subtract' },
+      handler: async (input: any) => {
+        const { a, b } = input.body || input;
+        return { result: a - b };
+      }
+    },
+    {
+      meta: { name: 'multiply' },
+      handler: async (input: any) => {
+        const { a, b } = input.body || input;
+        return { result: a * b };
+      }
+    },
+    {
+      meta: { name: 'divide' },
+      handler: async (input: any) => {
+        const { a, b } = input.body || input;
+        if (b === 0) throw new Error('Division by zero');
+        return { result: a / b };
+      }
+    }
+  ]
+};
 
 async function verify() {
   console.log('--- Testing CapsKit Core ---');
   
-  const capsKitSrcDir = path.resolve(__dirname, '..', 'src', 'capsules');
-  
   const { router, capskit } = await createCapsKit({
-    capsuleDirs: [
-      path.join(capsKitSrcDir, 'http'),
-      path.join(capsKitSrcDir, 'websocket'),
-      path.join(capsKitSrcDir, 'capskit-calculator'),
+    capsules: [
+      httpCapsuleDef,
+      wsCapsuleDef,
+      calculatorCapsuleDef,
     ],
     boot: {
       action: 'http.buildRouter',
       payload: {
         adapter: 'elysia',
-        traitHandlers: {
-          auth: (role: string, { request, set }: any) => {
-            const auth = request.headers.get('authorization');
-            if (role === 'admin' && auth !== 'Bearer token') {
-              set.status = 401;
-              return { error: 'Unauthorized: admin role required' };
-            }
-          }
-        }
       }
     },
     dependencies: {
@@ -81,9 +106,10 @@ async function verify() {
 
   console.log('--- Testing WebSocket Capsule ---');
   console.log('Building WebSocket configuration via WS adapter...');
-  const { sockets } = await capskit.use('websocket').buildSocket({ adapter: 'elysia' });
-  console.log('Registered Sockets:', Object.keys(sockets));
-  console.log('✅ websocket.buildSocket works!');
+  const wsResult = await capskit.use('websocket')['build-websocket']({ adapter: 'elysia' });
+  console.log('Total Endpoints:', wsResult.totalEndpoints);
+  console.log('✅ websocket.build-websocket works!');
+
 
   console.log('--- Testing Calculator Capsule ---');
    console.log('Calling capskit-calculator.sum (5 + 10) via proxy client...');
@@ -112,9 +138,9 @@ async function verify() {
    await runResiliencyTests(createCapsKitModern);
    await runCacheTests();
     await runCallProxyTests(createCapsKit);
-   await runDualFormatBootTests(createCapsKit);
    console.log('✅ All automated test suites passed');
  }
+
 
 test('verify CapsKit core', async () => {
   await verify();

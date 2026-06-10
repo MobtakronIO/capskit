@@ -55,18 +55,6 @@ export interface CapsuleManifest {
   boot?: { init: () => Promise<void>; timeout?: number };
 }
 
-export interface CapsuleRegistry {
-  name: string;
-  caps: Array<{ class: new (deps?: Record<string, unknown>) => unknown; meta: CapMeta }>;
-  dependencies?: string[];
-}
-
-export interface CapDefinition {
-  class: new (deps?: Record<string, unknown>) => unknown;
-  meta: CapMeta;
-  dependencies?: string[];
-}
-
 export interface CapsuleFormatDetection {
   kind: 'caps-registry' | 'cap-directories' | 'legacy-manifest' | 'unknown';
   hasCapsTs: boolean;
@@ -160,30 +148,6 @@ export function validateCapClass(capClass: unknown, filePath?: string): void {
   if (methodNames.length === 0) throw new CapLoadError('Cap class must have at least one method', filePath);
 }
 
-export function validateCapsuleRegistry(registry: unknown, filePath?: string): CapsuleRegistry {
-  if (registry === null || registry === undefined) throw new CapLoadError('Registry must not be null or undefined', filePath);
-  const r = registry as Record<string, unknown>;
-  if (!r.name || typeof r.name !== 'string') throw new CapLoadError('Registry must have a name', filePath);
-  if (!('caps' in r) || !Array.isArray(r.caps)) throw new CapLoadError('Registry must have a caps array', filePath);
-  if ((r.caps as unknown[]).length === 0) throw new CapLoadError('Registry caps array must not be empty', filePath);
-
-  const caps = (r.caps as Array<Record<string, unknown>>).map((c, i) => {
-    if (!c.class || typeof c.class !== 'function') throw new CapLoadError(`Caps[${i}] must have a class`, filePath);
-    if (!c.meta || typeof c.meta !== 'object') throw new CapLoadError(`Caps[${i}] must have meta`, filePath);
-    return { class: c.class as new () => unknown, meta: c.meta as CapMeta };
-  });
-
-  const nameCount = new Map<string, number>();
-  for (const c of caps) nameCount.set(c.meta.name, (nameCount.get(c.meta.name) || 0) + 1);
-  const dupes = Array.from(nameCount.entries()).filter(([, count]) => count > 1).map(([name]) => name);
-  if (dupes.length > 0) throw new DuplicateCapNameError(dupes, r.name as string);
-
-  const cycle = detectCapCycle(caps.map(c => ({ class: c.class, meta: c.meta })));
-  if (cycle) throw new CapCycleError(cycle, r.name as string);
-
-  return { name: r.name as string, caps, dependencies: r.dependencies as string[] | undefined };
-}
-
 // ── Cycle Detection ───────────────────────────────────────────────────────
 
 export function detectCapCycle(caps: Array<{ class?: new () => unknown; meta: CapMeta }>): string[] | null {
@@ -236,159 +200,6 @@ export function validateDepGraph(_graph: Map<string, string[]>): string[][] { re
 
 // ── Conversion ────────────────────────────────────────────────────────────
 
-function getActionMethods(capClass: new () => unknown): string[] {
-  const proto = capClass.prototype;
-  return Object.getOwnPropertyNames(proto).filter(n => n !== 'constructor');
-}
-
-function mergeActionMeta(method: string, capMeta: CapMeta, defaults: Record<string, unknown>): Record<string, unknown> {
-  const actionMeta = (capMeta as unknown as Record<string, unknown>).actions as Record<string, Record<string, unknown>> | undefined;
-  if (!actionMeta || !actionMeta[method]) return defaults;
-  const m = actionMeta[method];
-  const result = { ...defaults };
-  if (m.description) result.description = m.description;
-  if (m.inputSchema) result.inputSchema = m.inputSchema;
-  if (m.schema) result.inputSchema = m.schema;
-  if (m.outputSchema) result.outputSchema = m.outputSchema;
-  if (m.cache) result.cache = m.cache;
-  if (m.resiliency) result.resiliency = m.resiliency;
-  return result;
-}
-
-export function convertCapToManifest(def: CapDefinition, capsuleName?: string, deps?: Record<string, unknown>): CapsuleManifest {
-  const name = capsuleName || def.meta.name;
-  const methods = getActionMethods(def.class);
-
-  if (methods.length === 0) throw new CapLoadError(`Cap "${name}" has no action methods`);
-
-  const actions: CapsuleManifest['actions'] = {};
-  for (const method of methods) {
-    const instance = deps ? new def.class(deps) : new def.class();
-    const handler = async (...args: unknown[]) => {
-      const fn = (instance as any)[method];
-      return typeof fn === 'function' ? fn.call(instance, ...args) : undefined;
-    };
-    const merged = mergeActionMeta(method, def.meta, {
-      description: `Cap "${def.meta.name}" action: ${method}`,
-    });
-    actions[method] = {
-      handler,
-      meta: def.meta,
-      ...merged,
-    };
-  }
-
-  const manifest: CapsuleManifest = { name, actions };
-
-  if (def.meta.dependencies && def.meta.dependencies.length > 0) {
-    manifest.requires = [...def.meta.dependencies];
-  }
-
-  if (def.meta.events) {
-    manifest.events = {};
-    if (def.meta.events.publishes) manifest.events.publishes = [...def.meta.events.publishes];
-    if (def.meta.events.subscribes) manifest.events.subscribes = [...def.meta.events.subscribes];
-  }
-
-  if (def.meta.routes && def.meta.routes.length > 0) {
-    (manifest as unknown as Record<string, unknown>).routes = def.meta.routes.map(r => ({
-      method: r.method, path: r.path, action: r.action || r.cap,
-    }));
-  }
-
-  if ((def.meta as unknown as Record<string, unknown>).boot) {
-    manifest.boot = (def.meta as unknown as Record<string, unknown>).boot as CapsuleManifest['boot'];
-  }
-
-  return manifest;
-}
-
-export function convertCapsToManifests(defs: CapDefinition[]): CapsuleManifest[] {
-  return defs.map(def => convertCapToManifest(def));
-}
-
-export function convertRegistryToManifest(registry: CapsuleRegistry, deps?: Record<string, unknown>): CapsuleManifest {
-  if (!registry.caps || registry.caps.length === 0) {
-    throw new CapLoadError(`Registry "${registry.name}" has no caps`);
-  }
-
-  const actions: CapsuleManifest['actions'] = {};
-  const allDeps = new Set<string>();
-  const allPublishes = new Set<string>();
-  const allSubscribes: CapEventSubscription[] = [];
-  let hasRoutes = false;
-  const routes: Array<{ method: string; path: string; action: string }> = [];
-  let boot: CapsuleManifest['boot'] | undefined;
-  const actionOrigins = new Map<string, string>();
-
-  for (const cap of registry.caps) {
-    const methods = getActionMethods(cap.class);
-    if (methods.length === 0) throw new CapLoadError(`Cap "${cap.meta.name}" has no action methods`);
-
-    for (const method of methods) {
-      if (actions[method]) {
-        const origin = actionOrigins.get(method);
-        console.warn(`Duplicate action "${method}" in capsule "${registry.name}" - defined in multiple caps (${origin}, ${cap.meta.name})`);
-      }
-      actionOrigins.set(method, cap.meta.name);
-      const instance = deps ? new cap.class(deps) : new cap.class();
-      const handler = async (...args: unknown[]) => {
-        const fn = (instance as any)[method];
-        return typeof fn === 'function' ? fn.call(instance, ...args) : undefined;
-      };
-      const merged = mergeActionMeta(method, cap.meta, {
-        description: `Cap "${cap.meta.name}" action: ${method}`,
-      });
-      actions[method] = {
-        handler,
-        meta: cap.meta,
-        ...merged,
-      };
-    }
-
-    if (cap.meta.dependencies) {
-      for (const dep of cap.meta.dependencies) allDeps.add(dep);
-    }
-
-    if (cap.meta.events) {
-      if (cap.meta.events.publishes) {
-        for (const p of cap.meta.events.publishes) allPublishes.add(p);
-      }
-      if (cap.meta.events.subscribes) {
-        for (const s of cap.meta.events.subscribes) allSubscribes.push(s);
-      }
-    }
-
-    if (cap.meta.routes && cap.meta.routes.length > 0) {
-      hasRoutes = true;
-      for (const r of cap.meta.routes) {
-        routes.push({ method: r.method, path: r.path, action: r.action || cap.meta.name });
-      }
-    }
-
-    if (!boot && (cap.meta as unknown as Record<string, unknown>).boot) {
-      boot = (cap.meta as unknown as Record<string, unknown>).boot as CapsuleManifest['boot'];
-    }
-  }
-
-  const manifest: CapsuleManifest = { name: registry.name, actions };
-
-  if (allDeps.size > 0) manifest.requires = [...allDeps].sort();
-  if (allPublishes.size > 0 || allSubscribes.length > 0) {
-    manifest.events = {};
-    if (allPublishes.size > 0) manifest.events.publishes = [...allPublishes];
-    if (allSubscribes.length > 0) manifest.events.subscribes = allSubscribes;
-  }
-  if (hasRoutes) (manifest as unknown as Record<string, unknown>).routes = routes;
-  if (boot) manifest.boot = boot;
-
-  return manifest;
-}
-
-export function convertRegistriesToManifests(registries: CapsuleRegistry[]): CapsuleManifest[] {
-  return registries.map(r => convertRegistryToManifest(r));
-}
-
 // ── Detection ─────────────────────────────────────────────────────────────
 
 export function detectDuplicateCapNames(caps: Array<{ meta?: { name: string }; name?: string }>): string[] {
@@ -397,12 +208,6 @@ export function detectDuplicateCapNames(caps: Array<{ meta?: { name: string }; n
     const name = c.meta?.name ?? c.name;
     if (name) count.set(name, (count.get(name) || 0) + 1);
   }
-  return Array.from(count.entries()).filter(([, c]) => c > 1).map(([n]) => n);
-}
-
-export function detectDuplicateRegistryNames(regs: Array<{ name: string }>): string[] {
-  const count = new Map<string, number>();
-  for (const r of regs) count.set(r.name, (count.get(r.name) || 0) + 1);
   return Array.from(count.entries()).filter(([, c]) => c > 1).map(([n]) => n);
 }
 
@@ -423,9 +228,6 @@ export function detectCapsuleFormat(dirPath: string): CapsuleFormatDetection {
   const entries = fs.readdirSync(dirPath, { withFileTypes: true });
 
   for (const entry of entries) {
-    if (entry.isFile() && /^caps\.(ts|js|mjs)$/.test(entry.name)) {
-      result.hasCapsTs = true;
-    }
     if (entry.isFile() && /^manifest\.(ts|js|mjs)$/.test(entry.name)) {
       result.hasManifest = true;
     }
@@ -434,13 +236,13 @@ export function detectCapsuleFormat(dirPath: string): CapsuleFormatDetection {
     }
   }
 
-  if (result.hasCapsTs) result.kind = 'caps-registry';
-  else if (result.hasCapDirs) result.kind = 'cap-directories';
+  if (result.hasCapDirs) result.kind = 'cap-directories';
   else if (result.hasManifest) result.kind = 'legacy-manifest';
   else result.kind = 'unknown';
 
   return result;
 }
+
 
 // ── Loading ───────────────────────────────────────────────────────────────
 
@@ -498,51 +300,6 @@ export async function loadCapsFromDirectory(dirPath: string): Promise<CapFileRes
 
   const dupes = detectDuplicateCapNames(results);
   if (dupes.length > 0) throw new DuplicateCapNameError(dupes, dirPath);
-
-  return results;
-}
-
-export async function loadCapsRegistry(dirPath: string): Promise<CapsuleRegistry | null> {
-  if (!fs.existsSync(dirPath)) return null;
-
-  const capsPath = path.join(dirPath, 'caps.ts');
-  if (!fs.existsSync(capsPath)) return null;
-
-  try {
-    const mod = await import(capsPath);
-    const registry = mod.default || Object.values(mod)[0];
-    if (!registry || !registry.name || !registry.caps) {
-      throw new CapLoadError(`Invalid caps registry in ${dirPath}: missing name or caps`, dirPath);
-    }
-    return { name: registry.name, caps: registry.caps, dependencies: registry.dependencies };
-  } catch (e) {
-    if (e instanceof CapLoadError) throw e;
-    throw new CapLoadError(`Failed to load caps registry from ${dirPath}`, dirPath);
-  }
-}
-
-export async function loadCapsRegistriesFromDirectory(dirPath: string): Promise<CapsuleRegistry[]> {
-  if (!fs.existsSync(dirPath)) return [];
-
-  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-  const results: CapsuleRegistry[] = [];
-
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const subDir = path.join(dirPath, entry.name);
-    const capsPath = path.join(subDir, 'caps.ts');
-    if (!fs.existsSync(capsPath)) continue;
-
-    try {
-      const mod = await import(capsPath);
-      const registry = mod.default || Object.values(mod)[0];
-      if (registry && registry.name && registry.caps) {
-        results.push({ name: registry.name, caps: registry.caps, dependencies: registry.dependencies });
-      }
-    } catch {
-      // Skip invalid registries
-    }
-  }
 
   return results;
 }

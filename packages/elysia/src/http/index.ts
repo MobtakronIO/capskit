@@ -5,32 +5,13 @@ import type { HttpOptions, CorsOptions } from '../shared';
 
 export { HttpOptions, CorsOptions };
 
-export interface HttpAdapterOptions extends HttpOptions {
-  /**
-   * @deprecated Use hook caps instead. Trait handlers are legacy adapter-level middleware.
-   * Hooks are now handled by the kernel via meta.hooks and capsuleDef.hooks.
-   * This field will be removed in a future version.
-   */
-  traitHandlers?: Record<string, TraitHandler>;
-}
-
-/**
- * @deprecated Use hook caps instead. See docs/guide/hooks.md
- */
-type TraitHandler = (traitValue: unknown, context: unknown) => void | Promise<void>;
+export interface HttpAdapterOptions extends HttpOptions {}
 
 const DEFAULT_CORS: CorsOptions = {
   origin: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
-
-/**
- * Check if a route has legacy traits attached (backward compat).
- */
-function routeHasTraits(route: RouteManifest): boolean {
-  return !!(route as any).traits && typeof (route as any).traits === 'object';
-}
 
 async function applyCors(app: Elysia, corsOption: boolean | CorsOptions): Promise<boolean> {
   if (corsOption === false) return false;
@@ -49,15 +30,6 @@ async function applyCors(app: Elysia, corsOption: boolean | CorsOptions): Promis
 
 export async function createRouter(capskit: ICapsKit, options: HttpAdapterOptions = {}) {
   const { cors } = options;
-  const traitHandlers = options.traitHandlers;
-
-  // Warn if legacy trait handlers are provided
-  if (Object.keys(traitHandlers || {}).length > 0) {
-    console.warn(
-      '[capskit-elysia] traitHandlers is deprecated. Use hook caps instead. ' +
-      'See docs/guide/hooks.md. Trait handlers will continue to work for backward compatibility.'
-    );
-  }
 
   const app = new Elysia();
 
@@ -72,26 +44,6 @@ export async function createRouter(capskit: ICapsKit, options: HttpAdapterOption
       manifest.routes.forEach((route: RouteManifest) => {
         const path = route.path;
 
-        let hooks: Record<string, unknown> = {};
-        if (traitHandlers && routeHasTraits(route)) {
-          const traits = (route as any).traits;
-          hooks.beforeHandle = [];
-          for (const [traitName, traitValue] of Object.entries(traits)) {
-            if (traitHandlers[traitName]) {
-              const wrappedTrait = async (c: any) => {
-                try {
-                  await traitHandlers[traitName](traitValue, c);
-                } catch (error: any) {
-                  return mapToHttpResponse(error, c.set);
-                }
-              };
-              (hooks.beforeHandle as unknown[]).push(wrappedTrait);
-            } else {
-              console.warn(`[HTTP Elysia] No handler provided for trait "${traitName}" on route ${route.method} ${path}`);
-            }
-          }
-        }
-
         const handler = async ({ body, params, query, set }: any) => {
           try {
             return await capskit.call(route.cap, {
@@ -105,15 +57,16 @@ export async function createRouter(capskit: ICapsKit, options: HttpAdapterOption
         };
 
         switch (route.method) {
-          case 'GET': app.get(path, handler, hooks as any); break;
-          case 'POST': app.post(path, handler, hooks as any); break;
-          case 'PUT': app.put(path, handler, hooks as any); break;
-          case 'DELETE': app.delete(path, handler, hooks as any); break;
-          case 'PATCH': app.patch(path, handler, hooks as any); break;
+          case 'GET': app.get(path, handler); break;
+          case 'POST': app.post(path, handler); break;
+          case 'PUT': app.put(path, handler); break;
+          case 'DELETE': app.delete(path, handler); break;
+          case 'PATCH': app.patch(path, handler); break;
         }
       });
     }
   });
+
 
   // ── Generic API endpoints for client SDK ──────────────────────
 

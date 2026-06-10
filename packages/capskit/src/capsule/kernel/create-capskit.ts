@@ -1,12 +1,12 @@
 import { CapsuleDefinition } from './types/capsule-definition.type';
 import { BootOptions } from './types/platform.types';
 import { CapsKitPlatform, createCapsKitPlatform } from './caps/platform.cap';
-import { convertRegistryToManifest } from './helpers/legacy-bridge.helper';
 import { ValidationError, AuthorizationError } from './errors';
 import { buildContext } from './helpers/build-context.helper';
 import { executeCap } from './helpers/execute-cap.helper';
 import { CapInput } from './types/cap-input.type';
 import { toCapsuleDefinition } from './helpers/boot-helpers.helper';
+
 
 export interface CreateCapsKitOptions {
   /** Directories to scan for capsule.ts files */
@@ -158,9 +158,6 @@ export async function createCapsKit(options?: CreateCapsKitOptions): Promise<Cre
         const source = capsule as any;
         if (source.type === 'manifest' && source.manifest) {
           platform.registerCapsule(toCapsuleDefinition(source.manifest));
-        } else if (source.type === 'registry' && source.registry) {
-          const manifest = convertRegistryToManifest(source.registry);
-          platform.registerCapsule(toCapsuleDefinition(manifest));
         } else if (source.type === 'directory' && source.path) {
           if (!bootOptions.capsuleDirs) {
             bootOptions.capsuleDirs = [];
@@ -172,6 +169,7 @@ export async function createCapsKit(options?: CreateCapsKitOptions): Promise<Cre
       }
     }
   }
+
 
   // Boot
   await platform.boot(bootOptions);

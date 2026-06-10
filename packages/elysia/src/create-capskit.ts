@@ -3,7 +3,7 @@ import type { CapsuleDefinition, ICapsKit } from '@mobtakronio/capskit';
 import { createCapsKit as createCapsKitCore } from '@mobtakronio/capskit';
 import { createRouter } from './http';
 import { createSocket } from './websocket';
-import type { HttpOptions, WebSocketOptions, TraitHandler } from './shared';
+import type { HttpOptions, WebSocketOptions } from './shared';
 
 /** The CapsKit instance type returned by the core createCapsKit factory. */
 type CoreCapsKit = Awaited<ReturnType<typeof createCapsKitCore>>['capskit'];
@@ -23,11 +23,6 @@ export interface CreateCapsKitAppOptions {
   cors?: boolean | Record<string, unknown>;
   /** WebSocket path (e.g., '/ws/capskit'). If not set, WebSocket is disabled. */
   wsPath?: string;
-  /**
-   * @deprecated Use hook caps instead. Trait handlers are legacy adapter-level middleware.
-   * Hooks are now handled by the kernel via meta.hooks and capsuleDef.hooks.
-   */
-  traitHandlers?: Record<string, TraitHandler>;
   /** HTTP adapter options */
   http?: HttpOptions;
   /** WebSocket adapter options */
@@ -80,11 +75,11 @@ export async function createCapsKit(options?: CreateCapsKitAppOptions): Promise<
 
   // 3. Mount capsule routes from meta.routes (CORS applied inside createRouter before routes)
   const httpOptions: HttpOptions = {
-    traitHandlers: options?.traitHandlers,
     cors: options?.cors,
     ...options?.http,
   };
   app.use(await createRouter(capskit as unknown as ICapsKit, httpOptions));
+
 
   // 4. WebSocket
   if (options?.wsPath) {

@@ -2,7 +2,7 @@ import { Elysia } from 'elysia';
 import type { ICapsKit } from '@mobtakronio/capskit';
 import { createRouter } from './http';
 import { createSocket } from './websocket';
-import type { ElysiaAdapterOptions, HttpOptions, WebSocketOptions, LifecycleHooks, TraitHandler } from './shared';
+import type { ElysiaAdapterOptions, HttpOptions, WebSocketOptions, LifecycleHooks } from './shared';
 
 export { createRouter } from './http';
 export { createSocket } from './websocket';
@@ -17,12 +17,6 @@ export interface UnifiedElysiaAdapter {
 export interface CreateElysiaAdapterOptions extends LifecycleHooks {
   http?: boolean | HttpOptions;
   websocket?: boolean | WebSocketOptions;
-  /**
-   * @deprecated Use hook caps instead. Trait handlers are legacy adapter-level middleware.
-   * Hooks are now handled by the kernel via meta.hooks and capsuleDef.hooks.
-   * This field will be removed in a future version.
-   */
-  traitHandlers?: Record<string, TraitHandler>;
 }
 
 function isHttpEnabled(options: CreateElysiaAdapterOptions): options is CreateElysiaAdapterOptions & { http: HttpOptions } {
@@ -34,15 +28,15 @@ function isWebSocketEnabled(options: CreateElysiaAdapterOptions): options is Cre
 }
 
 function getHttpOptions(options: CreateElysiaAdapterOptions): HttpOptions | undefined {
-  if (options.http === true) return { traitHandlers: options.traitHandlers };
+  if (options.http === true) return {};
   if (typeof options.http === 'object') {
     return {
-      ...(options.traitHandlers && { traitHandlers: options.traitHandlers }),
       ...options.http
     };
   }
   return undefined;
 }
+
 
 function getWebSocketOptions(options: CreateElysiaAdapterOptions): WebSocketOptions | undefined {
   if (options.websocket === true) return {};

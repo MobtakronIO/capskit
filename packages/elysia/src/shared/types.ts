@@ -55,13 +55,6 @@ export interface CorsOptions {
  */
 export interface HttpOptions {
   /**
-   * @deprecated Use hook caps instead. Trait handlers are legacy adapter-level middleware.
-   * Hooks are now handled by the kernel via meta.hooks and capsuleDef.hooks.
-   * This field will be removed in a future version.
-   */
-  traitHandlers?: Record<string, TraitHandler>;
-
-  /**
    * CORS configuration. Pass `true` for defaults or a `CorsOptions` object for customization.
    * When set, CORS middleware is applied before route handlers.
    */
@@ -90,13 +83,6 @@ export interface LifecycleHooks {
   onError?: (error: unknown) => void | Promise<void>;
 }
 
-/**
- * @deprecated Use hook caps instead. See docs/guide/hooks.md
- * A trait handler function.
- * @param traitValue - The parameter from the trait declaration (e.g., 'admin' in 'auth:role:admin')
- * @param context - The request context containing deps, params, body, etc.
- */
-export type TraitHandler = (traitValue: unknown, context: unknown) => void | Promise<void>;
 
 export type CreateRouterFn = (capskit: ICapsKit, options?: HttpOptions) => Promise<any> | any;
 export type CreateSocketFn = (capskit: ICapsKit, options?: WebSocketOptions) => Promise<any> | any;

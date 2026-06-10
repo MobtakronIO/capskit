@@ -93,7 +93,7 @@ describe('Elysia Adapter', () => {
 
     test('accepts http options object', async () => {
       const adapter = await createElysiaAdapter(mockCapskit, { 
-        http: { traitHandlers: {} } 
+        http: { cors: true } 
       });
       
       expect(adapter.app).toBeDefined();
@@ -106,23 +106,6 @@ describe('Elysia Adapter', () => {
       });
       
       expect(adapter.sockets).toBeDefined();
-      await adapter.shutdown();
-    });
-
-    test('accepts traitHandlers at top level', async () => {
-      const traitHandler = async (role: string, ctx: any) => {
-        if (role === 'admin') {
-          return;
-        }
-        throw new Error('Unauthorized');
-      };
-
-      const adapter = await createElysiaAdapter(mockCapskit, { 
-        http: true,
-        traitHandlers: { auth: traitHandler }
-      });
-      
-      expect(adapter.app).toBeDefined();
       await adapter.shutdown();
     });
 
@@ -169,7 +152,7 @@ describe('Elysia Adapter', () => {
     test('creates Elysia router with routes', async () => {
       const { createRouter } = await import('../src/http');
       
-      const router = await createRouter(mockCapskit, { traitHandlers: {} });
+      const router = await createRouter(mockCapskit, {});
       
       expect(router).toBeDefined();
       expect(typeof router.get).toBe('function');

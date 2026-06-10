@@ -34,25 +34,15 @@ export {
   DuplicateCapNameError,
   CapCycleError,
   validateCapClass,
-  validateCapsuleRegistry,
   detectCapCycle,
-  convertCapToManifest,
-  convertCapsToManifests,
-  convertRegistryToManifest,
-  convertRegistriesToManifests,
   detectDuplicateCapNames,
-  detectDuplicateRegistryNames,
   detectCapsuleFormat,
   loadCapFromDir,
   loadCapsFromDirectory,
-  loadCapsRegistry,
-  loadCapsRegistriesFromDirectory,
   createCapContext,
   wrapCapHandler,
 } from './helpers/legacy-bridge.helper';
 export type {
-  CapsuleRegistry,
-  CapDefinition,
   CapsuleFormatDetection,
   CapFileResult,
   PlatformContext,
@@ -70,7 +60,7 @@ export { default as describeCap, meta as describeCapMeta } from './caps/describe
 export { default as rpcCap, meta as rpcCapMeta } from './caps/rpc.cap';
 
 // Platform
-export { createCapsKitPlatform, createCapsKitAdapter } from './caps/platform.cap';
+export { createCapsKitPlatform } from './caps/platform.cap';
 export type { PreBuiltCap, CapsKitPlatform } from './caps/platform.cap';
 export type { CapsKitInstance, InternalState, BootOptions } from './types/platform.types';
 
