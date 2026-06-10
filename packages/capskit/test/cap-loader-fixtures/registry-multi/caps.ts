@@ -1,4 +1,4 @@
-import { CapsuleRegistry } from '../../../src/types';
+import { CapsuleRegistry } from '../../../src/kernel/cap-loader';
 
 class MathCap {
   async sum(input: any, ctx: any) {

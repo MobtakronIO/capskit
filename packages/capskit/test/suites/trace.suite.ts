@@ -1,7 +1,7 @@
 // @ts-nocheck
 
 import { createCapsKit } from '../../src/capsule/kernel/create-capskit';
-import { redactPayload } from '../../src/types';
+import { redactPayload } from '../../src/capsule/kernel/helpers/redact-payload.helper';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';

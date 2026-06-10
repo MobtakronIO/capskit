@@ -1,6 +1,7 @@
 // Types
 export * from './types/event.type';
 export * from './types/subscription.type';
+export * from './types/event-bus.type';
 
 // Errors
 export * from './errors';
@@ -29,7 +30,7 @@ export { meta as unsubscribeCapMeta } from './caps/unsubscribe.cap';
 export { meta as listSubscriptionsCapMeta } from './caps/list-subscriptions.cap';
 
 // EventBus factory
-import type { EventBus, EventSubscriber } from '../../types';
+import type { EventBus, EventSubscriber } from './types/event-bus.type';
 import { matchEventPattern } from './helpers/match-event-pattern.helper';
 
 export function createEventBus(): EventBus {

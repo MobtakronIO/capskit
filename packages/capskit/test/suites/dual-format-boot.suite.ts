@@ -1,7 +1,7 @@
 // @ts-nocheck
 
 import { convertCapToManifest, convertRegistryToManifest } from '../../src/kernel/cap-loader';
-import type { CapDefinition, CapsuleRegistry } from '../../src/types';
+import type { CapDefinition, CapsuleRegistry } from '../../src/kernel/cap-loader';
 
 /**
  * Dual-Format Boot Integration Tests

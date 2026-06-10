@@ -1,4 +1,4 @@
-import { CapsuleRegistry } from '../../../src/types';
+import { CapsuleRegistry } from '../../../src/kernel/cap-loader';
 
 class GreetCap {
   async hello(input: any, ctx: any) {

@@ -50,7 +50,7 @@ import type {
   CapEventSubscription,
   CapRoute,
   CapsuleFormatDetection,
-} from '../../src/types';
+} from '../../src/kernel/cap-loader';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURES_DIR = path.resolve(__dirname, '..', 'cap-loader-fixtures');

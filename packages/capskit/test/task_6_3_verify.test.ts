@@ -19,7 +19,7 @@ import type {
   CapsuleRegistry,
   CapsuleManifest,
   CapDefinition,
-} from '../src/types';
+} from '../src/kernel/cap-loader';
 
 // ===========================================================================
 // 1. STATIC VERIFICATION: System capsule registry → manifest conversion

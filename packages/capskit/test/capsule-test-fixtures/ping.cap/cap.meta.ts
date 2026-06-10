@@ -1,4 +1,4 @@
-import { CapMeta } from '../../../src/types';
+import { CapMeta } from '../../../src/capsule/kernel';
 
 export const meta: CapMeta = {
   name: 'ping',

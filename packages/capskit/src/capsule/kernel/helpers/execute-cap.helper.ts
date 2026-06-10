@@ -5,7 +5,7 @@ import { validateSchema } from './validate-schema.helper';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
-import { redactPayload } from '../../../types';
+import { redactPayload } from './redact-payload.helper';
 
 /**
  * Helper to handle fallback logic for action, cache fallbacks.

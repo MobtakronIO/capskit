@@ -6,7 +6,7 @@ export * from './capsule/websocket';
 
 // EventBus factory
 export { createEventBus } from './capsule/events';
-export type { EventBus, EventSubscriber } from './types';
+export type { EventBus, EventSubscriber } from './capsule/events';
 
 // ESLint rules
 export * from './lint';

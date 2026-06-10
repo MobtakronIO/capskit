@@ -31,8 +31,10 @@ import {
   detectDuplicateCapNames,
   detectDuplicateRegistryNames,
   detectCapCycle,
+  CapMeta,
+  CapDefinition,
+  CapsuleRegistry,
 } from '../src/kernel/cap-loader';
-import type { CapMeta, CapDefinition, CapsuleRegistry } from '../src/types';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURES_DIR = path.resolve(__dirname, 'cap-loader-fixtures');

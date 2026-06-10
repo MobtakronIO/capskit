@@ -29,7 +29,7 @@ import type {
   CapDefinition,
   CapsuleRegistry,
   CapsuleManifest,
-} from '../../src/types';
+} from '../../src/kernel/cap-loader';
 import type { PlatformContext } from '../../src/kernel/cap-loader';
 
 // ===========================================================================

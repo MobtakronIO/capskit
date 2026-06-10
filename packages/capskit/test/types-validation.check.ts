@@ -7,20 +7,17 @@
  */
 
 import type {
-  // CapContext
   CapContext,
   CapHandler,
-
-  // Registry
   CapMeta,
   CapRoute,
   CapEventSubscription,
+  CapInput,
+} from '../src/capsule/kernel';
+import type {
   CapDefinition,
   CapsuleRegistry,
-
-  // Backward compat
-  CapInput,
-} from '../src/types';
+} from '../src/kernel/cap-loader';
 
 // ============================================================
 // 1. CapResponseMessage — response shape (kept conceptually,
