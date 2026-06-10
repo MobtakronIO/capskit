@@ -1,207 +1,114 @@
-# CapsKit 💊
+# CapsKit
 
-**The Universal Capability Kernel** — Break free from controllers. Package your business logic into pure, swappable caps that run identically via HTTP, Event Bus, CLI, or internal routines.
+**The Universal Capability Kernel.** Package your business logic into pure, swappable caps that run identically via HTTP, WebSocket, CLI, or internal routines.
 
 [![npm version](https://img.shields.io/npm/v/@mobtakronio/capskit.svg)](https://www.npmjs.com/package/@mobtakronio/capskit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Monorepo](https://img.shields.io/badge/monorepo-npm%20workspaces-blue.svg)](#-repository-structure)
 
-## 🚀 Why CapsKit?
+## Why CapsKit?
 
-Traditional architectures tightly couple business logic to the transport layer (Controllers/Request objects). This makes it hard to reuse logic in CRON jobs, background workers, or CLIs.
+Traditional architectures tightly couple business logic to the transport layer. CapsKit implements the **Capability Architecture** pattern:
 
-CapsKit implements the **Capability Architecture** pattern:
-- **Zero Boundary Logic**: Caps don't know about HTTP or Frameworks.
-- **Declarative Metadata**: Routing, Events, and Traits are defined in `cap.meta.ts`—separate from business logic.
-- **Universal Pipelines**: Global Interceptors and Action-level Hooks for tracing, auth, and more.
-- **Framework Agnostic**: Plug in any framework (Elysia, Express, etc.) through transport adapters.
+- **Transport Agnostic** — Write pure logic once, run it via HTTP, WebSocket, CLI, or internal calls.
+- **Declarative Metadata** — Routes, events, and schemas defined in `meta`, separate from logic.
+- **Auto-Discovery** — Drop `.cap.ts` files into a capsule directory; the kernel finds them.
+- **Framework Agnostic** — Plug in any framework through transport adapters.
 
-## 🧱 Caps & Capsules
-
-CapsKit organizes logic into two levels:
-
-- **Cap**: The atomic unit—a class (`cap.ts`) with action methods + a metadata contract (`cap.meta.ts`).
-- **Capsule**: A deployable group of related Caps composed via a `CapsuleRegistry` (`caps.ts`).
-
-```
-my-capsule/
-├── caps.ts              # CapsuleRegistry — composes caps
-├── .cap/
-│   └── calculator/
-│       ├── cap.ts       # CapClass — business logic
-│       └── cap.meta.ts  # CapMeta — routes, events, deps
-```
-
-## 📦 Repository Structure
-
-This is a monorepo containing the core kernel, client SDK, framework integrations, and official adapters:
-
-- [**@mobtakronio/capskit**](./packages/capskit) — The Core Kernel and System Capsules.
-- [**@mobtakronio/capskit-client**](./packages/client) — Typed client SDK with offline support and interceptors.
-- [**@mobtakronio/capskit-react**](./packages/react) — React hooks (`useAction`, `useSubscription`, `useCapsule`).
-- [**@mobtakronio/capskit-vue**](./packages/vue) — Vue 3 composables for CapsKit.
-- [**@mobtakronio/capskit-http-elysia**](./packages/capskit-http-elysia) — Elysia HTTP Transport Adapter.
-- [**@mobtakronio/capskit-websocket-elysia**](./packages/capskit-websocket-elysia) — Elysia WebSocket Transport Adapter.
-
-## 🌐 Client-Side SDK
-
-CapsKit isn't just a server framework — it ships a complete client ecosystem for building frontends.
-
-### Typed Client
-
-```ts
-import { createCapsKitClient } from '@mobtakronio/capskit-client';
-
-const client = createCapsKitClient({
-  baseUrl: 'http://localhost:3000',
-  transport: 'auto',     // HTTP for calls, WebSocket for subscriptions
-  offline: { enabled: true },
-});
-
-// Call actions
-const result = await client.call('orders.sum', { a: 15, b: 30 });
-
-// Typed capsule proxy
-const orders = client.use('orders');
-await orders.sum({ a: 15, b: 30 });
-
-// Real-time subscriptions
-const unsub = client.subscribe('order.*', (data) => console.log(data));
-```
-
-### React Hooks
-
-```tsx
-import { CapsKitProvider, useAction, useSubscription } from '@mobtakronio/capskit-react';
-
-<CapsKitProvider client={client}>
-  <OrderList />
-</CapsKitProvider>
-
-function OrderList() {
-  const { data, loading } = useAction('orders.list', undefined, { immediate: true });
-  const { latest } = useSubscription('order.created');
-  // ...
-}
-```
-
-### Vue Composables
-
-```vue
-<script setup>
-import { provideCapsKit, useAction, useSubscription } from '@mobtakronio/capskit-vue';
-
-provideCapsKit(client);
-
-const { data, loading } = useAction('orders.list', undefined, { immediate: true });
-const { latest } = useSubscription('order.created');
-</script>
-```
-
-### Features
-
-- **Three transport modes**: HTTP, WebSocket, or Auto (HTTP + lazy WebSocket)
-- **Offline queue**: IndexedDB-backed, auto-flush on reconnect
-- **Interceptor pipeline**: Auth, logging, retry, error normalization
-- **Type generation**: `npx capskit generate --url <url> --output <file>`
-- **Framework integrations**: React and Vue with typed hooks/composables
-
-## 🛠️ Quick Start
-
-### 1. Create a Cap
-
-```typescript
-// src/capsules/math-capsule/.cap/calculator/cap.ts
-import { CapInput, CapContext } from '@mobtakronio/capskit';
-
-export default class CalculatorCap {
-  [action: string]: any;  // Required for dynamic dispatch
-
-  async sum(input: CapInput, _ctx: CapContext): Promise<{ result: number }> {
-    const { a, b } = input.body;
-    return { result: a + b };
-  }
-}
-```
-
-```typescript
-// src/capsules/math-capsule/.cap/calculator/cap.meta.ts
-import { CapMeta } from '@mobtakronio/capskit';
-
-export const meta: CapMeta = {
-  name: 'calculator',
-  routes: [
-    { method: 'POST', path: '/sum', action: 'sum' }
-  ],
-  actions: {
-    sum: { description: 'Sums two integers' }
-  }
-};
-```
-
-### 2. Compose into a Capsule
-
-```typescript
-// src/capsules/math-capsule/caps.ts
-import { CapsuleRegistry } from '@mobtakronio/capskit';
-import CalculatorCap from './.cap/calculator/cap';
-import { meta as calcMeta } from './.cap/calculator/cap.meta';
-
-const mathCapsule: CapsuleRegistry = {
-  name: 'math-capsule',
-  caps: [
-    { class: CalculatorCap, meta: calcMeta }
-  ]
-};
-
-export default mathCapsule;
-```
-
-### 3. Boot the Kernel with an Adapter
-
-To use an adapter, install it alongside the core:
+## Quick Start
 
 ```bash
-npm install @mobtakronio/capskit @mobtakronio/capskit-http-elysia elysia
+npm install @mobtakronio/capskit @mobtakronio/capskit-elysia
 ```
 
-```typescript
+### 1. Create a Capsule
+
+```ts
+// capsules/orders/capsule.ts
+import { CapsuleDefinition } from '@mobtakronio/capskit';
+
+export default {
+  name: 'orders',
+  dependencies: [],
+} satisfies CapsuleDefinition;
+```
+
+### 2. Write a Cap
+
+```ts
+// capsules/orders/caps/sum.cap.ts
+import { CapInput, CapContext, CapMeta } from '@mobtakronio/capskit';
+
+export const meta: CapMeta = {
+  name: 'sum',
+  routes: [{ method: 'POST', path: '/sum', cap: 'sum' }],
+  inputSchema: {
+    type: 'object',
+    properties: {
+      a: { type: 'number' },
+      b: { type: 'number' },
+    },
+    required: ['a', 'b'],
+  },
+};
+
+export default async function sum(input: CapInput, _ctx: CapContext) {
+  const { a, b } = input.body;
+  return { result: a + b };
+}
+```
+
+### 3. Boot the Kernel
+
+```ts
 import { createCapsKit } from '@mobtakronio/capskit';
-import { Elysia } from 'elysia';
-import mathCapsule from './src/capsules/math-capsule/caps';
+import { createElysiaAdapter } from '@mobtakronio/capskit-elysia';
 
 const { capskit } = await createCapsKit({
-  capsules: [
-    { type: 'caps-registry', registry: mathCapsule }
-  ]
+  capsuleDirs: ['./capsules'],
 });
 
-// Generate an Elysia router automatically from cap metadata!
-const { router } = await capskit.use('http').buildRouter({ adapter: 'elysia' });
+const { app, sockets, shutdown } = await createElysiaAdapter(capskit, {
+  http: true,
+  websocket: true,
+});
 
-new Elysia().use(router).listen(3000);
+app.ws(sockets).listen(3000);
+// POST /sum is live. WebSocket at /ws/capskit.
 ```
 
-Done! `POST /sum` is now live, bound automatically from your cap's route metadata.
+### 4. Invoke Internally
 
-### 4. Invoke Capsules in Code
-
-```typescript
-const math = capskit.use('math-capsule');
-const { result } = await math.sum({ a: 15, b: 30 });
-console.log(result); // 45
+```ts
+const orders = capskit.use('orders');
+const { result } = await orders.sum({ a: 15, b: 30 });
 ```
 
-## 🏗️ Monorepo Commands
+## Packages
 
-1. **Install everything**: `npm install`
-2. **Build everything**: `npm run build`
-3. **Run tests**: `npm run test`
+| Package | Description |
+|---|---|
+| [`@mobtakronio/capskit`](./packages/capskit) | Core kernel and built-in capsules |
+| [`@mobtakronio/capskit-elysia`](./packages/elysia) | Elysia HTTP + WebSocket adapter |
+| [`@mobtakronio/capskit-drizzle`](./packages/drizzle) | Drizzle ORM database capsule |
+| [`@mobtakronio/capskit-client`](./packages/client) | Typed client SDK with offline support |
+| [`@mobtakronio/capskit-react`](./packages/react) | React hooks (`useAction`, `useSubscription`) |
+| [`@mobtakronio/capskit-vue`](./packages/vue) | Vue 3 composables |
+| [`@mobtakronio/capskit-cache`](./packages/cache) | Caching capsule |
+| [`@mobtakronio/capskit-testing`](./packages/testing) | Testing utilities |
 
-## 📖 Documentation
+## Documentation
 
-Visit [capskit.io](https://capskit.io) (Coming Soon!) or check the `/docs` folder for the full guide.
+Full guide, API reference, and examples: **[capskit.dev](https://capskit.dev)**
 
-## 📄 License
+## Monorepo Commands
+
+```bash
+npm install          # Install all packages
+npm run build        # Build everything
+npm run test         # Run all tests
+npm run docs:dev     # Start docs dev server
+```
+
+## License
 
 MIT © 2026 CapsKit Team / MobtakronIO
