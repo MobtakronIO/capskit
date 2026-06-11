@@ -30,7 +30,7 @@ export function useSubscription<T = unknown>(
   function setup() {
     if (!enabled) return;
     try {
-      unsub = client.subscribe(pattern, (data) => {
+      unsub = client.subscribe(pattern, (data: unknown) => {
         latest.value = data as T;
         events.value = [...events.value.slice(-99), data as T];
       });

@@ -79,7 +79,7 @@ export async function createCapsKitPlatform(): Promise<CapsKitPlatform> {
 
     const bootState = parseAndBuildState(bootInput);
 
-    await loadAllCapsules(bootState.disableBuiltins, bootState.state.capsuleDirs || [], bootState.state, bootState.preRegisteredCapsules);
+    await loadAllCapsules(bootState.disableBuiltins, bootState.capsuleDirs, bootState.state, bootState.preRegisteredCapsules);
     const sorted = (await import('../helpers/validate-and-order.helper')).validateAndOrder(
       new Map(bootState.state.capsules.entries())
     );
